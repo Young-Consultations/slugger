@@ -46,12 +46,18 @@ This document reflects the evolution of the orchestrator architecture as agents 
 - Full pipeline integration test (Requirements → Analysis → Architecture → Planning → Coding)
 - Coding agent documentation
 
-**Testing Agent (current commit)**
+**Testing Agent (commit 27aa704)**
 - TestingAgent: code → test scaffolds, fixtures, mocks (unit, integration, performance, security tests)
 - Unit tests for Testing agent
 - Full pipeline integration test (Requirements → Analysis → Architecture → Planning → Coding → Testing)
 - Testing agent documentation
-- Complete design-to-test pipeline
+
+**Documentation Agent (current commit)**
+- DocumentationAgent: all prior outputs → comprehensive documentation (API, deployment, guides, operations)
+- Unit tests for Documentation agent
+- Full pipeline integration test (Requirements → Analysis → Architecture → Planning → Coding → Testing → Documentation)
+- Documentation agent documentation
+- Complete design-to-ship pipeline
 
 ## Design Principles Maintained
 
@@ -79,18 +85,20 @@ CodingAgent (generates code scaffolds)
      ↓
 TestingAgent (generates test scaffolds & fixtures)
      ↓
-Final Artifact: Complete project with tests
+DocumentationAgent (generates comprehensive documentation)
+     ↓
+Final Artifact: Complete, documented, tested project ready for deployment
 ```
 
 ## Next Steps
 
-1. **Documentation Agent** — Generate API docs, guides, release notes
-2. **Deployment Agent** — Create CI/CD workflows and deployment scripts
-3. **Memory Persistence** — Persist artifacts and conversation state to disk/database
-4. **Real Provider SDKs** — Replace stubs with actual OpenAI, Anthropic, Copilot integrations
-5. **Parallel Execution** — Extend WorkflowEngine to support concurrent agent runs
-6. **Human Approval Steps** — Add gates for approval-required decisions
-7. **Logging & Observability** — Structured logging, audit trails, metrics
-8. **Error Recovery & Retry Logic** — Improve resilience and retry strategies
-9. **Agent Composition** — Enable agents to call other agents (sub-pipelines)
-10. **Multi-turn Conversations** — Support iterative refinement with user feedback
+1. **Deployment Agent** — Create CI/CD workflows and deployment scripts
+2. **Memory Persistence** — Persist artifacts and conversation state to disk/database
+3. **Real Provider SDKs** — Replace stubs with actual OpenAI, Anthropic, Copilot integrations
+4. **Parallel Execution** — Extend WorkflowEngine to support concurrent agent runs
+5. **Human Approval Steps** — Add gates for approval-required decisions
+6. **Logging & Observability** — Structured logging, audit trails, metrics
+7. **Error Recovery & Retry Logic** — Improve resilience and retry strategies
+8. **Agent Composition** — Enable agents to call other agents (sub-pipelines)
+9. **Multi-turn Conversations** — Support iterative refinement with user feedback
+10. **Performance Optimization** — Caching, batching, and parallel execution improvements
