@@ -1,48 +1,24 @@
-<!--
-  docs/Architecture.md
-  Purpose: High-level architecture, components, and data flow.
-  Drawn from README.md and project vision.
--->
+# Architecture notes for the initial orchestrator scaffold
 
-# Architecture
+This document summarises the initial scaffold added on branch feature/init-try1.
 
-## Overview
-Slugger is an orchestration system composed of modular AI agents that implement stages of a software development lifecycle: requirements elicitation, architectural design, implementation, testing, and packaging. The system favors a stateless, horizontally scalable API for coordination and uses pluggable components for persistence, templates, and execution.
+Goals
+- Provide small, well-typed abstractions for Agents and AI Providers.
+- Introduce a Memory component to hold project and conversation state.
+- Add a minimal WorkflowEngine that supports sequential execution and retries.
+- Provide an AgentManager registry for deterministic agent registration.
+- Include unit tests and a CI job to run them.
 
-## Components
-- CLI / API
-  - Entry points for user ideas and configuration. Submits jobs to the orchestration layer.
-- Orchestrator
-  - Coordinates agent execution, manages job state, and assembles artifacts.
-- Agents
-  - Requirements Agent: expands idea into requirements.
-  - Architecture Agent: proposes system design and components.
-  - Implementation Agent: generates code and scaffolding.
-  - Test Agent: generates tests and verifies generated code.
-  - CI/CD Agent: generates pipeline definitions and deployment artifacts.
-- Template Engine
-  - Renders language/framework specific templates into concrete files.
-- Persistence (optional)
-  - Stores job metadata, mappings for traceability, and optionally canonical slugs/artifacts.
-- Worker Pool
-  - Executes resource-intensive tasks (code synthesis, tests) asynchronously with retries.
-- Observability
-  - Metrics, structured logs, and tracing for debugging and health monitoring.
+Design principles followed
+- SOLID: single-responsibility classes and clear interfaces.
+- Clean/Hexagonal: separation between provider adapters and orchestrator core.
+- Dependency injection: components are instantiated and passed explicitly in tests.
+- Plugin architecture: AgentManager serves as a simple registry; future work will add dynamic discovery.
 
-## Data flow
-1. User submits idea via CLI or API.
-2. Orchestrator creates a job and invokes the Requirements Agent.
-3. Requirements Agent outputs structured requirements stored to persistence.
-4. Architecture Agent consumes requirements and proposes components.
-5. Implementation Agent uses templates and architecture to generate source, tests, and docs.
-6. Test Agent runs generated tests; results are recorded.
-7. CI/CD Agent emits pipeline configs and packaging artifacts.
-8. Orchestrator collates artifacts and returns a package or repository layout.
-
-## Deployment
-- Containerized services (Docker) with a recommended Kubernetes deployment for scale.
-- Expose health and metrics endpoints for automated monitoring.
-
-## Security
-- Enforce TLS, sandbox generation steps where possible, and avoid executing untrusted generated code without isolation.
+Next steps
+- Implement provider SDK integrations (OpenAI, Anthropic, Copilot).
+- Extend AgentManager with plugin discovery (importlib / entry points).
+- Implement memory persistence and a knowledge-base index.
+- Build the orchestration pipeline connecting Requirements->Planning->Coding->Testing agents.
+- Add logging, retry policies, human approval steps, parallel workflow execution and better error handling.
 
