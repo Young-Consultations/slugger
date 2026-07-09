@@ -26,13 +26,20 @@ This document reflects the evolution of the orchestrator architecture as agents 
 - Artifact registration in memory
 - Orchestrator tests
 
-**Pipeline Agents (current commit)**
+**Pipeline Agents (commit 2a7b334)**
 - RequirementsAgent: user request → requirements document
 - BusinessAnalystAgent: requirements → user stories, acceptance criteria, business value
 - ArchitectureAgent: analysis → architecture design
 - Agent-specific tests
 - Full pipeline integration test (Requirements → Analysis → Architecture)
 - Pipeline documentation
+
+**Planning Agent (current commit)**
+- PlanningAgent: architecture → detailed project plan (milestones, phases, tasks, timeline)
+- Unit tests for Planning agent
+- Full pipeline integration test (Requirements → Analysis → Architecture → Planning)
+- Planning agent documentation
+- Now supports end-to-end orchestration from request to actionable project plan
 
 ## Design Principles Maintained
 
@@ -41,16 +48,33 @@ This document reflects the evolution of the orchestrator architecture as agents 
 - **Dependency Injection**: Provider and orchestrator are passed explicitly.
 - **Plugin Architecture**: AgentManager allows adding new agents without modifying existing code.
 - **Test-Driven**: All new code includes unit and integration tests.
+- **Incremental Development**: Each agent added one at a time with full test coverage.
+
+## Current Pipeline State
+
+```
+User Request
+     ↓
+RequirementsAgent
+     ↓ (requirements document)
+BusinessAnalystAgent
+     ↓ (user stories, acceptance criteria)
+ArchitectureAgent
+     ↓ (system design)
+PlanningAgent
+     ↓ (project plan)
+Final Artifact: Project Plan
+```
 
 ## Next Steps
 
-1. **Planning Agent** — Translate architecture into a detailed project plan (milestones, tasks).
-2. **Coding Agent** — Generate source code scaffolds based on architecture.
-3. **Testing Agent** — Write unit and integration tests.
-4. **Documentation Agent** — Generate API docs, guides, release notes.
-5. **Deployment Agent** — Create CI/CD workflows and deployment scripts.
-6. **Memory Persistence** — Persist artifacts and conversation state to disk/database.
-7. **Real Provider SDKs** — Replace stubs with actual OpenAI, Anthropic, Copilot integrations.
-8. **Parallel Execution** — Extend WorkflowEngine to support concurrent agent runs.
-9. **Human Approval Steps** — Add gates for approval-required decisions.
-10. **Logging & Observability** — Structured logging, audit trails, metrics.
+1. **Coding Agent** — Generate source code scaffolds based on architecture and plan
+2. **Testing Agent** — Write unit and integration test templates
+3. **Documentation Agent** — Generate API docs, guides, release notes
+4. **Deployment Agent** — Create CI/CD workflows and deployment scripts
+5. **Memory Persistence** — Persist artifacts and conversation state to disk/database
+6. **Real Provider SDKs** — Replace stubs with actual OpenAI, Anthropic, Copilot integrations
+7. **Parallel Execution** — Extend WorkflowEngine to support concurrent agent runs
+8. **Human Approval Steps** — Add gates for approval-required decisions
+9. **Logging & Observability** — Structured logging, audit trails, metrics
+10. **Error Recovery & Retry Logic** — Improve resilience and retry strategies
