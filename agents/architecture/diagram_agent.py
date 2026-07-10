@@ -22,6 +22,7 @@ class DiagramAgent(BaseAgent):
                 outputs=['architecture_diagram'],
                 tags=['architecture', 'diagram'],
                 provider='mock',
+                external_interface='canva',
             ),
             capabilities=[AgentCapability(name='diagram', description='Create diagram artifacts.', outputs=('architecture_diagram',))],
         )

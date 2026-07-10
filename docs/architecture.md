@@ -265,6 +265,8 @@ All AI capabilities are accessed through the `ProviderInterface` defined in `cor
 
 Provider selection is configuration-driven. New providers are added as plugins in `providers/` without modifying agent code.
 
+Agent metadata declares provider and external platform concerns separately. The `provider` field continues to identify the execution backend, while `external_interface` is reserved for role-specific integrations with named platforms. Current defaults are `openai_codex` for coding, `canva` for design, and `github_actions` for CI/CD.
+
 ---
 
 ## Plugin System

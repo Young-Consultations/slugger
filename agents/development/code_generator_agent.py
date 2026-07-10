@@ -22,6 +22,7 @@ class CodeGeneratorAgent(BaseAgent):
                 outputs=['generated_code'],
                 tags=['development', 'code_generation'],
                 provider='mock',
+                external_interface='openai_codex',
             ),
             capabilities=[AgentCapability(name='code_generation', description='Create code artifacts.', outputs=('generated_code',))],
         )

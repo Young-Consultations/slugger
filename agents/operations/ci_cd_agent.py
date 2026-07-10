@@ -22,6 +22,7 @@ class CICDAgent(BaseAgent):
                 outputs=['ci_cd_pipeline'],
                 tags=['operations', 'ci_cd'],
                 provider='mock',
+                external_interface='github_actions',
             ),
             capabilities=[AgentCapability(name='ci_cd', description='Create CI/CD pipeline artifacts.', outputs=('ci_cd_pipeline',))],
         )

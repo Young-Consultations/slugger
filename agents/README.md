@@ -11,7 +11,14 @@ Each agent is responsible for one well-defined task within the AI-SDLC workflow.
 - One agent per file or subdirectory.
 - Each agent declares its capabilities, dependencies, expected inputs, and expected outputs.
 - Agents communicate through shared artifacts rather than direct coupling.
-- Agent metadata (name, version, description) is exposed in a standard format.
+- Agent metadata (name, version, description, provider, external_interface) is exposed in a standard format.
+- `provider` identifies the runtime backend; `external_interface` identifies any role-specific third-party platform contract.
+
+## Default External Interfaces
+
+- `code_generator_agent` — `openai_codex`
+- `diagram_agent` — `canva`
+- `ci_cd_agent` — `github_actions`
 
 ## Examples of Agents
 

@@ -16,6 +16,8 @@ The smallest executable unit in a workflow. A step binds one capability-focused 
 ### Agent
 An autonomous worker with a single responsibility. Agents consume structured context and artifacts, perform focused reasoning or automation, and emit new artifacts.
 
+Each agent exposes both its backing provider requirements and any named external interface assignment used for platform-specific integrations.
+
 ### AgentCapability
 A formal declaration describing what an agent can do, which artifact types it understands, and which outcomes it can produce.
 
@@ -77,7 +79,7 @@ Contains artifact metadata, status, classification, and version lineage. Traceab
 ### Agent Aggregate
 Root: `AgentMetadata`
 
-Encapsulates capabilities, provider requirements, supported inputs/outputs, and lifecycle state for a runnable agent.
+Encapsulates capabilities, provider requirements, external interface assignments, supported inputs/outputs, and lifecycle state for a runnable agent.
 
 ## Bounded Contexts
 
