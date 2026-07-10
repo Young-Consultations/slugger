@@ -52,15 +52,15 @@ class CanvaClient(ICanvaService):
         payload = {'design_id': design_id, 'format': export_format.value}
         response = requests.post(self._url('/exports'), json=payload, headers=self._headers(), timeout=30)
         response.raise_for_status()
-        data = response.json()
-        data = data.get('job', data)
+        response_data = response.json()
+        data = response_data.get('job', response_data)
         return self._parse_export_job(data)
 
     def get_export_job(self, job_id: str) -> CanvaExportJob:
         response = requests.get(self._url(f'/exports/{job_id}'), headers=self._headers(), timeout=30)
         response.raise_for_status()
-        data = response.json()
-        data = data.get('job', data)
+        response_data = response.json()
+        data = response_data.get('job', response_data)
         return self._parse_export_job(data)
 
     # ------------------------------------------------------------------
