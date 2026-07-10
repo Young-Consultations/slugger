@@ -2,6 +2,8 @@
 
 The AI Software Factory that turns ideas into production-ready software.
 
+[![CI](https://github.com/mightyjoe909/slugger/actions/workflows/ci.yml/badge.svg)](https://github.com/mightyjoe909/slugger/actions/workflows/ci.yml)
+
 ⸻
 
 What is Slugger?
@@ -372,3 +374,13 @@ slugger status
 ```
 
 The default workflow recipes live in `workflow/recipes/` and can be executed directly by recipe name or by passing a YAML file path.
+
+## Continuous Integration
+
+GitHub Actions runs the project's CI workflow on pushes to `main` and on pull requests.
+
+The workflow:
+
+- Sets up Python 3.11
+- Installs project dependencies
+- Runs the test suite with `python -m pytest tests/`
