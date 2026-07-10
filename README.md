@@ -157,6 +157,8 @@ Examples include:
 
 Each agent has a clearly defined responsibility and communicates through shared artifacts and workflows.
 
+Default external interface assignments currently map the coding agent to OpenAI Codex, the design agent to Canva, and the CI/CD agent to GitHub Actions.
+
 ⸻
 
 Supported AI Providers

@@ -38,3 +38,4 @@ class AgentMetadata:
     outputs: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     provider: str | None = None
+    external_interface: str | None = None
