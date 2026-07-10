@@ -28,7 +28,11 @@ class AgentCapability:
 
 @dataclass(slots=True)
 class AgentMetadata:
-    """Standard metadata exposed by every agent."""
+    """Standard metadata exposed by every agent.
+
+    The provider identifies the backing AI/runtime provider, while
+    external_interface names any role-specific third-party platform contract.
+    """
 
     name: str
     version: str

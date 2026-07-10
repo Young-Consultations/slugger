@@ -157,7 +157,7 @@ Examples include:
 
 Each agent has a clearly defined responsibility and communicates through shared artifacts and workflows.
 
-Default external interface assignments currently map the coding agent to OpenAI Codex, the design agent to Canva, and the CI/CD agent to GitHub Actions.
+Agent metadata now exposes provider selection and external platform contracts separately: `provider` identifies the backing runtime, while `external_interface` declares role-specific integrations. Default external interface assignments currently map the coding agent to OpenAI Codex, the design agent to Canva, and the CI/CD agent to GitHub Actions.
 
 ⸻
 

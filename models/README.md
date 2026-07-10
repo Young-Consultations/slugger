@@ -5,7 +5,7 @@ This directory contains typed domain models used across the Slugger runtime.
 ## Key Modules
 
 - `project.py` — project lifecycle entities.
-- `agent.py` — agent metadata, capabilities, and status.
+- `agent.py` — agent metadata, capabilities, and status, including separate provider and `external_interface` fields.
 - `artifact.py` — artifact envelopes, metadata, and typed subclasses.
 - `artifact_store.py` — in-memory artifact store implementation.
 - `workflow.py` — workflow definitions and quality gates.
