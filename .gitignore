@@ -5,3 +5,6 @@ logs/*
 
 # Secret configuration — contains API keys and tokens. Never commit this file.
 config/secrets.yaml
+
+# Packaging build artifacts
+*.egg-info/

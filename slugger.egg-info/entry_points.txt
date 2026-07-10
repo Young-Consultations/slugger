@@ -1,2 +1,0 @@
-[console_scripts]
-slugger = cli.main:main
