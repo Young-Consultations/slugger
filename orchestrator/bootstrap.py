@@ -48,6 +48,12 @@ class Bootstrap:
 
     def _build_agents(self) -> AgentRegistry:
         registry = AgentRegistry()
-        for agent in [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent(), ProjectPlanAgent(), SystemDesignAgent(), ADRAgent(), DiagramAgent(), APIDesignAgent(), CodeGeneratorAgent(), CodeReviewAgent(), RefactorAgent(), DocumentationAgent(), TestGeneratorAgent(), TestRunnerAgent(), SecurityReviewAgent(), PerformanceAgent(), DeploymentAgent(), CICDAgent(), MonitoringAgent(), ReleaseAgent(), KnowledgeAgent(), GitHubIssuesAgent(), ChangelogAgent(), ReflectionAgent()]:
+        planning_agents = [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent(), ProjectPlanAgent()]
+        architecture_agents = [SystemDesignAgent(), ADRAgent(), DiagramAgent(), APIDesignAgent()]
+        development_agents = [CodeGeneratorAgent(), CodeReviewAgent(), RefactorAgent(), DocumentationAgent()]
+        qa_agents = [TestGeneratorAgent(), TestRunnerAgent(), SecurityReviewAgent(), PerformanceAgent()]
+        operations_agents = [DeploymentAgent(), CICDAgent(), MonitoringAgent(), ReleaseAgent()]
+        support_agents = [KnowledgeAgent(), GitHubIssuesAgent(), ChangelogAgent(), ReflectionAgent()]
+        for agent in planning_agents + architecture_agents + development_agents + qa_agents + operations_agents + support_agents:
             registry.register(agent)
         return registry
