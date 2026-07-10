@@ -1,0 +1,4 @@
+# logs/ directory is excluded from version control.
+# Only the README.md that documents this directory is tracked.
+logs/*
+!logs/README.md
