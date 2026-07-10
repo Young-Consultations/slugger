@@ -376,3 +376,12 @@ No architectural changes are required for these extensions — only additions.
 | Architecture Decision Records | [docs/adr/README.md](adr/README.md) |
 | Repository Context | [prompts/system/RepositoryContext.md](../prompts/system/RepositoryContext.md) |
 | Master Orchestrator | [prompts/system/MasterOrchestrator.md](../prompts/system/MasterOrchestrator.md) |
+
+
+---
+
+## Version History
+
+| Version | Date | Description |
+|---------|------|-------------|
+| 1.0.0 | 2026-07-10 | Initial system architecture overview |
