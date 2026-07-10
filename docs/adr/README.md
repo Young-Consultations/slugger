@@ -40,3 +40,10 @@ What are the positive and negative outcomes?
 | [0004](0004-ai-provider-abstraction.md) | AI Provider Abstraction | Accepted |
 | [0005](0005-knowledge-first-design.md) | Knowledge-First Design | Accepted |
 | [0006](0006-directory-structure.md) | Directory Structure | Accepted |
+| [0007](0007-python-primary-language.md) | Python as Primary Language | Accepted |
+| [0008](0008-agent-architecture-design.md) | Agent Architecture Design | Accepted |
+| [0009](0009-declarative-workflow-design.md) | Declarative Workflow Design | Accepted |
+| [0010](0010-artifact-first-development-process.md) | Artifact-First Development Process | Accepted |
+| [0011](0011-observability-and-telemetry.md) | Observability and Telemetry Architecture | Accepted |
+| [0012](0012-security-architecture-principles.md) | Security Architecture Principles | Accepted |
+| [0013](0013-domain-driven-design.md) | Domain-Driven Design Approach | Accepted |
