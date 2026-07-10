@@ -47,7 +47,11 @@ class OpenAIProvider(BaseProvider):
             raise ProviderError(f'OpenAI API error {exc.response.status_code}: {exc.response.text}') from exc
         except requests.RequestException as exc:
             raise ProviderError(f'OpenAI request failed: {exc}') from exc
-        return response.json()['choices'][0]['message']['content']
+        data = response.json()
+        choices = data.get('choices', [])
+        if not choices or 'message' not in choices[0]:
+            raise ProviderError(f'Unexpected OpenAI response structure: {data}')
+        return choices[0]['message']['content']
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         headers = self._auth_headers()

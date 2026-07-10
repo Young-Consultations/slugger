@@ -11,7 +11,7 @@ from models.provider import ProviderConfig
 from providers.base import BaseProvider
 
 _ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1'
-_ANTHROPIC_VERSION = '2023-06-01'
+_ANTHROPIC_VERSION = '2024-10-22'
 
 
 class AnthropicProvider(BaseProvider):
@@ -55,7 +55,7 @@ class AnthropicProvider(BaseProvider):
         except requests.RequestException as exc:
             raise ProviderError(f'Anthropic request failed: {exc}') from exc
         content_blocks = response.json().get('content', [])
-        text_blocks = [block['text'] for block in content_blocks if block.get('type') == 'text']
+        text_blocks = [block.get('text', '') for block in content_blocks if block.get('type') == 'text']
         return '\n'.join(text_blocks)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
