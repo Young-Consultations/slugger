@@ -1,0 +1,28 @@
+environment: development
+providers:
+  default_provider: mock
+  configs:
+    mock:
+      provider_type: mock
+      model: mock-model
+agents:
+  default_timeout_seconds: 60
+  enabled_categories:
+    - planning
+    - architecture
+    - development
+    - qa
+    - operations
+    - support
+workflow:
+  recipe_directory: workflow/recipes
+  max_retries: 2
+observability:
+  enabled: true
+  log_level: INFO
+  json_logs: true
+memory:
+  backend: in_memory
+  storage_path: memory/store.json
+plugin_directories:
+  - plugins

@@ -356,3 +356,17 @@ Writing code is only one part of software engineering.
 Great software is the result of disciplined architecture, thoughtful planning, rigorous validation, continuous learning, and relentless improvement.
 
 Slugger exists to bring those engineering disciplines into the age of AI and to become the AI software factory every engineering team wishes they had on their roster.
+
+## Getting Started with the CLI
+
+Install the package in editable mode and use the `slugger` command to explore or run workflows.
+
+```bash
+pip install -e .
+slugger list agents
+slugger list workflows
+slugger run full-sdlc
+slugger status
+```
+
+The default workflow recipes live in `workflow/recipes/` and can be executed directly by recipe name or by passing a YAML file path.
