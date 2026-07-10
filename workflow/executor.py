@@ -12,10 +12,18 @@ class StepExecutor:
         self.agent_registry = agent_registry
         self.quality_gate_evaluator = quality_gate_evaluator
 
-    def execute(self, workflow_name: str, project_id: str, step_instance: StepInstance, available_artifacts: dict[str, object]):
+    def execute(self, workflow_name: str, project_id: str, step_instance: StepInstance, available_artifacts: dict[str, object], metadata: dict[str, str] | None = None):
         agent = self.agent_registry.resolve(step_instance.definition.agent)
         inputs = {name: available_artifacts[name] for name in step_instance.definition.inputs if name in available_artifacts}
-        context = ExecutionContext(project_id=project_id, workflow_name=workflow_name, step_name=step_instance.definition.name, inputs=inputs, artifacts=[artifact for artifact in available_artifacts.values() if hasattr(artifact, 'artifact_id')])
+        prior_artifacts = [a for a in available_artifacts.values() if hasattr(a, 'artifact_id')]
+        context = ExecutionContext(
+            project_id=project_id,
+            workflow_name=workflow_name,
+            step_name=step_instance.definition.name,
+            inputs=inputs,
+            artifacts=prior_artifacts,
+            metadata=dict(metadata or {}),
+        )
         artifacts = agent.execute(context)
         results = []
         for artifact in artifacts:

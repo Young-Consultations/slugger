@@ -6,12 +6,37 @@ import argparse
 import json
 from pathlib import Path
 
+from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
+
+_PLATFORMS = [p.value for p in Platform]
+_CODING_AGENTS = [a.value for a in CodingAgent]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='slugger', description='Slugger AI Software Factory CLI')
     subparsers = parser.add_subparsers(dest='command', required=True)
+
+    # build — single-input entry point
+    build_parser = subparsers.add_parser('build', help='Build an app from a single structured input')
+    build_parser.add_argument('idea', help='Description of the app idea to build')
+    build_parser.add_argument(
+        '--platform',
+        choices=_PLATFORMS,
+        required=True,
+        metavar='PLATFORM',
+        help=f'Target output platform: {", ".join(_PLATFORMS)}',
+    )
+    build_parser.add_argument(
+        '--coding-agent',
+        choices=_CODING_AGENTS,
+        default=CodingAgent.CODEX.value,
+        dest='coding_agent',
+        metavar='AGENT',
+        help=f'Coding agent to use: {", ".join(_CODING_AGENTS)} (default: {CodingAgent.CODEX.value})',
+    )
+    build_parser.add_argument('--workflow', default=None, help='Override the default workflow (name or YAML path)')
+
     run_parser = subparsers.add_parser('run', help='Run a workflow recipe')
     run_parser.add_argument('workflow', help='Workflow name or YAML path')
     list_parser = subparsers.add_parser('list', help='List runtime assets')
@@ -26,6 +51,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     slugger = Slugger(Bootstrap(Path(__file__).resolve().parent.parent).build())
+    if args.command == 'build':
+        project_input = ProjectInput(
+            idea=args.idea,
+            platform=Platform(args.platform),
+            coding_agent=CodingAgent(args.coding_agent),
+        )
+        result = slugger.build(project_input, workflow=args.workflow)
+        print(json.dumps({
+            'idea': project_input.idea,
+            'platform': project_input.platform.value,
+            'coding_agent': project_input.coding_agent.value,
+            'workflow': result.definition.name,
+            'status': result.status,
+            'artifacts': len(result.artifacts),
+        }))
+        return 0
     if args.command == 'run':
         result = slugger.run_workflow(args.workflow)
         print(json.dumps({'workflow': result.definition.name, 'status': result.status, 'artifacts': len(result.artifacts)}))

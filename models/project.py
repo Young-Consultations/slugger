@@ -7,6 +7,39 @@ from datetime import datetime, timezone
 from enum import Enum
 
 
+class Platform(str, Enum):
+    """Target output platform for a generated application."""
+
+    IOS = 'ios'
+    ANDROID = 'android'
+    WEB = 'web'
+
+
+class CodingAgent(str, Enum):
+    """Coding agent (AI provider) used for code generation."""
+
+    CODEX = 'codex'
+    ANTHROPIC = 'anthropic'
+
+
+@dataclass(slots=True)
+class ProjectInput:
+    """Structured input supplied by the user to initiate a build."""
+
+    idea: str
+    platform: Platform
+    coding_agent: CodingAgent = CodingAgent.CODEX
+
+    def as_metadata(self) -> dict[str, str]:
+        """Return a plain-string dict suitable for workflow metadata."""
+
+        return {
+            'idea': self.idea,
+            'platform': self.platform.value,
+            'coding_agent': self.coding_agent.value,
+        }
+
+
 class ProjectStatus(str, Enum):
     """High-level project status."""
 

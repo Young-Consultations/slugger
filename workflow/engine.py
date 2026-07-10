@@ -28,7 +28,7 @@ class WorkflowEngine:
             path = self.recipe_directory / f'{workflow_name}.yaml'
         return self.parser.parse_file(path)
 
-    def run(self, workflow_name: str, project_id: str = 'default-project') -> WorkflowInstance:
+    def run(self, workflow_name: str, project_id: str = 'default-project', metadata: dict[str, str] | None = None) -> WorkflowInstance:
         definition = self.load_definition(workflow_name)
         instance = WorkflowInstance(definition=definition, step_instances=[StepInstance(definition=step) for step in definition.steps], status='running')
         artifacts_by_name: dict[str, object] = {}
@@ -38,7 +38,7 @@ class WorkflowEngine:
                 step_instance.attempts += 1
                 step_instance.status = StepStatus.RUNNING
                 try:
-                    artifacts, results = self.executor.execute(definition.name, project_id, step_instance, artifacts_by_name)
+                    artifacts, results = self.executor.execute(definition.name, project_id, step_instance, artifacts_by_name, metadata=metadata)
                     if any(not result.valid for result in results):
                         raise WorkflowError(f'Quality gate failure in step {step_instance.definition.name}')
                     for artifact in artifacts:
