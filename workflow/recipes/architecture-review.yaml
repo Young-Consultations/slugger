@@ -1,0 +1,16 @@
+name: architecture-review
+version: 1.0.0
+description: Review architecture inputs and produce design artifacts.
+steps:
+  - name: design
+    agent: system_design_agent
+    inputs: [requirements]
+    outputs: [system_design]
+  - name: diagram
+    agent: diagram_agent
+    inputs: [system_design]
+    outputs: [architecture_diagram]
+  - name: adr
+    agent: adr_agent
+    inputs: [system_design]
+    outputs: [adr]

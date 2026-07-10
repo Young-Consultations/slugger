@@ -1,0 +1,18 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+type: object
+required: [providers, workflow]
+properties:
+  environment:
+    type: string
+  providers:
+    type: object
+  workflow:
+    type: object
+  observability:
+    type: object
+  memory:
+    type: object
+  plugin_directories:
+    type: array
+    items:
+      type: string

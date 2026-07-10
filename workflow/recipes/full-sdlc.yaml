@@ -1,0 +1,40 @@
+name: full-sdlc
+version: 1.0.0
+description: Complete AI-SDLC workflow from vision through reflection.
+tags: [default, sdlc]
+steps:
+  - name: vision
+    agent: product_vision_agent
+    outputs: [product_vision]
+    quality_gates:
+      - validator: artifact_validator
+  - name: requirements
+    agent: requirements_agent
+    inputs: [product_vision]
+    outputs: [requirements]
+    retry_policy:
+      max_attempts: 2
+  - name: architecture
+    agent: system_design_agent
+    inputs: [requirements]
+    outputs: [system_design]
+  - name: planning
+    agent: project_plan_agent
+    inputs: [requirements]
+    outputs: [project_plan]
+  - name: implementation
+    agent: code_generator_agent
+    inputs: [requirements, system_design]
+    outputs: [generated_code]
+  - name: testing
+    agent: test_runner_agent
+    inputs: [generated_code]
+    outputs: [test_results]
+  - name: deployment
+    agent: deployment_agent
+    inputs: [generated_code, test_results]
+    outputs: [deployment_plan]
+  - name: reflection
+    agent: reflection_agent
+    inputs: [deployment_plan]
+    outputs: [retrospective]

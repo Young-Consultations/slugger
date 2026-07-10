@@ -1,0 +1,12 @@
+name: code-review
+version: 1.0.0
+description: Review generated code artifacts.
+steps:
+  - name: code-review
+    agent: code_review_agent
+    inputs: [generated_code]
+    outputs: [code_review]
+  - name: security-review
+    agent: security_review_agent
+    inputs: [generated_code]
+    outputs: [security_review]

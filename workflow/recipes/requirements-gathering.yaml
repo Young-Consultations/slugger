@@ -1,0 +1,11 @@
+name: requirements-gathering
+version: 1.0.0
+description: Produce product vision and requirements.
+steps:
+  - name: vision
+    agent: product_vision_agent
+    outputs: [product_vision]
+  - name: requirements
+    agent: requirements_agent
+    inputs: [product_vision]
+    outputs: [requirements]
