@@ -2,3 +2,9 @@
 # Only the README.md that documents this directory is tracked.
 logs/*
 !logs/README.md
+
+# Secret configuration — contains API keys and tokens. Never commit this file.
+config/secrets.yaml
+
+# Packaging build artifacts
+*.egg-info/

@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from config.settings import AgentSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
+from config.settings import AgentSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
 from core.exceptions import ConfigurationError
 from models.provider import ProviderConfig, ProviderType
 
@@ -22,7 +22,9 @@ class ConfigLoader:
     def load(self, config_path: str | None = None) -> Settings:
         defaults = self._load_yaml(self.root_path / 'config' / 'defaults.yaml')
         overrides = self._load_yaml(self.root_path / config_path) if config_path else {}
+        secrets = self._load_yaml(self.root_path / 'config' / 'secrets.yaml')
         merged = self._deep_merge(defaults, overrides)
+        merged = self._deep_merge(merged, secrets)
         merged = self._apply_environment(merged)
         return self._to_settings(merged)
 
@@ -48,6 +50,11 @@ class ConfigLoader:
         workflow = dict(config.get('workflow', {}))
         workflow['recipe_directory'] = os.getenv('SLUGGER_WORKFLOW_DIR', workflow.get('recipe_directory', 'workflow/recipes'))
         config['workflow'] = workflow
+        github = dict(config.get('github', {}))
+        env_token = os.getenv(github.get('token_env', 'GITHUB_TOKEN'), '')
+        if env_token:
+            github['token'] = env_token
+        config['github'] = github
         return config
 
     def _to_settings(self, data: dict[str, Any]) -> Settings:
@@ -57,6 +64,7 @@ class ConfigLoader:
                 name=name,
                 provider_type=ProviderType(details.get('provider_type', name)),
                 model=details.get('model', 'stub-model'),
+                api_key=details.get('api_key'),
                 api_key_env=details.get('api_key_env'),
                 base_url=details.get('base_url'),
                 timeout_seconds=int(details.get('timeout_seconds', 30)),
@@ -65,6 +73,13 @@ class ConfigLoader:
             for name, details in provider_configs_raw.items()
         }
         providers = ProviderSettings(default_provider=data.get('providers', {}).get('default_provider', 'mock'), configs=provider_configs or ProviderSettings().configs)
+        github_data = data.get('github', {})
+        github = GitHubSettings(
+            owner=github_data.get('owner', ''),
+            repo=github_data.get('repo', ''),
+            token=github_data.get('token', ''),
+            token_env=github_data.get('token_env', 'GITHUB_TOKEN'),
+        )
         return Settings(
             environment=data.get('environment', 'development'),
             providers=providers,
@@ -72,5 +87,6 @@ class ConfigLoader:
             workflow=WorkflowSettings(**data.get('workflow', {})),
             observability=ObservabilitySettings(**data.get('observability', {})),
             memory=MemorySettings(**data.get('memory', {})),
+            github=github,
             plugin_directories=data.get('plugin_directories', ['plugins']),
         )

@@ -12,7 +12,7 @@ from models.provider import ProviderConfig, ProviderType
 from observability import ExecutionTracer, MetricsCollector, ObservabilityReporter
 from orchestrator.context import ApplicationContext
 from providers import AnthropicProvider, MockProvider, OpenAIProvider, ProviderRegistry
-from services.github import MockGitHubService
+from services.github import IGitHubService, MockGitHubService
 from validators import AgentValidator, ArtifactValidator, QualityGateEvaluator, WorkflowValidator
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser
 
@@ -44,7 +44,17 @@ class Bootstrap:
         parser = WorkflowParser(validators['workflow_validator'])
         executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}))
         workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store)
-        return ApplicationContext(settings=settings, providers=providers, agents=agents, workflow_engine=workflow_engine, artifact_store=artifact_store, memory=memory, github=MockGitHubService(), metrics=metrics, tracer=tracer, reporter=reporter)
+        github_settings = settings.github
+        if github_settings.token and github_settings.owner and github_settings.repo:
+            from services.github import GitHubClient
+            github_service: IGitHubService = GitHubClient(
+                owner=github_settings.owner,
+                repo=github_settings.repo,
+                token=github_settings.token,
+            )
+        else:
+            github_service = MockGitHubService()
+        return ApplicationContext(settings=settings, providers=providers, agents=agents, workflow_engine=workflow_engine, artifact_store=artifact_store, memory=memory, github=github_service, metrics=metrics, tracer=tracer, reporter=reporter)
 
     def _build_agents(self) -> AgentRegistry:
         registry = AgentRegistry()

@@ -5,6 +5,14 @@ providers:
     mock:
       provider_type: mock
       model: mock-model
+    openai:
+      provider_type: openai
+      model: gpt-4o
+      api_key_env: OPENAI_API_KEY
+    anthropic:
+      provider_type: anthropic
+      model: claude-3-5-sonnet-20241022
+      api_key_env: ANTHROPIC_API_KEY
 agents:
   default_timeout_seconds: 60
   enabled_categories:
@@ -24,5 +32,9 @@ observability:
 memory:
   backend: in_memory
   storage_path: memory/store.json
+github:
+  token_env: GITHUB_TOKEN
+  owner: ''
+  repo: ''
 plugin_directories:
   - plugins

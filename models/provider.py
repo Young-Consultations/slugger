@@ -22,6 +22,7 @@ class ProviderConfig:
     name: str
     provider_type: ProviderType
     model: str = 'stub-model'
+    api_key: str | None = None
     api_key_env: str | None = None
     base_url: str | None = None
     timeout_seconds: int = 30
