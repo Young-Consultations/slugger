@@ -59,6 +59,15 @@ class GitHubSettings:
 
 
 @dataclass(slots=True)
+class CanvaSettings:
+    """Canva Connect API configuration section."""
+
+    access_token: str = ''
+    access_token_env: str = 'CANVA_API_TOKEN'
+    base_url: str = 'https://api.canva.com/rest/v1'
+
+
+@dataclass(slots=True)
 class Settings:
     """Root application settings."""
 
@@ -69,4 +78,5 @@ class Settings:
     observability: ObservabilitySettings = field(default_factory=ObservabilitySettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)
+    canva: CanvaSettings = field(default_factory=CanvaSettings)
     plugin_directories: list[str] = field(default_factory=lambda: ['plugins'])

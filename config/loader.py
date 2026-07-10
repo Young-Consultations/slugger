@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from config.settings import AgentSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
+from config.settings import AgentSettings, CanvaSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
 from core.exceptions import ConfigurationError
 from models.provider import ProviderConfig, ProviderType
 
@@ -55,6 +55,11 @@ class ConfigLoader:
         if env_token:
             github['token'] = env_token
         config['github'] = github
+        canva = dict(config.get('canva', {}))
+        env_canva_token = os.getenv(canva.get('access_token_env', 'CANVA_API_TOKEN'), '')
+        if env_canva_token:
+            canva['access_token'] = env_canva_token
+        config['canva'] = canva
         return config
 
     def _to_settings(self, data: dict[str, Any]) -> Settings:
@@ -80,6 +85,12 @@ class ConfigLoader:
             token=github_data.get('token', ''),
             token_env=github_data.get('token_env', 'GITHUB_TOKEN'),
         )
+        canva_data = data.get('canva', {})
+        canva = CanvaSettings(
+            access_token=canva_data.get('access_token', ''),
+            access_token_env=canva_data.get('access_token_env', 'CANVA_API_TOKEN'),
+            base_url=canva_data.get('base_url', 'https://api.canva.com/rest/v1'),
+        )
         return Settings(
             environment=data.get('environment', 'development'),
             providers=providers,
@@ -88,5 +99,6 @@ class ConfigLoader:
             observability=ObservabilitySettings(**data.get('observability', {})),
             memory=MemorySettings(**data.get('memory', {})),
             github=github,
+            canva=canva,
             plugin_directories=data.get('plugin_directories', ['plugins']),
         )
