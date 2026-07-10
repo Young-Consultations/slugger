@@ -36,5 +36,8 @@ github:
   token_env: GITHUB_TOKEN
   owner: ''
   repo: ''
+canva:
+  access_token_env: CANVA_API_TOKEN
+  base_url: https://api.canva.com/rest/v1
 plugin_directories:
   - plugins
