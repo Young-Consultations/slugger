@@ -49,6 +49,16 @@ class MemorySettings:
 
 
 @dataclass(slots=True)
+class GitHubSettings:
+    """GitHub integration configuration section."""
+
+    owner: str = ''
+    repo: str = ''
+    token: str = ''
+    token_env: str = 'GITHUB_TOKEN'
+
+
+@dataclass(slots=True)
 class Settings:
     """Root application settings."""
 
@@ -58,4 +68,5 @@ class Settings:
     workflow: WorkflowSettings = field(default_factory=WorkflowSettings)
     observability: ObservabilitySettings = field(default_factory=ObservabilitySettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
+    github: GitHubSettings = field(default_factory=GitHubSettings)
     plugin_directories: list[str] = field(default_factory=lambda: ['plugins'])
