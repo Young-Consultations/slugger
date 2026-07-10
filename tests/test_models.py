@@ -1,7 +1,8 @@
+from dataclasses import asdict
+
 from agents.architecture.diagram_agent import DiagramAgent
 from agents.development.code_generator_agent import CodeGeneratorAgent
 from agents.operations.ci_cd_agent import CICDAgent
-from dataclasses import asdict
 from models import DocumentArtifact, InMemoryArtifactStore, Project, ProjectPhase, ProjectStatus
 
 
