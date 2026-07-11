@@ -1,0 +1,33 @@
+name: codex-review-refactor
+version: 1.0.0
+description: >
+  Codex-powered code review and refactoring workflow.
+  Generates code, runs automated code review, and produces
+  a refactored version with documentation.
+tags: [codex, review, refactor]
+steps:
+  - name: implementation
+    agent: code_generator_agent
+    inputs: [requirements]
+    outputs: [generated_code]
+    retry_policy:
+      max_attempts: 2
+
+  - name: code-review
+    agent: code_review_agent
+    inputs: [generated_code]
+    outputs: [code_review]
+
+  - name: refactor
+    agent: refactor_agent
+    inputs: [generated_code, code_review]
+    outputs: [refactored_code]
+    retry_policy:
+      max_attempts: 2
+    quality_gates:
+      - validator: artifact_validator
+
+  - name: documentation
+    agent: documentation_agent
+    inputs: [refactored_code]
+    outputs: [documentation]
