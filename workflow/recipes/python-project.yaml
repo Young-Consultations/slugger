@@ -1,0 +1,34 @@
+name: python-project
+version: 1.0.0
+description: Streamlined pipeline from idea to Python project scaffold.
+tags: [python, scaffold]
+steps:
+  - name: vision
+    agent: product_vision_agent
+    outputs: [product_vision]
+    quality_gates:
+      - validator: artifact_validator
+  - name: requirements
+    agent: requirements_agent
+    inputs: [product_vision]
+    outputs: [requirements]
+    retry_policy:
+      max_attempts: 2
+  - name: architecture
+    agent: system_design_agent
+    inputs: [requirements]
+    outputs: [system_design]
+  - name: implementation
+    agent: code_generator_agent
+    inputs: [requirements, system_design]
+    outputs: [generated_code]
+    quality_gates:
+      - validator: artifact_validator
+  - name: testing
+    agent: test_generator_agent
+    inputs: [generated_code]
+    outputs: [test_suite]
+  - name: ci_setup
+    agent: ci_cd_agent
+    inputs: [generated_code]
+    outputs: [ci_cd_pipeline]

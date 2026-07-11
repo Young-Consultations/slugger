@@ -29,6 +29,7 @@ class WorkflowSettings:
 
     recipe_directory: str = 'workflow/recipes'
     max_retries: int = 2
+    state_store: str = 'workflow/state.json'
 
 
 @dataclass(slots=True)

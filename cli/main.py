@@ -37,6 +37,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build_parser.add_argument('--workflow', default=None, help='Override the default workflow (name or YAML path)')
 
+    # resume — continue a previously interrupted build
+    resume_parser = subparsers.add_parser('resume', help='Resume a previously interrupted build')
+    resume_parser.add_argument('run_id', help='Run ID returned by the original build command')
+    resume_parser.add_argument('--idea', default=None, help='Original idea (forwarded as metadata)')
+    resume_parser.add_argument(
+        '--platform',
+        choices=_PLATFORMS,
+        default=None,
+        metavar='PLATFORM',
+        help='Original platform (forwarded as metadata)',
+    )
+    resume_parser.add_argument(
+        '--coding-agent',
+        choices=_CODING_AGENTS,
+        default=None,
+        dest='coding_agent',
+        metavar='AGENT',
+        help='Original coding agent (forwarded as metadata)',
+    )
+
     run_parser = subparsers.add_parser('run', help='Run a workflow recipe')
     run_parser.add_argument('workflow', help='Workflow name or YAML path')
     list_parser = subparsers.add_parser('list', help='List runtime assets')
@@ -59,9 +79,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = slugger.build(project_input, workflow=args.workflow)
         print(json.dumps({
+            'run_id': result.run_id,
             'idea': project_input.idea,
             'platform': project_input.platform.value,
             'coding_agent': project_input.coding_agent.value,
+            'workflow': result.definition.name,
+            'status': result.status,
+            'artifacts': len(result.artifacts),
+        }))
+        return 0
+    if args.command == 'resume':
+        project_input = None
+        if args.idea and args.platform:
+            project_input = ProjectInput(
+                idea=args.idea,
+                platform=Platform(args.platform),
+                coding_agent=CodingAgent(args.coding_agent) if args.coding_agent else CodingAgent.CODEX,
+            )
+        result = slugger.resume(args.run_id, project_input=project_input)
+        print(json.dumps({
+            'run_id': result.run_id,
             'workflow': result.definition.name,
             'status': result.status,
             'artifacts': len(result.artifacts),

@@ -14,7 +14,7 @@ from orchestrator.context import ApplicationContext
 from providers import AnthropicProvider, MockProvider, OpenAIProvider, ProviderRegistry
 from services.github import IGitHubService, MockGitHubService
 from validators import AgentValidator, ArtifactValidator, QualityGateEvaluator, WorkflowValidator
-from workflow import StepExecutor, WorkflowEngine, WorkflowParser
+from workflow import StepExecutor, WorkflowEngine, WorkflowParser, WorkflowPersistence
 
 
 class Bootstrap:
@@ -43,7 +43,8 @@ class Bootstrap:
         agents = self._build_agents()
         parser = WorkflowParser(validators['workflow_validator'])
         executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}))
-        workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store)
+        persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
+        workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
         github_settings = settings.github
         if github_settings.token and github_settings.owner and github_settings.repo:
             from services.github import GitHubClient
