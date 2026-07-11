@@ -126,7 +126,7 @@ class WorkflowEngine:
 
             # Evaluate approval gate before executing the step (WP-022/WP-023)
             if not self._check_approval(step_instance, run_id=instance.run_id):
-                step_instance.status = StepStatus.PENDING
+                step_instance.status = StepStatus.AWAITING_APPROVAL
                 instance.status = 'awaiting_approval'
                 if self.persistence is not None:
                     self.persistence.save(instance)

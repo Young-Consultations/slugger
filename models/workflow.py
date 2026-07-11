@@ -14,6 +14,7 @@ class StepStatus(str, Enum):
     SUCCEEDED = 'succeeded'
     FAILED = 'failed'
     SKIPPED = 'skipped'
+    AWAITING_APPROVAL = 'awaiting_approval'
 
 
 @dataclass(slots=True)

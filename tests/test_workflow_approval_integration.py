@@ -67,8 +67,6 @@ class TestWorkflowEngineApprovalGate:
     """Verify that auto_approve gates allow execution to proceed."""
 
     def test_auto_approve_does_not_block_execution(self, tmp_path) -> None:
-        from pathlib import Path
-        from unittest.mock import MagicMock, patch
         import yaml
 
         from agents.base import BaseAgent

@@ -103,13 +103,5 @@ class BaseProvider(ABC):
         always_supported = {'complete', 'embed', 'generate', 'embed_typed'}
         if capability in always_supported:
             return True
-        # Probe optional capabilities
-        method = getattr(self, capability, None)
-        if method is None:
-            return False
-        try:
-            # If the method is the base class version it will raise immediately
-            # on a trivial probe; we treat that as unsupported.
-            return True
-        except Exception:  # noqa: BLE001
-            return False
+        # Probe optional capabilities by checking a callable method exists on this instance
+        return callable(getattr(self, capability, None))

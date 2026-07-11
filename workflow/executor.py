@@ -20,7 +20,7 @@ _STAGE_KEYWORDS: list[tuple[str, SdlcStage]] = [
     ('plan', SdlcStage.TASKS),
     ('task', SdlcStage.TASKS),
     ('code', SdlcStage.CODE),
-    ('generat', SdlcStage.CODE),
+    ('generate', SdlcStage.CODE),
     ('develop', SdlcStage.CODE),
     ('test', SdlcStage.TESTS),
     ('review', SdlcStage.TESTS),
@@ -64,6 +64,7 @@ class StepExecutor:
         agent = self.agent_registry.resolve(step_instance.definition.agent)
         inputs = {name: available_artifacts[name] for name in step_instance.definition.inputs if name in available_artifacts}
         prior_artifacts = [a for a in available_artifacts.values() if hasattr(a, 'artifact_id')]
+        parent_ids = [aid for a in prior_artifacts if (aid := getattr(a, 'artifact_id', None)) is not None]
         context = ExecutionContext(
             project_id=project_id,
             workflow_name=workflow_name,
@@ -73,7 +74,6 @@ class StepExecutor:
             metadata=dict(metadata or {}),
             message_bus=self.message_bus,
         )
-        parent_ids = [getattr(a, 'artifact_id') for a in prior_artifacts if hasattr(a, 'artifact_id')]
         artifacts = agent.execute(context)
         results = []
         stage = _infer_stage(step_instance.definition.name)
@@ -89,7 +89,7 @@ class StepExecutor:
                         artifact_id=artifact_id,
                         name=artifact_name,
                         stage=stage,
-                        parent_ids=list(parent_ids),
+                        parent_ids=parent_ids,
                         agent_name=agent.metadata.name,
                         project_id=project_id,
                     )

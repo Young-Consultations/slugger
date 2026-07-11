@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -45,7 +46,9 @@ class Bootstrap:
                 providers.register(name, MockProvider(config))
         if 'mock' not in providers.list():
             providers.register('mock', MockProvider(ProviderConfig(name='mock', provider_type=ProviderType.MOCK)))
-        # Register Codex provider when OPENAI_API_KEY is present and codex is not yet registered
+        # Register Codex provider when OPENAI_API_KEY is present and codex is not yet registered.
+        # Codex is registered separately from the openai provider so it gets the correct
+        # ProviderType.CODEX discriminator for capability routing.
         if 'codex' not in providers.list():
             codex_key = os.environ.get('OPENAI_API_KEY', '')
             if codex_key:
@@ -159,7 +162,9 @@ class Bootstrap:
             indexer = KnowledgeIndexer(knowledge_dir)
             try:
                 indexer.index()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).warning(
+                    'Knowledge indexing failed for %s: %s', knowledge_dir, exc
+                )
             return indexer
         return None

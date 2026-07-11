@@ -243,6 +243,8 @@ class CodexProvider(BaseProvider):
         return GenerationResult(
             content=content,
             model=self._model,
+            # Note: token counts are rough whitespace-word approximations; for accurate
+            # billing-grade counts use a tokenizer library such as tiktoken.
             input_tokens=len(request.prompt.split()),
             output_tokens=len(content.split()),
         )
