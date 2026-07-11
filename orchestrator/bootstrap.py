@@ -9,10 +9,15 @@ from agents import ADRAgent, APIDesignAgent, AgentRegistry, CICDAgent, Changelog
 from agents.architecture.canva_design_agent import CanvaDesignAgent
 from agents.messaging import MessageBus
 from config.loader import ConfigLoader
+from knowledge.indexer import KnowledgeIndexer
 from memory import FileMemoryBackend, InMemoryBackend, MemoryManager
 from models.artifact_store import InMemoryArtifactStore
 from models.provider import ProviderConfig, ProviderType
 from observability import ExecutionTracer, MetricsCollector, ObservabilityReporter
+from observability.cost_tracker import CostTracker
+from observability.dashboard import FailureAnalytics
+from observability.telemetry import TelemetryCollector
+from observability.token_budget import TokenBudget
 from orchestrator.context import ApplicationContext
 from providers import AnthropicProvider, CodexProvider, MockProvider, OpenAIProvider, ProviderRegistry
 from services.canva import ICanvaService, MockCanvaService
@@ -49,14 +54,21 @@ class Bootstrap:
         backend = InMemoryBackend() if settings.memory.backend == 'in_memory' else FileMemoryBackend(self.root_path / settings.memory.storage_path)
         memory = MemoryManager(backend)
         message_bus = MessageBus()
+        from models.artifact_lineage import LineageGraph
+        lineage_graph = LineageGraph()
         metrics = MetricsCollector()
         tracer = ExecutionTracer()
         reporter = ObservabilityReporter(metrics, tracer)
+        cost_tracker = CostTracker()
+        token_budget = TokenBudget()
+        telemetry = TelemetryCollector()
+        failure_analytics = FailureAnalytics()
+        knowledge_indexer = self._build_knowledge_indexer()
         validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
         canva_service = self._build_canva_service(settings)
         agents = self._build_agents(canva_service)
         parser = WorkflowParser(validators['workflow_validator'])
-        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus)
+        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph)
         persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
         workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
         github_settings = settings.github
@@ -87,6 +99,12 @@ class Bootstrap:
             tracer=tracer,
             reporter=reporter,
             message_bus=message_bus,
+            lineage_graph=lineage_graph,
+            cost_tracker=cost_tracker,
+            token_budget=token_budget,
+            telemetry=telemetry,
+            failure_analytics=failure_analytics,
+            knowledge_indexer=knowledge_indexer,
             chatgpt=chatgpt_service,
             canva=canva_service,
         )
@@ -133,3 +151,15 @@ class Bootstrap:
         for agent in planning_agents + architecture_agents + development_agents + qa_agents + operations_agents + support_agents:
             registry.register(agent)
         return registry
+
+    def _build_knowledge_indexer(self) -> KnowledgeIndexer | None:
+        """Build and index the knowledge base if the directory exists."""
+        knowledge_dir = self.root_path / 'knowledge'
+        if knowledge_dir.is_dir():
+            indexer = KnowledgeIndexer(knowledge_dir)
+            try:
+                indexer.index()
+            except Exception:  # noqa: BLE001
+                pass
+            return indexer
+        return None

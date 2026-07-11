@@ -64,6 +64,22 @@ def build_parser() -> argparse.ArgumentParser:
     list_subparsers.add_parser('agents', help='List available agents')
     list_subparsers.add_parser('workflows', help='List available workflows')
     subparsers.add_parser('status', help='Show system status')
+
+    # lineage — show artifact traceability (WP-020)
+    lineage_parser = subparsers.add_parser('lineage', help='Show artifact lineage and traceability')
+    lineage_parser.add_argument(
+        '--format',
+        choices=['json', 'summary'],
+        default='summary',
+        dest='lineage_format',
+        help='Output format: json or summary (default: summary)',
+    )
+
+    # approvals — manage approval gates (WP-024)
+    approvals_parser = subparsers.add_parser('approvals', help='Manage workflow approval gates')
+    approvals_subparsers = approvals_parser.add_subparsers(dest='approvals_command', required=True)
+    approvals_subparsers.add_parser('list', help='List pending approval records')
+
     return parser
 
 
@@ -116,6 +132,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == 'status':
         print(json.dumps(slugger.status(), indent=2))
+        return 0
+    if args.command == 'lineage':
+        lineage_data = slugger.lineage()
+        if args.lineage_format == 'json':
+            print(json.dumps(lineage_data, indent=2))
+        else:
+            nodes = lineage_data.get('nodes', [])
+            if not nodes:
+                print('No lineage data available.')
+            else:
+                print(f'Artifact lineage: {len(nodes)} node(s)')
+                for node in nodes:
+                    parents = ', '.join(node.get('parent_ids', [])) or 'none'
+                    print(f"  [{node.get('stage', '?')}] {node.get('name', '?')} "
+                          f"(id={node.get('artifact_id', '?')}, parents={parents})")
+        return 0
+    if args.command == 'approvals' and args.approvals_command == 'list':
+        approval_handler = slugger.context.workflow_engine.approval_handler
+        summary = approval_handler.summary()
+        print(json.dumps(summary, indent=2))
         return 0
     parser.print_help()
     return 1

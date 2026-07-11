@@ -3,9 +3,41 @@
 from __future__ import annotations
 
 from agents.messaging import MessageBus
+from models.artifact_lineage import ArtifactLineageNode, LineageGraph, SdlcStage
 from models.execution import ExecutionContext
 from validators.quality_gate import QualityGateEvaluator
 from workflow.models import StepInstance
+
+# Maps step name keywords to SDLC stages for automatic lineage tagging
+_STAGE_KEYWORDS: list[tuple[str, SdlcStage]] = [
+    ('vision', SdlcStage.IDEA),
+    ('requirements', SdlcStage.REQUIREMENTS),
+    ('story', SdlcStage.STORIES),
+    ('stories', SdlcStage.STORIES),
+    ('architecture', SdlcStage.ARCHITECTURE),
+    ('design', SdlcStage.ARCHITECTURE),
+    ('adr', SdlcStage.ADR),
+    ('plan', SdlcStage.TASKS),
+    ('task', SdlcStage.TASKS),
+    ('code', SdlcStage.CODE),
+    ('generat', SdlcStage.CODE),
+    ('develop', SdlcStage.CODE),
+    ('test', SdlcStage.TESTS),
+    ('review', SdlcStage.TESTS),
+    ('secur', SdlcStage.TESTS),
+    ('release', SdlcStage.RELEASE),
+    ('deploy', SdlcStage.RELEASE),
+    ('doc', SdlcStage.RELEASE),
+]
+
+
+def _infer_stage(step_name: str) -> SdlcStage:
+    """Infer the SDLC stage from a step name."""
+    lower = step_name.lower()
+    for keyword, stage in _STAGE_KEYWORDS:
+        if keyword in lower:
+            return stage
+    return SdlcStage.CODE
 
 
 class StepExecutor:
@@ -14,10 +46,12 @@ class StepExecutor:
         agent_registry,
         quality_gate_evaluator: QualityGateEvaluator,
         message_bus: MessageBus | None = None,
+        lineage_graph: LineageGraph | None = None,
     ) -> None:
         self.agent_registry = agent_registry
         self.quality_gate_evaluator = quality_gate_evaluator
         self.message_bus = message_bus
+        self.lineage_graph = lineage_graph
 
     def execute(
         self,
@@ -39,11 +73,27 @@ class StepExecutor:
             metadata=dict(metadata or {}),
             message_bus=self.message_bus,
         )
+        parent_ids = [getattr(a, 'artifact_id') for a in prior_artifacts if hasattr(a, 'artifact_id')]
         artifacts = agent.execute(context)
         results = []
+        stage = _infer_stage(step_instance.definition.name)
         for artifact in artifacts:
             step_instance.artifacts.append(artifact)
             results.extend(self.quality_gate_evaluator.evaluate(step_instance.definition.quality_gates, artifact))
+            # Capture lineage for this artifact
+            if self.lineage_graph is not None:
+                artifact_id = getattr(artifact, 'artifact_id', None)
+                artifact_name = getattr(artifact, 'name', step_instance.definition.name)
+                if artifact_id:
+                    node = ArtifactLineageNode(
+                        artifact_id=artifact_id,
+                        name=artifact_name,
+                        stage=stage,
+                        parent_ids=list(parent_ids),
+                        agent_name=agent.metadata.name,
+                        project_id=project_id,
+                    )
+                    self.lineage_graph.add(node)
             # Publish artifact-ready event to the message bus if available
             if self.message_bus is not None:
                 from agents.messaging import AgentMessage
