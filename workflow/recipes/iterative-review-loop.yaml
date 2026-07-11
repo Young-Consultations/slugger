@@ -1,0 +1,56 @@
+name: iterative-review-loop
+version: 1.0.0
+description: >
+  Iterative review loop: Architect designs, Developer implements,
+  Reviewer audits, and QA validates. Steps execute sequentially with
+  retry policies to support autonomous multi-agent collaboration.
+tags: [review, collaboration, quality]
+steps:
+  - name: architecture
+    agent: system_design_agent
+    inputs: [requirements]
+    outputs: [system_design]
+    retry_policy:
+      max_attempts: 2
+    quality_gates:
+      - validator: artifact_validator
+
+  - name: api-design
+    agent: api_design_agent
+    inputs: [requirements, system_design]
+    outputs: [api_design]
+    retry_policy:
+      max_attempts: 2
+
+  - name: implementation
+    agent: code_generator_agent
+    inputs: [requirements, system_design]
+    outputs: [generated_code]
+    retry_policy:
+      max_attempts: 3
+
+  - name: code-review
+    agent: code_review_agent
+    inputs: [generated_code]
+    outputs: [code_review]
+    retry_policy:
+      max_attempts: 2
+
+  - name: security-review
+    agent: security_review_agent
+    inputs: [generated_code]
+    outputs: [security_review]
+
+  - name: qa-testing
+    agent: test_generator_agent
+    inputs: [generated_code, code_review]
+    outputs: [test_suite]
+    retry_policy:
+      max_attempts: 2
+    quality_gates:
+      - validator: artifact_validator
+
+  - name: test-execution
+    agent: test_runner_agent
+    inputs: [test_suite, generated_code]
+    outputs: [test_results]
