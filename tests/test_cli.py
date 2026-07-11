@@ -109,6 +109,7 @@ class TestMainBuildCommand:
         result.definition.name = workflow_name
         result.status = status
         result.artifacts = []
+        result.run_id = 'test-run-id'
         return result
 
     @patch('cli.main.Bootstrap')

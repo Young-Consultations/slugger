@@ -2,10 +2,102 @@
 
 from __future__ import annotations
 
+import textwrap
+
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
 from models.artifact import CodeArtifact
 from models.execution import ExecutionContext
+
+_PLATFORM_NOTES: dict[str, str] = {
+    'web': 'FastAPI web application with REST endpoints',
+    'ios': 'Python back-end service powering an iOS application',
+    'android': 'Python back-end service powering an Android application',
+}
+
+_AGENT_NOTES: dict[str, str] = {
+    'codex': 'OpenAI Codex',
+    'anthropic': 'Anthropic Claude',
+}
+
+
+def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
+    """Return a Python project scaffold as a markdown-formatted code listing."""
+
+    platform_note = _PLATFORM_NOTES.get(platform, platform)
+    agent_note = _AGENT_NOTES.get(coding_agent, coding_agent)
+
+    return textwrap.dedent(f"""\
+        # Generated Python Project
+
+        **Idea:** {idea}
+        **Platform:** {platform_note}
+        **Coding agent:** {agent_note}
+
+        ---
+
+        ## Project Structure
+
+        ```
+        project/
+        ├── README.md
+        ├── pyproject.toml
+        ├── src/
+        │   └── app/
+        │       ├── __init__.py
+        │       └── main.py
+        └── tests/
+            ├── __init__.py
+            └── test_main.py
+        ```
+
+        ---
+
+        ## src/app/main.py
+
+        ```python
+        \"\"\"Entry point for: {idea}.\"\"\"
+
+        from __future__ import annotations
+
+
+        def run() -> None:
+            \"\"\"Run the application.\"\"\"
+            print("Running: {idea}")
+
+
+        if __name__ == "__main__":
+            run()
+        ```
+
+        ---
+
+        ## tests/test_main.py
+
+        ```python
+        \"\"\"Smoke tests for: {idea}.\"\"\"
+
+        from app.main import run
+
+
+        def test_run_executes_without_error() -> None:
+            run()
+        ```
+
+        ---
+
+        ## pyproject.toml
+
+        ```toml
+        [project]
+        name = "project"
+        version = "0.1.0"
+        requires-python = ">=3.11"
+
+        [project.optional-dependencies]
+        test = ["pytest"]
+        ```
+    """)
 
 
 class CodeGeneratorAgent(BaseAgent):
@@ -28,6 +120,8 @@ class CodeGeneratorAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Generated Code\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.metadata.get('idea', 'Unspecified idea')
+        platform = context.metadata.get('platform', 'web')
+        coding_agent = context.metadata.get('coding_agent', 'codex')
+        content = _python_scaffold(idea, platform, coding_agent)
         return [self.create_artifact(context, 'generated_code', content, CodeArtifact)]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from uuid import uuid4
 from typing import Any
 
 from models.artifact import Artifact
@@ -46,3 +47,4 @@ class WorkflowInstance:
     step_instances: list[StepInstance] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
     status: str = 'pending'
+    run_id: str = field(default_factory=lambda: str(uuid4()))

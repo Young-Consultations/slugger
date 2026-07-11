@@ -32,6 +32,22 @@ class Slugger:
         metadata = project_input.as_metadata()
         return self.context.workflow_engine.run(workflow_name, metadata=metadata)
 
+    def resume(self, run_id: str, project_input: ProjectInput | None = None) -> WorkflowInstance:
+        """Resume a previously interrupted workflow run.
+
+        Parameters
+        ----------
+        run_id:
+            The run identifier returned by a prior :meth:`build` call
+            (``result.run_id``).
+        project_input:
+            Optional project input whose metadata is forwarded to remaining
+            steps.  If omitted the steps receive no metadata.
+        """
+
+        metadata = project_input.as_metadata() if project_input is not None else None
+        return self.context.workflow_engine.resume(run_id, metadata=metadata)
+
     def list_agents(self) -> list[str]:
         return self.context.agents.list()
 
