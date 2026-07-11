@@ -32,6 +32,11 @@ def test_policy_to_dict_round_trip() -> None:
     assert restored.fallback_agent == 'backup_agent'
 
 
+def test_policy_from_dict_unknown_level_falls_back_to_abort() -> None:
+    restored = EscalationPolicy.from_dict({'escalation_level': 'unknown'})
+    assert restored.escalation_level == EscalationLevel.ABORT
+
+
 # ---------------------------------------------------------------------------
 # EscalationHandler.handle
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ approval decisions for traceability.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -142,6 +142,7 @@ class ApprovalGateHandler:
         self._force_auto = force_auto_approve
         self._audit: list[ApprovalRecord] = []
         self._resolved_ids: set[str] = set()
+        self._pending_checkpoints: dict[str, ApprovalCheckpoint] = {}
 
     # ------------------------------------------------------------------
     # Evaluation
@@ -180,6 +181,8 @@ class ApprovalGateHandler:
             comment=comment,
         )
         self._audit.append(record)
+        if decision == ApprovalDecision.PENDING:
+            self._pending_checkpoints[record.record_id] = checkpoint
         return record
 
     def approve(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
@@ -195,11 +198,15 @@ class ApprovalGateHandler:
         Raises :exc:`KeyError` if *record_id* is not found.
         Raises :exc:`ValueError` if the record is not in PENDING state.
         """
+        self._expire_pending_records()
         record = self._find(record_id)
         # First check catches non-PENDING records (e.g. AUTO_APPROVED).
         # Second check catches PENDING records that have already been resolved.
         if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
             raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
+        checkpoint = self._pending_checkpoints.get(record_id)
+        if checkpoint and checkpoint.required_approvers and approver not in checkpoint.required_approvers:
+            raise ValueError(f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}.")
         new_record = ApprovalRecord(
             checkpoint_name=record.checkpoint_name,
             run_id=record.run_id,
@@ -209,6 +216,7 @@ class ApprovalGateHandler:
         )
         self._audit.append(new_record)
         self._resolved_ids.add(record_id)
+        self._pending_checkpoints.pop(record_id, None)
         return new_record
 
     def reject(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
@@ -224,11 +232,15 @@ class ApprovalGateHandler:
         Raises :exc:`KeyError` if *record_id* is not found.
         Raises :exc:`ValueError` if the record is not in PENDING state.
         """
+        self._expire_pending_records()
         record = self._find(record_id)
         # First check catches non-PENDING records (e.g. AUTO_APPROVED).
         # Second check catches PENDING records that have already been resolved.
         if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
             raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
+        checkpoint = self._pending_checkpoints.get(record_id)
+        if checkpoint and checkpoint.required_approvers and approver not in checkpoint.required_approvers:
+            raise ValueError(f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}.")
         new_record = ApprovalRecord(
             checkpoint_name=record.checkpoint_name,
             run_id=record.run_id,
@@ -238,6 +250,7 @@ class ApprovalGateHandler:
         )
         self._audit.append(new_record)
         self._resolved_ids.add(record_id)
+        self._pending_checkpoints.pop(record_id, None)
         return new_record
 
     # ------------------------------------------------------------------
@@ -252,6 +265,7 @@ class ApprovalGateHandler:
         decision: ApprovalDecision | None = None,
     ) -> list[ApprovalRecord]:
         """Return audit records, optionally filtered."""
+        self._expire_pending_records()
         records = self._audit
         if run_id is not None:
             records = [r for r in records if r.run_id == run_id]
@@ -268,6 +282,7 @@ class ApprovalGateHandler:
         that have since been resolved via :meth:`approve` or :meth:`reject`).
         Use :meth:`audit_log` to inspect the full decision history.
         """
+        self._expire_pending_records()
         active = [r for r in self._audit if r.record_id not in self._resolved_ids]
         return {
             'total': len(active),
@@ -286,3 +301,25 @@ class ApprovalGateHandler:
             if record.record_id == record_id:
                 return record
         raise KeyError(f'Approval record not found: {record_id!r}')
+
+    def _expire_pending_records(self) -> None:
+        now = datetime.now(timezone.utc)
+        for record in list(self._audit):
+            if record.decision != ApprovalDecision.PENDING or record.record_id in self._resolved_ids:
+                continue
+            checkpoint = self._pending_checkpoints.get(record.record_id)
+            if checkpoint is None or checkpoint.timeout_seconds is None:
+                continue
+            deadline = record.timestamp + timedelta(seconds=checkpoint.timeout_seconds)
+            if now < deadline:
+                continue
+            timeout_record = ApprovalRecord(
+                checkpoint_name=record.checkpoint_name,
+                run_id=record.run_id,
+                decision=ApprovalDecision.REJECTED,
+                approver='system',
+                comment='Auto-rejected: checkpoint approval timed out.',
+            )
+            self._audit.append(timeout_record)
+            self._resolved_ids.add(record.record_id)
+            self._pending_checkpoints.pop(record.record_id, None)

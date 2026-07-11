@@ -164,9 +164,11 @@ class LineageGraph:
         return result
 
     def chain(self, artifact_id: str) -> list[ArtifactLineageNode]:
-        """Return the full ancestor chain for *artifact_id*, ordered from root to *artifact_id*.
+        """Return *artifact_id* with all discovered ancestors in stage order.
 
-        The node for *artifact_id* is included as the last element.
+        In graphs with multiple parents this returns the full ancestor set (not
+        a single path), sorted by :class:`SdlcStage`, with *artifact_id* as the
+        last element when present.
         """
         ancestors = self.ancestors(artifact_id)
         # Sort ancestors by SdlcStage order

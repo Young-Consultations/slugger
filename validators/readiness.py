@@ -38,6 +38,8 @@ class CoverageGate:
 
     @property
     def passed(self) -> bool:
+        if self.threshold <= 0:
+            return True
         return self.actual is not None and self.actual >= self.threshold
 
     def to_dict(self) -> dict[str, Any]:

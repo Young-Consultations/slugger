@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from workflow.approvals import (
@@ -103,6 +105,32 @@ def test_approve_unknown_id_raises() -> None:
     handler = ApprovalGateHandler()
     with pytest.raises(KeyError):
         handler.approve('nonexistent-id', approver='x')
+
+
+def test_required_approvers_are_enforced_on_approve() -> None:
+    handler = ApprovalGateHandler()
+    cp = ApprovalCheckpoint(name='gate', required_approvers=['alice'])
+    record = handler.evaluate('run-1', cp)
+    with pytest.raises(ValueError, match='not allowed'):
+        handler.approve(record.record_id, approver='bob')
+
+
+def test_timeout_auto_rejects_pending_record() -> None:
+    handler = ApprovalGateHandler()
+    cp = ApprovalCheckpoint(name='gate', timeout_seconds=1)
+    record = handler.evaluate('run-1', cp)
+    handler._audit[-1] = ApprovalRecord(
+        **{
+            **handler._audit[-1].__dict__,
+            'timestamp': handler._audit[-1].timestamp - timedelta(seconds=5),
+        }
+    )
+    with pytest.raises(ValueError, match='not pending'):
+        handler.approve(record.record_id, approver='alice')
+    rejected = handler.audit_log(decision=ApprovalDecision.REJECTED)
+    assert len(rejected) == 1
+    assert rejected[0].approver == 'system'
+    assert 'timed out' in rejected[0].comment
 
 
 # ---------------------------------------------------------------------------

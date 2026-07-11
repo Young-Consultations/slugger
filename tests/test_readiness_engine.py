@@ -38,6 +38,11 @@ def test_coverage_gate_not_measured() -> None:
     assert gate.passed is False
 
 
+def test_coverage_gate_non_positive_threshold_auto_passes() -> None:
+    gate = CoverageGate(threshold=0.0, actual=-1.0)
+    assert gate.passed is True
+
+
 def test_security_gate_passed() -> None:
     gate = SecurityGate(findings_count=0, max_allowed=0)
     assert gate.passed is True
@@ -158,3 +163,12 @@ def test_report_to_dict(engine: ProductionReadinessEngine) -> None:
     assert 'coverage' in data
     assert 'security' in data
     assert 'documentation' in data
+
+
+def test_zero_coverage_threshold_does_not_divide_by_zero(engine: ProductionReadinessEngine) -> None:
+    report = engine.evaluate(
+        coverage=CoverageGate(threshold=0.0, actual=-10.0),
+        security=SecurityGate(findings_count=0),
+        documentation=DocumentationGate(required_artifacts=[], present_artifacts=[]),
+    )
+    assert report.score == 100.0

@@ -47,7 +47,11 @@ class EscalationPolicy:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EscalationPolicy:
-        level = EscalationLevel(data.get('escalation_level', EscalationLevel.ABORT.value))
+        raw_level = data.get('escalation_level', EscalationLevel.ABORT.value)
+        try:
+            level = EscalationLevel(raw_level)
+        except ValueError:
+            level = EscalationLevel.ABORT
         return cls(
             max_retries=int(data.get('max_retries', 3)),
             escalation_level=level,
