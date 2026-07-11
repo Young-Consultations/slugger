@@ -88,6 +88,11 @@ def _hash_rendered(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def _baseline_key(template_name: str, variables: dict[str, str]) -> str:
+    serialized_variables = json.dumps(variables, sort_keys=True, separators=(',', ':'))
+    return f'{template_name}:{serialized_variables}'
+
+
 class PromptRegressionSuite:
     """Record baselines and detect prompt regressions.
 
@@ -143,7 +148,7 @@ class PromptRegressionSuite:
             rendered_hash=_hash_rendered(rendered),
             rendered_length=len(rendered),
         )
-        self._baselines[template_name] = baseline
+        self._baselines[_baseline_key(template_name, variables)] = baseline
         if self._baseline_path:
             self._save(self._baseline_path)
         return baseline
@@ -176,11 +181,11 @@ class PromptRegressionSuite:
         KeyError
             If no baseline exists for *template_name*.
         """
-        baseline = self._baselines.get(template_name)
+        variables = variables or {}
+        baseline = self._baselines.get(_baseline_key(template_name, variables))
         if baseline is None:
             raise KeyError(f"No baseline recorded for template '{template_name}'.")
 
-        variables = variables or {}
         result = self._evaluator.evaluate(template_name, variables)
         current_hash = _hash_rendered(result.rendered)
         current_len = len(result.rendered)
@@ -215,9 +220,9 @@ class PromptRegressionSuite:
         """
         results: list[RegressionResult] = []
         variables = variables or {}
-        for name, baseline in self._baselines.items():
-            vars_for_template = variables.get(name, baseline.variables)
-            results.append(self.check(name, vars_for_template))
+        for baseline in self._baselines.values():
+            vars_for_template = variables.get(baseline.template_name, baseline.variables)
+            results.append(self.check(baseline.template_name, vars_for_template))
         return results
 
     # ------------------------------------------------------------------
@@ -233,4 +238,4 @@ class PromptRegressionSuite:
         data = json.loads(path.read_text(encoding='utf-8'))
         for raw in data:
             baseline = RegressionBaseline.from_dict(raw)
-            self._baselines[baseline.template_name] = baseline
+            self._baselines[_baseline_key(baseline.template_name, baseline.variables)] = baseline

@@ -51,6 +51,16 @@ def test_run_all_returns_results(tmp_path) -> None:
     assert results[0].passed
 
 
+def test_multiple_baselines_for_same_template_use_variables(tmp_path) -> None:
+    evaluator = _setup_evaluator(tmp_path)
+    suite = PromptRegressionSuite(evaluator)
+    suite.capture_baseline('hello', {'name': 'Alice'})
+    suite.capture_baseline('hello', {'name': 'Bob'})
+
+    assert suite.check('hello', {'name': 'Alice'}).passed
+    assert suite.check('hello', {'name': 'Bob'}).passed
+
+
 def test_persistence(tmp_path) -> None:
     evaluator = _setup_evaluator(tmp_path)
     baseline_path = tmp_path / 'baselines.json'
