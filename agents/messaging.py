@@ -113,19 +113,18 @@ class MessageBus:
         """
         self._history.append(message)
         dispatched = 0
-        for handler in list(self._handlers.get(message.recipient, [])):
-            handler(message)
-            dispatched += 1
-        if message.recipient != '*':
+        if message.recipient == '*':
+            for handlers in list(self._handlers.values()):
+                for handler in list(handlers):
+                    handler(message)
+                    dispatched += 1
+        else:
+            for handler in list(self._handlers.get(message.recipient, [])):
+                handler(message)
+                dispatched += 1
             for handler in list(self._handlers.get('*', [])):
                 handler(message)
                 dispatched += 1
-        else:
-            for name, handlers in list(self._handlers.items()):
-                if name == '*':
-                    for handler in handlers:
-                        handler(message)
-                        dispatched += 1
         return dispatched
 
     # ------------------------------------------------------------------

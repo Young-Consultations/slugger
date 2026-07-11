@@ -56,6 +56,7 @@ class FailureRecord:
             'error_type': self.error_type,
             'message': self.message,
             'timestamp': self.timestamp.isoformat(),
+            'metadata': dict(self.metadata),
         }
 
 
@@ -129,7 +130,6 @@ class FailureAnalytics:
             'total_failures': len(self._failures),
             'by_error_type': dict(by_type),
             'by_agent': dict(by_agent),
-            'by_step': dict(by_step),
             'by_step': dict(by_step),
         }
 

@@ -75,9 +75,14 @@ class ApprovalCheckpoint:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ApprovalRecord:
-    """Immutable record of a single approval decision.
+    """Record of a single approval decision.
+
+    Each record is immutable once created.  :meth:`ApprovalGateHandler.approve`
+    and :meth:`ApprovalGateHandler.reject` append *new* records rather than
+    mutating existing ones, preserving the full decision history in the audit
+    log.
 
     Parameters
     ----------
@@ -136,6 +141,7 @@ class ApprovalGateHandler:
     def __init__(self, force_auto_approve: bool = False) -> None:
         self._force_auto = force_auto_approve
         self._audit: list[ApprovalRecord] = []
+        self._resolved_ids: set[str] = set()
 
     # ------------------------------------------------------------------
     # Evaluation
@@ -177,34 +183,62 @@ class ApprovalGateHandler:
         return record
 
     def approve(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
-        """Mark an existing PENDING record as APPROVED.
+        """Record an APPROVED decision for an existing PENDING record.
+
+        The original PENDING record (identified by *record_id*) is retained
+        in the audit log for full traceability.  A new
+        :class:`ApprovalRecord` with its own ``record_id`` and ``APPROVED``
+        status is appended and returned.  ``_resolved_ids`` tracks the
+        original *record_id* so the same pending record cannot be resolved
+        twice.
 
         Raises :exc:`KeyError` if *record_id* is not found.
         Raises :exc:`ValueError` if the record is not in PENDING state.
         """
         record = self._find(record_id)
-        if record.decision != ApprovalDecision.PENDING:
+        # First check catches non-PENDING records (e.g. AUTO_APPROVED).
+        # Second check catches PENDING records that have already been resolved.
+        if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
             raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
-        record.decision = ApprovalDecision.APPROVED
-        record.approver = approver
-        record.comment = comment
-        record.timestamp = datetime.now(timezone.utc)
-        return record
+        new_record = ApprovalRecord(
+            checkpoint_name=record.checkpoint_name,
+            run_id=record.run_id,
+            decision=ApprovalDecision.APPROVED,
+            approver=approver,
+            comment=comment,
+        )
+        self._audit.append(new_record)
+        self._resolved_ids.add(record_id)
+        return new_record
 
     def reject(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
-        """Mark an existing PENDING record as REJECTED.
+        """Record a REJECTED decision for an existing PENDING record.
+
+        The original PENDING record (identified by *record_id*) is retained
+        in the audit log for full traceability.  A new
+        :class:`ApprovalRecord` with its own ``record_id`` and ``REJECTED``
+        status is appended and returned.  ``_resolved_ids`` tracks the
+        original *record_id* so the same pending record cannot be resolved
+        twice.
 
         Raises :exc:`KeyError` if *record_id* is not found.
         Raises :exc:`ValueError` if the record is not in PENDING state.
         """
         record = self._find(record_id)
-        if record.decision != ApprovalDecision.PENDING:
+        # First check catches non-PENDING records (e.g. AUTO_APPROVED).
+        # Second check catches PENDING records that have already been resolved.
+        if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
             raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
-        record.decision = ApprovalDecision.REJECTED
-        record.approver = approver
-        record.comment = comment
-        record.timestamp = datetime.now(timezone.utc)
-        return record
+        new_record = ApprovalRecord(
+            checkpoint_name=record.checkpoint_name,
+            run_id=record.run_id,
+            decision=ApprovalDecision.REJECTED,
+            approver=approver,
+            comment=comment,
+        )
+        self._audit.append(new_record)
+        self._resolved_ids.add(record_id)
+        return new_record
 
     # ------------------------------------------------------------------
     # Audit
@@ -228,13 +262,19 @@ class ApprovalGateHandler:
         return list(records)
 
     def summary(self) -> dict[str, Any]:
-        """Return a summary of approval gate activity."""
+        """Return a summary of approval gate activity.
+
+        Counts only active records (i.e., excludes original PENDING records
+        that have since been resolved via :meth:`approve` or :meth:`reject`).
+        Use :meth:`audit_log` to inspect the full decision history.
+        """
+        active = [r for r in self._audit if r.record_id not in self._resolved_ids]
         return {
-            'total': len(self._audit),
-            'approved': sum(1 for r in self._audit if r.decision == ApprovalDecision.APPROVED),
-            'auto_approved': sum(1 for r in self._audit if r.decision == ApprovalDecision.AUTO_APPROVED),
-            'rejected': sum(1 for r in self._audit if r.decision == ApprovalDecision.REJECTED),
-            'pending': sum(1 for r in self._audit if r.decision == ApprovalDecision.PENDING),
+            'total': len(active),
+            'approved': sum(1 for r in active if r.decision == ApprovalDecision.APPROVED),
+            'auto_approved': sum(1 for r in active if r.decision == ApprovalDecision.AUTO_APPROVED),
+            'rejected': sum(1 for r in active if r.decision == ApprovalDecision.REJECTED),
+            'pending': sum(1 for r in active if r.decision == ApprovalDecision.PENDING),
         }
 
     # ------------------------------------------------------------------
