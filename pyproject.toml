@@ -23,6 +23,7 @@ slugger = "cli.main:main"
 
 [tool.setuptools.packages.find]
 include = [
-  "agents*", "cli*", "config*", "core*", "memory*", "models*", "observability*", "orchestrator*",
-  "plugins*", "providers*", "services*", "state_machine*", "validators*", "workflow*"
+  "agents*", "benchmarks*", "cli*", "config*", "core*", "docs*", "knowledge*",
+  "memory*", "models*", "observability*", "orchestrator*",
+  "plugins*", "providers*", "scripts*", "services*", "state_machine*", "validators*", "workflow*"
 ]

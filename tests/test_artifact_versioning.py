@@ -1,0 +1,69 @@
+"""Tests for TASK-043: Artifact Versioning."""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+from models.artifact import ArtifactMetadata, DocumentArtifact
+from models.artifact_version import ArtifactVersionStore, _bump_version
+
+
+def _make_artifact(name: str, content: str = 'hello') -> DocumentArtifact:
+    return DocumentArtifact(
+        artifact_id=str(uuid4()),
+        name=name,
+        content=content,
+        metadata=ArtifactMetadata(source_agent='test', source_step='test'),
+    )
+
+
+def test_bump_version_basic() -> None:
+    assert _bump_version('1.0.0') == '1.0.1'
+    assert _bump_version('2.3.9') == '2.3.10'
+    assert _bump_version('0.0.0') == '0.0.1'
+
+
+def test_store_first_version() -> None:
+    store = ArtifactVersionStore()
+    artifact = _make_artifact('spec')
+    version = store.store(artifact)
+    assert version == '1.0.0'
+    assert store.latest('spec') is not None
+    assert store.latest('spec').version == '1.0.0'
+
+
+def test_store_increments_version() -> None:
+    store = ArtifactVersionStore()
+    a1 = _make_artifact('spec', 'v1')
+    a2 = _make_artifact('spec', 'v2')
+    store.store(a1)
+    store.store(a2)
+    assert store.latest('spec').version == '1.0.1'
+    history = store.history('spec')
+    assert len(history) == 2
+    assert history[0].version == '1.0.0'
+    assert history[1].version == '1.0.1'
+
+
+def test_get_version_by_string() -> None:
+    store = ArtifactVersionStore()
+    a = _make_artifact('doc')
+    store.store(a)
+    entry = store.get_version('doc', '1.0.0')
+    assert entry is not None
+    assert entry.content == 'hello'
+
+
+def test_history_empty_for_unknown() -> None:
+    store = ArtifactVersionStore()
+    assert store.history('nonexistent') == []
+    assert store.latest('nonexistent') is None
+
+
+def test_multiple_artifacts_are_independent() -> None:
+    store = ArtifactVersionStore()
+    store.store(_make_artifact('a'))
+    store.store(_make_artifact('a'))
+    store.store(_make_artifact('b'))
+    assert len(store.history('a')) == 2
+    assert len(store.history('b')) == 1
