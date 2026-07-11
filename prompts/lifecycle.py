@@ -84,6 +84,8 @@ def _bump_minor(version: str) -> str:
         parts[1] = str(int(parts[1]) + 1)
         if len(parts) > 2:
             parts[2] = '0'
+        elif len(parts) == 2:
+            parts.append('0')
     except (ValueError, IndexError):
         parts = ['1', '0', '0']
     return '.'.join(parts)

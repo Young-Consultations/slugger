@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 import requests
@@ -108,7 +109,6 @@ class ChatGPTClient(IChatGPTService):
         )
         result = self.execute(prompt, system=system)
         # Parse JSON response (best-effort)
-        import json
         try:
             data = json.loads(result.response)
             return PromptReviewResult(

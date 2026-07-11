@@ -125,9 +125,12 @@ class LineageGraph:
         Returns an empty list if the artifact is not in the graph or has no
         parents.
         """
+        node = self._nodes.get(artifact_id)
+        if node is None:
+            return []
         visited: set[str] = set()
         result: list[ArtifactLineageNode] = []
-        queue = list((self._nodes.get(artifact_id) or ArtifactLineageNode('', '', SdlcStage.IDEA)).parent_ids)
+        queue = list(node.parent_ids)
         while queue:
             parent_id = queue.pop(0)
             if parent_id in visited:

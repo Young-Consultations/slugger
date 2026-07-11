@@ -108,7 +108,8 @@ class MockGitHubService(IGitHubService):
 
     def list_workflow_runs(self, workflow_id: str | int | None = None) -> list[GitHubWorkflowRun]:
         if workflow_id is not None:
-            return [run for run in self.workflow_runs if str(run.workflow_id) == str(workflow_id)]
+            workflow_id_str = str(workflow_id)
+            return [run for run in self.workflow_runs if str(run.workflow_id) == workflow_id_str]
         return list(self.workflow_runs)
 
     def trigger_workflow(self, workflow_id: str, ref: str = 'main', inputs: dict[str, str] | None = None) -> None:

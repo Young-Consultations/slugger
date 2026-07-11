@@ -17,7 +17,7 @@ steps:
 
   - name: api-design
     agent: api_design_agent
-    inputs: [requirements, system_design]
+    inputs: [system_design]
     outputs: [api_design]
     retry_policy:
       max_attempts: 2
