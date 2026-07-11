@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0",
+  "target_path": "prompts/tasks/remaining_work",
+  "packet_count": 60,
+  "completion_target": {
+    "overall_percent": 95,
+    "p0_percent": 100,
+    "evidence_packet": "WP-060"
+  },
+  "epics": [
+    {
+      "number": 1,
+      "file": "EPIC-01_AI_PROVIDER_COMPLETION.md",
+      "title": "AI Provider Completion",
+      "priority": "P0",
+      "packets": [
+        "WP-001",
+        "WP-002",
+        "WP-003",
+        "WP-004",
+        "WP-005",
+        "WP-006",
+        "WP-007",
+        "WP-008"
+      ]
+    },
+    {
+      "number": 2,
+      "file": "EPIC-02_AUTONOMOUS_AGENT_COLLABORATION.md",
+      "title": "Autonomous Agent Collaboration",
+      "priority": "P0",
+      "packets": [
+        "WP-009",
+        "WP-010",
+        "WP-011",
+        "WP-012",
+        "WP-013",
+        "WP-014",
+        "WP-015"
+      ]
+    },
+    {
+      "number": 3,
+      "file": "EPIC-03_ARTIFACT_TRACEABILITY.md",
+      "title": "Artifact Traceability",
+      "priority": "P0",
+      "packets": [
+        "WP-016",
+        "WP-017",
+        "WP-018",
+        "WP-019",
+        "WP-020",
+        "WP-021"
+      ]
+    },
+    {
+      "number": 4,
+      "file": "EPIC-04_HUMAN_APPROVAL_SYSTEM.md",
+      "title": "Human Approval System",
+      "priority": "P0/P1",
+      "packets": [
+        "WP-022",
+        "WP-023",
+        "WP-024",
+        "WP-025",
+        "WP-026"
+      ]
+    },
+    {
+      "number": 5,
+      "file": "EPIC-05_PRODUCTION_READINESS_ENGINE.md",
+      "title": "Production Readiness and Generated-App Delivery",
+      "priority": "P0",
+      "packets": [
+        "WP-027",
+        "WP-028",
+        "WP-029",
+        "WP-030",
+        "WP-031",
+        "WP-032",
+        "WP-033",
+        "WP-034"
+      ]
+    },
+    {
+      "number": 6,
+      "file": "EPIC-06_PROMPT_LIFECYCLE.md",
+      "title": "Prompt Lifecycle",
+      "priority": "P0/P1",
+      "packets": [
+        "WP-035",
+        "WP-036",
+        "WP-037",
+        "WP-038",
+        "WP-039",
+        "WP-040"
+      ]
+    },
+    {
+      "number": 7,
+      "file": "EPIC-07_KNOWLEDGE_BASE.md",
+      "title": "Knowledge Base",
+      "priority": "P1/P2",
+      "packets": [
+        "WP-041",
+        "WP-042",
+        "WP-043",
+        "WP-044",
+        "WP-045",
+        "WP-046"
+      ]
+    },
+    {
+      "number": 8,
+      "file": "EPIC-08_OBSERVABILITY.md",
+      "title": "Observability",
+      "priority": "P1",
+      "packets": [
+        "WP-047",
+        "WP-048",
+        "WP-049",
+        "WP-050",
+        "WP-051",
+        "WP-052"
+      ]
+    },
+    {
+      "number": 9,
+      "file": "EPIC-09_ENTERPRISE_HARDENING.md",
+      "title": "Enterprise Hardening and Certification",
+      "priority": "P0/P1",
+      "packets": [
+        "WP-053",
+        "WP-054",
+        "WP-055",
+        "WP-056",
+        "WP-057",
+        "WP-058",
+        "WP-059",
+        "WP-060"
+      ]
+    }
+  ]
+}
