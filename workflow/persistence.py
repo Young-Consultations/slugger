@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,6 +26,29 @@ def _new_run_id() -> str:
 
 
 def _serialize_artifact(artifact: Artifact) -> dict:
+    """Serialise *artifact* to a JSON-compatible dict.
+
+    Schema::
+
+        {
+          "artifact_id": str,
+          "name": str,
+          "artifact_type": str (ArtifactType value),
+          "content": str,
+          "status": str (ArtifactStatus value),
+          "format": str,
+          "tags": list[str],
+          "metadata": {
+            "source_agent": str,
+            "source_step": str,
+            "version": str,
+            "project_id": str | None,
+            "correlation_id": str | None,
+            "labels": dict[str, str],
+            "created_at": str (ISO-8601),
+          }
+        }
+    """
     return {
         'artifact_id': artifact.artifact_id,
         'name': artifact.name,
@@ -47,8 +70,14 @@ def _serialize_artifact(artifact: Artifact) -> dict:
 
 
 def _deserialize_artifact(raw: dict) -> Artifact:
+    """Reconstruct an :class:`Artifact` subclass from a serialised *raw* dict.
+
+    The ``artifact_type`` field is used to select the appropriate subclass via
+    :data:`_ARTIFACT_CLASSES`.  Unknown types fall back to
+    :class:`~models.artifact.DocumentArtifact`.
+    """
     meta_raw = raw.get('metadata', {})
-    created_at = datetime.fromisoformat(meta_raw['created_at']) if meta_raw.get('created_at') else datetime.utcnow()
+    created_at = datetime.fromisoformat(meta_raw['created_at']) if meta_raw.get('created_at') else datetime.now(timezone.utc)
     metadata = ArtifactMetadata(
         source_agent=meta_raw.get('source_agent', 'unknown'),
         source_step=meta_raw.get('source_step', 'unknown'),

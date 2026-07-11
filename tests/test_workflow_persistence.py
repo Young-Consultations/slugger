@@ -195,7 +195,7 @@ class TestResumeCLI:
         assert args.idea == 'My app'
         assert args.platform == 'web'
 
-    def test_build_output_includes_run_id(self) -> None:
+    def test_build_output_includes_run_id(self, capsys) -> None:
         import json
         from unittest.mock import MagicMock, patch
         from cli.main import main
@@ -207,22 +207,8 @@ class TestResumeCLI:
         result.artifacts = []
         fake_slugger.build.return_value = result
         with patch('cli.main.Bootstrap'), patch('cli.main.Slugger', return_value=fake_slugger):
-            from io import StringIO
-            import sys
-            captured = []
-
-            class _Cap:
-                def write(self, s):
-                    captured.append(s)
-                def flush(self):
-                    pass
-
-            old_stdout = sys.stdout
-            sys.stdout = _Cap()
-            try:
-                rc = main(['build', 'An idea', '--platform', 'web'])
-            finally:
-                sys.stdout = old_stdout
-            output = json.loads(''.join(captured))
-            assert rc == 0
-            assert output['run_id'] == 'test-run-id-123'
+            rc = main(['build', 'An idea', '--platform', 'web'])
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert rc == 0
+        assert output['run_id'] == 'test-run-id-123'

@@ -20,13 +20,20 @@ _AGENT_NOTES: dict[str, str] = {
     'anthropic': 'Anthropic Claude',
 }
 
-_SAFE_CHARS_RE = None
-
-
 def _sanitize_for_docstring(text: str) -> str:
-    """Strip characters that could break a Python docstring or markdown block."""
-    # Replace triple-quotes to avoid prematurely closing the docstring.
-    return text.replace('"""', "'''").replace('\r', '').strip()
+    """Strip characters that could break a Python docstring or markdown block.
+
+    Both triple double-quote and triple single-quote sequences are replaced so
+    neither can prematurely close the surrounding string literals in the
+    generated scaffold.
+    """
+    return (
+        text
+        .replace('"""', '\\"\\"\\"')
+        .replace("'''", "\\'\\'\\'")
+        .replace('\r', '')
+        .strip()
+    )
 
 
 def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
