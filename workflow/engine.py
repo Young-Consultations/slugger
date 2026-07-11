@@ -86,7 +86,7 @@ class WorkflowEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _check_approval(self, step_instance: StepInstance) -> bool:
+    def _check_approval(self, step_instance: StepInstance, run_id: str = 'default-run') -> bool:
         """Evaluate any approval policy for *step_instance*.
 
         Returns ``True`` if execution may proceed, ``False`` if the workflow
@@ -105,7 +105,7 @@ class WorkflowEngine:
             auto_approve=policy.auto_approve,
             timeout_seconds=policy.timeout_seconds,
         )
-        record = self.approval_handler.evaluate(checkpoint)
+        record = self.approval_handler.evaluate(run_id, checkpoint)
         step_instance.approval_record_id = record.record_id
         from workflow.approvals import ApprovalDecision
         return record.decision in (ApprovalDecision.APPROVED, ApprovalDecision.AUTO_APPROVED)
@@ -125,7 +125,7 @@ class WorkflowEngine:
                 continue
 
             # Evaluate approval gate before executing the step (WP-022/WP-023)
-            if not self._check_approval(step_instance):
+            if not self._check_approval(step_instance, run_id=instance.run_id):
                 step_instance.status = StepStatus.PENDING
                 instance.status = 'awaiting_approval'
                 if self.persistence is not None:
