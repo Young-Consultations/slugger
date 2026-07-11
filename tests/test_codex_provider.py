@@ -59,7 +59,7 @@ def test_codex_review_raises_without_key() -> None:
     cfg = ProviderConfig(name='codex', provider_type='codex', model='gpt-4o')
     provider = CodexProvider(cfg)
     with pytest.raises(ProviderError, match='API key'):
-        provider.review('print("hello")')
+        provider._review_raw('print("hello")')
 
 
 def test_codex_refactor_raises_without_key() -> None:
@@ -68,7 +68,7 @@ def test_codex_refactor_raises_without_key() -> None:
     cfg = ProviderConfig(name='codex', provider_type='codex', model='gpt-4o')
     provider = CodexProvider(cfg)
     with pytest.raises(ProviderError, match='API key'):
-        provider.refactor('x = 1', 'rename to counter')
+        provider._refactor_raw('x = 1', 'rename to counter')
 
 
 def test_codex_embed_raises_without_key() -> None:

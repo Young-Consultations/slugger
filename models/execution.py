@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from models.artifact import Artifact
+
+if TYPE_CHECKING:
+    from agents.messaging import MessageBus
 
 
 class ExecutionState(str, Enum):
@@ -41,6 +44,7 @@ class ExecutionContext:
     correlation_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     events: list[ExecutionEvent] = field(default_factory=list)
+    message_bus: MessageBus | None = field(default=None)
 
     def add_event(self, event: ExecutionEvent) -> None:
         """Attach an execution event to the context."""

@@ -69,6 +69,18 @@ class CanvaSettings:
 
 
 @dataclass(slots=True)
+class ChatGPTSettings:
+    """ChatGPT / OpenAI chat-completions configuration section."""
+
+    api_key: str = ''
+    api_key_env: str = 'OPENAI_API_KEY'
+    model: str = 'gpt-4o'
+    base_url: str = 'https://api.openai.com/v1'
+    timeout_seconds: int = 30
+    mock_mode: bool = False
+
+
+@dataclass(slots=True)
 class Settings:
     """Root application settings."""
 
@@ -80,4 +92,5 @@ class Settings:
     memory: MemorySettings = field(default_factory=MemorySettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)
     canva: CanvaSettings = field(default_factory=CanvaSettings)
+    chatgpt: ChatGPTSettings = field(default_factory=ChatGPTSettings)
     plugin_directories: list[str] = field(default_factory=lambda: ['plugins'])

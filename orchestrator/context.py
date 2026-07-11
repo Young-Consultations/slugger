@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from agents.messaging import MessageBus
 from agents.registry import AgentRegistry
 from config.settings import Settings
 from memory.memory_manager import MemoryManager
@@ -12,6 +13,8 @@ from observability.collector import MetricsCollector
 from observability.reporter import ObservabilityReporter
 from observability.tracer import ExecutionTracer
 from providers.registry import ProviderRegistry
+from services.canva.base import ICanvaService
+from services.chatgpt.base import IChatGPTService
 from services.github.base import IGitHubService
 from workflow.engine import WorkflowEngine
 
@@ -28,3 +31,6 @@ class ApplicationContext:
     metrics: MetricsCollector
     tracer: ExecutionTracer
     reporter: ObservabilityReporter
+    message_bus: MessageBus = field(default_factory=MessageBus)
+    chatgpt: IChatGPTService | None = None
+    canva: ICanvaService | None = None

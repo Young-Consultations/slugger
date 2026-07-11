@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from agents import ADRAgent, APIDesignAgent, AgentRegistry, CICDAgent, ChangelogAgent, CodeGeneratorAgent, CodeReviewAgent, DeploymentAgent, DiagramAgent, DocumentationAgent, GitHubIssuesAgent, KnowledgeAgent, MonitoringAgent, PerformanceAgent, ProductVisionAgent, ProjectPlanAgent, RefactorAgent, ReflectionAgent, ReleaseAgent, RequirementsAgent, SecurityReviewAgent, SystemDesignAgent, TestGeneratorAgent, TestRunnerAgent, UserStoryAgent
+from agents.architecture.canva_design_agent import CanvaDesignAgent
+from agents.messaging import MessageBus
 from config.loader import ConfigLoader
 from memory import FileMemoryBackend, InMemoryBackend, MemoryManager
 from models.artifact_store import InMemoryArtifactStore
 from models.provider import ProviderConfig, ProviderType
 from observability import ExecutionTracer, MetricsCollector, ObservabilityReporter
 from orchestrator.context import ApplicationContext
-from providers import AnthropicProvider, MockProvider, OpenAIProvider, ProviderRegistry
+from providers import AnthropicProvider, CodexProvider, MockProvider, OpenAIProvider, ProviderRegistry
+from services.canva import ICanvaService, MockCanvaService
+from services.chatgpt import IChatGPTService, MockChatGPTService
 from services.github import IGitHubService, MockGitHubService
 from validators import AgentValidator, ArtifactValidator, QualityGateEvaluator, WorkflowValidator
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser, WorkflowPersistence
@@ -29,20 +34,29 @@ class Bootstrap:
                 providers.register(name, OpenAIProvider(config))
             elif config.provider_type == ProviderType.ANTHROPIC:
                 providers.register(name, AnthropicProvider(config))
+            elif config.provider_type == ProviderType.CODEX:
+                providers.register(name, CodexProvider(config))
             else:
                 providers.register(name, MockProvider(config))
         if 'mock' not in providers.list():
             providers.register('mock', MockProvider(ProviderConfig(name='mock', provider_type=ProviderType.MOCK)))
+        # Register Codex provider when OPENAI_API_KEY is present and codex is not yet registered
+        if 'codex' not in providers.list():
+            codex_key = os.environ.get('OPENAI_API_KEY', '')
+            if codex_key:
+                providers.register('codex', CodexProvider(ProviderConfig(name='codex', provider_type=ProviderType.CODEX, api_key=codex_key)))
         artifact_store = InMemoryArtifactStore()
         backend = InMemoryBackend() if settings.memory.backend == 'in_memory' else FileMemoryBackend(self.root_path / settings.memory.storage_path)
         memory = MemoryManager(backend)
+        message_bus = MessageBus()
         metrics = MetricsCollector()
         tracer = ExecutionTracer()
         reporter = ObservabilityReporter(metrics, tracer)
         validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
-        agents = self._build_agents()
+        canva_service = self._build_canva_service(settings)
+        agents = self._build_agents(canva_service)
         parser = WorkflowParser(validators['workflow_validator'])
-        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}))
+        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus)
         persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
         workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
         github_settings = settings.github
@@ -54,13 +68,64 @@ class Bootstrap:
                 token=github_settings.token,
             )
         else:
-            github_service = MockGitHubService()
-        return ApplicationContext(settings=settings, providers=providers, agents=agents, workflow_engine=workflow_engine, artifact_store=artifact_store, memory=memory, github=github_service, metrics=metrics, tracer=tracer, reporter=reporter)
+            token = os.environ.get(github_settings.token_env, '')
+            if token and github_settings.owner and github_settings.repo:
+                from services.github import GitHubClient
+                github_service = GitHubClient(owner=github_settings.owner, repo=github_settings.repo, token=token)
+            else:
+                github_service = MockGitHubService()
+        chatgpt_service = self._build_chatgpt_service(settings)
+        return ApplicationContext(
+            settings=settings,
+            providers=providers,
+            agents=agents,
+            workflow_engine=workflow_engine,
+            artifact_store=artifact_store,
+            memory=memory,
+            github=github_service,
+            metrics=metrics,
+            tracer=tracer,
+            reporter=reporter,
+            message_bus=message_bus,
+            chatgpt=chatgpt_service,
+            canva=canva_service,
+        )
 
-    def _build_agents(self) -> AgentRegistry:
+    def _build_canva_service(self, settings: object) -> ICanvaService:
+        """Resolve the Canva service — live client if credentials present, mock otherwise."""
+        canva_settings = getattr(settings, 'canva', None)
+        if canva_settings is None:
+            return MockCanvaService()
+        token = canva_settings.access_token or os.environ.get(canva_settings.access_token_env, '')
+        if token:
+            from services.canva import CanvaClient
+            return CanvaClient(access_token=token, base_url=canva_settings.base_url)
+        return MockCanvaService()
+
+    def _build_chatgpt_service(self, settings: object) -> IChatGPTService:
+        """Resolve the ChatGPT service — live client if credentials present, mock otherwise."""
+        chatgpt_settings = getattr(settings, 'chatgpt', None)
+        if chatgpt_settings is None:
+            return MockChatGPTService()
+        if getattr(chatgpt_settings, 'mock_mode', False):
+            return MockChatGPTService()
+        api_key = chatgpt_settings.api_key or os.environ.get(chatgpt_settings.api_key_env, '')
+        if api_key:
+            from services.chatgpt import ChatGPTClient
+            return ChatGPTClient(
+                api_key=api_key,
+                model=chatgpt_settings.model,
+                base_url=chatgpt_settings.base_url,
+                timeout=chatgpt_settings.timeout_seconds,
+            )
+        return MockChatGPTService()
+
+    def _build_agents(self, canva_service: ICanvaService | None = None) -> AgentRegistry:
         registry = AgentRegistry()
         planning_agents = [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent(), ProjectPlanAgent()]
         architecture_agents = [SystemDesignAgent(), ADRAgent(), DiagramAgent(), APIDesignAgent()]
+        if canva_service is not None:
+            architecture_agents.append(CanvaDesignAgent(canva_service))
         development_agents = [CodeGeneratorAgent(), CodeReviewAgent(), RefactorAgent(), DocumentationAgent()]
         qa_agents = [TestGeneratorAgent(), TestRunnerAgent(), SecurityReviewAgent(), PerformanceAgent()]
         operations_agents = [DeploymentAgent(), CICDAgent(), MonitoringAgent(), ReleaseAgent()]
