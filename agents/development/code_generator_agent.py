@@ -20,12 +20,11 @@ _AGENT_NOTES: dict[str, str] = {
     'anthropic': 'Anthropic Claude',
 }
 
-def _sanitize_for_docstring(text: str) -> str:
-    """Strip characters that could break a Python docstring or markdown block.
+def _escape_triple_quotes(text: str) -> str:
+    """Escape triple-quote sequences so *text* is safe to embed in string literals.
 
-    Both triple double-quote and triple single-quote sequences are replaced so
-    neither can prematurely close the surrounding string literals in the
-    generated scaffold.
+    Both ``\"\"\"`` and ``'''`` are replaced with escaped equivalents to prevent
+    either from prematurely closing a surrounding docstring or code block.
     """
     return (
         text
@@ -39,7 +38,7 @@ def _sanitize_for_docstring(text: str) -> str:
 def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
     """Return a Python project scaffold as a markdown-formatted code listing."""
 
-    safe_idea = _sanitize_for_docstring(idea)
+    safe_idea = _escape_triple_quotes(idea)
     platform_note = _PLATFORM_NOTES.get(platform, platform)
     agent_note = _AGENT_NOTES.get(coding_agent, coding_agent)
 

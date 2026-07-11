@@ -77,7 +77,8 @@ def _deserialize_artifact(raw: dict) -> Artifact:
     :class:`~models.artifact.DocumentArtifact`.
     """
     meta_raw = raw.get('metadata', {})
-    created_at = datetime.fromisoformat(meta_raw['created_at']) if meta_raw.get('created_at') else datetime.now(timezone.utc)
+    raw_ts = meta_raw.get('created_at')
+    created_at = datetime.fromisoformat(raw_ts) if raw_ts else datetime.now(timezone.utc)
     metadata = ArtifactMetadata(
         source_agent=meta_raw.get('source_agent', 'unknown'),
         source_step=meta_raw.get('source_step', 'unknown'),
