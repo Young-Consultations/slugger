@@ -1,0 +1,199 @@
+{
+  "schema_version": "2.0",
+  "name": "Slugger Copilot Completion Plan v2",
+  "baseline": {
+    "repository": "slugger-main 5",
+    "verified_tests": 443,
+    "pytest_warnings": 7,
+    "verified_date": "2026-07-11",
+    "current_product_state": "The repository is a well-tested AI-SDLC framework prototype. It does not yet produce, build, test, and release a runnable Python application."
+  },
+  "task_count": 18,
+  "tasks": [
+    {
+      "id": "CC-001",
+      "title": "Correct workflow truthfulness and propagate the user idea",
+      "priority": "P0",
+      "milestone": "M1 \u2014 Honest orchestration",
+      "depends_on": []
+    },
+    {
+      "id": "CC-002",
+      "title": "Create managed prompts and structured artifact contracts",
+      "priority": "P0",
+      "milestone": "M1 \u2014 Honest orchestration",
+      "depends_on": [
+        "CC-001"
+      ]
+    },
+    {
+      "id": "CC-003",
+      "title": "Implement capability-based runtime provider and service resolution",
+      "priority": "P0",
+      "milestone": "M2 \u2014 Real AI agents",
+      "depends_on": [
+        "CC-001",
+        "CC-002"
+      ]
+    },
+    {
+      "id": "CC-004",
+      "title": "Connect ChatGPT to planning and prompt review",
+      "priority": "P0",
+      "milestone": "M2 \u2014 Real AI agents",
+      "depends_on": [
+        "CC-002",
+        "CC-003"
+      ]
+    },
+    {
+      "id": "CC-005",
+      "title": "Replace the fake Codex wrapper with a true Codex coding-agent adapter",
+      "priority": "P0",
+      "milestone": "M2 \u2014 Real AI agents",
+      "depends_on": [
+        "CC-002",
+        "CC-003"
+      ]
+    },
+    {
+      "id": "CC-006",
+      "title": "Complete Canva design generation, export, and approval handoff",
+      "priority": "P0",
+      "milestone": "M2 \u2014 Real AI agents",
+      "depends_on": [
+        "CC-003",
+        "CC-004"
+      ]
+    },
+    {
+      "id": "CC-007",
+      "title": "Generate a validated multi-file Python application manifest",
+      "priority": "P0",
+      "milestone": "M3 \u2014 Runnable output",
+      "depends_on": [
+        "CC-002",
+        "CC-004",
+        "CC-005",
+        "CC-006"
+      ]
+    },
+    {
+      "id": "CC-008",
+      "title": "Materialize application files into a safe, reproducible workspace",
+      "priority": "P0",
+      "milestone": "M3 \u2014 Runnable output",
+      "depends_on": [
+        "CC-007"
+      ]
+    },
+    {
+      "id": "CC-009",
+      "title": "Build, test, analyze, and smoke-run generated applications in isolation",
+      "priority": "P0",
+      "milestone": "M3 \u2014 Runnable output",
+      "depends_on": [
+        "CC-008"
+      ]
+    },
+    {
+      "id": "CC-010",
+      "title": "Implement bounded code-review, QA, and security remediation loops",
+      "priority": "P0",
+      "milestone": "M4 \u2014 Autonomous quality",
+      "depends_on": [
+        "CC-005",
+        "CC-009"
+      ]
+    },
+    {
+      "id": "CC-011",
+      "title": "Persist artifacts, versions, lineage, and workflow state durably",
+      "priority": "P0",
+      "milestone": "M5 \u2014 Auditability",
+      "depends_on": [
+        "CC-001",
+        "CC-007",
+        "CC-008"
+      ]
+    },
+    {
+      "id": "CC-012",
+      "title": "Fix human approval persistence, quorum, CLI decisions, and resume security",
+      "priority": "P0",
+      "milestone": "M5 \u2014 Auditability",
+      "depends_on": [
+        "CC-011"
+      ]
+    },
+    {
+      "id": "CC-013",
+      "title": "Inject knowledge, standards, and project memory into agent context",
+      "priority": "P1",
+      "milestone": "M6 \u2014 Governed intelligence",
+      "depends_on": [
+        "CC-002",
+        "CC-011"
+      ]
+    },
+    {
+      "id": "CC-014",
+      "title": "Instrument executions, token budgets, cost, failures, and completion evidence",
+      "priority": "P1",
+      "milestone": "M6 \u2014 Governed intelligence",
+      "depends_on": [
+        "CC-003",
+        "CC-011"
+      ]
+    },
+    {
+      "id": "CC-015",
+      "title": "Replace the eight-step placeholder recipe with the real full AI-SDLC",
+      "priority": "P0",
+      "milestone": "M7 \u2014 Product workflow",
+      "depends_on": [
+        "CC-004",
+        "CC-005",
+        "CC-006",
+        "CC-010",
+        "CC-012",
+        "CC-013",
+        "CC-014"
+      ]
+    },
+    {
+      "id": "CC-016",
+      "title": "Collect authoritative readiness evidence and enforce release gates",
+      "priority": "P0",
+      "milestone": "M7 \u2014 Product workflow",
+      "depends_on": [
+        "CC-009",
+        "CC-010",
+        "CC-011",
+        "CC-012",
+        "CC-015"
+      ]
+    },
+    {
+      "id": "CC-017",
+      "title": "Complete GitHub automation, CI quality gates, packaging, and release candidate creation",
+      "priority": "P0",
+      "milestone": "M8 \u2014 Repository delivery",
+      "depends_on": [
+        "CC-012",
+        "CC-016"
+      ]
+    },
+    {
+      "id": "CC-018",
+      "title": "Prove idea-to-production behavior and generate the 95% completion certification",
+      "priority": "P0",
+      "milestone": "M9 \u2014 Acceptance",
+      "depends_on": [
+        "CC-015",
+        "CC-016",
+        "CC-017"
+      ]
+    }
+  ]
+}

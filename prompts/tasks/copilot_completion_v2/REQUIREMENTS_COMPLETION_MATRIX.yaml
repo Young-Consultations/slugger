@@ -1,0 +1,91 @@
+schema_version: '2.0'
+baseline:
+  repository: slugger-main 5
+  verified_tests: 443
+  pytest_warnings: 7
+  verified_date: '2026-07-11'
+  current_product_state: The repository is a well-tested AI-SDLC framework prototype.
+    It does not yet produce, build, test, and release a runnable Python application.
+completion_policy:
+  overall_required_percent: 95
+  p0_required_percent: 100
+  completion_requires:
+  - merged implementation
+  - passing focused tests
+  - passing full suite
+  - primary runtime evidence
+  - documentation
+  - no unresolved blocking finding
+requirements:
+- id: REQ-001
+  requirement: User idea is authoritative root input
+  task: CC-001
+  priority: P0
+- id: REQ-002
+  requirement: Versioned prompt lifecycle and structured outputs
+  task: CC-002
+  priority: P0
+- id: REQ-003
+  requirement: Capability-based provider/service selection
+  task: CC-003
+  priority: P0
+- id: REQ-004
+  requirement: ChatGPT executes and reviews planning prompts
+  task: CC-004
+  priority: P0
+- id: REQ-005
+  requirement: OpenAI Codex operates as coding and review agent
+  task: CC-005
+  priority: P0
+- id: REQ-006
+  requirement: Canva operates as design agent
+  task: CC-006
+  priority: P0
+- id: REQ-007
+  requirement: System generates validated multi-file Python app
+  task: CC-007
+  priority: P0
+- id: REQ-008
+  requirement: Generated app materializes to safe workspace
+  task: CC-008
+  priority: P0
+- id: REQ-009
+  requirement: Generated app builds, tests, scans, and smoke-runs
+  task: CC-009
+  priority: P0
+- id: REQ-010
+  requirement: Autonomous bounded remediation loops
+  task: CC-010
+  priority: P0
+- id: REQ-011
+  requirement: Durable artifacts, versions, state, and lineage
+  task: CC-011
+  priority: P0
+- id: REQ-012
+  requirement: Secure human approval and audit gates
+  task: CC-012
+  priority: P0
+- id: REQ-013
+  requirement: Knowledge, standards, and memory influence execution
+  task: CC-013
+  priority: P1
+- id: REQ-014
+  requirement: Observability, cost, budget, and completion evidence
+  task: CC-014
+  priority: P1
+- id: REQ-015
+  requirement: Complete AI-SDLC workflow
+  task: CC-015
+  priority: P0
+- id: REQ-016
+  requirement: Evidence-backed production readiness
+  task: CC-016
+  priority: P0
+- id: REQ-017
+  requirement: GitHub/Copilot workflows, CI, package, draft release
+  task: CC-017
+  priority: P0
+- id: REQ-018
+  requirement: "End-to-end acceptance and \u226595% certification"
+  task: CC-018
+  priority: P0
