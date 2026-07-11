@@ -104,6 +104,8 @@ class WorkflowEngine:
             required_approvers=policy.required_approvers,
             auto_approve=policy.auto_approve,
             timeout_seconds=policy.timeout_seconds,
+            on_timeout=policy.on_timeout,
+            quorum=policy.quorum,
         )
         record = self.approval_handler.evaluate(run_id, checkpoint)
         step_instance.approval_record_id = record.record_id

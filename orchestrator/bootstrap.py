@@ -52,7 +52,9 @@ class Bootstrap:
         if 'codex' not in providers.list():
             codex_key = os.environ.get('OPENAI_API_KEY', '')
             if codex_key:
-                providers.register('codex', CodexProvider(ProviderConfig(name='codex', provider_type=ProviderType.CODEX, api_key=codex_key)))
+                chatgpt_settings = getattr(settings, 'chatgpt', None)
+                codex_model = getattr(chatgpt_settings, 'model', 'gpt-4o') if chatgpt_settings is not None else 'gpt-4o'
+                providers.register('codex', CodexProvider(ProviderConfig(name='codex', provider_type=ProviderType.CODEX, api_key=codex_key, model=codex_model)))
         artifact_store = InMemoryArtifactStore()
         backend = InMemoryBackend() if settings.memory.backend == 'in_memory' else FileMemoryBackend(self.root_path / settings.memory.storage_path)
         memory = MemoryManager(backend)

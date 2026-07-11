@@ -103,5 +103,11 @@ class BaseProvider(ABC):
         always_supported = {'complete', 'embed', 'generate', 'embed_typed'}
         if capability in always_supported:
             return True
-        # Probe optional capabilities by checking a callable method exists on this instance
+        # 'review' and 'refactor' raise UnsupportedCapabilityError in BaseProvider.
+        # Return True only if a subclass has overridden the method.
+        unsupported_unless_overridden = {'review', 'refactor'}
+        if capability in unsupported_unless_overridden:
+            base_method = getattr(BaseProvider, capability, None)
+            instance_method = getattr(type(self), capability, None)
+            return instance_method is not base_method
         return callable(getattr(self, capability, None))

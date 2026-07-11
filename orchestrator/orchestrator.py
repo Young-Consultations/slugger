@@ -71,7 +71,7 @@ class Slugger:
         lineage_node_count = len(self.context.lineage_graph.all_nodes())
         knowledge_doc_count = 0
         if self.context.knowledge_indexer is not None:
-            knowledge_doc_count = len(self.context.knowledge_indexer.documents())
+            knowledge_doc_count = len(self.context.knowledge_indexer.documents)
         return {
             'environment': self.context.settings.environment,
             'providers': provider_names,
