@@ -184,7 +184,10 @@ class PromptRegressionSuite:
         variables = variables or {}
         baseline = self._baselines.get(_baseline_key(template_name, variables))
         if baseline is None:
-            raise KeyError(f"No baseline recorded for template '{template_name}'.")
+            raise KeyError(
+                f"No baseline recorded for template '{template_name}' "
+                f"with variables {variables!r}."
+            )
 
         result = self._evaluator.evaluate(template_name, variables)
         current_hash = _hash_rendered(result.rendered)
