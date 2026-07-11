@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from models.project import ProjectInput
 from orchestrator.context import ApplicationContext
+from workflow.models import WorkflowInstance
+
+_DEFAULT_WORKFLOW = 'full-sdlc'
 
 
 class Slugger:
@@ -11,6 +15,22 @@ class Slugger:
 
     def run_workflow(self, workflow_name: str):
         return self.context.workflow_engine.run(workflow_name)
+
+    def build(self, project_input: ProjectInput, workflow: str | None = None) -> WorkflowInstance:
+        """Run a workflow initialised with the supplied :class:`ProjectInput`.
+
+        Parameters
+        ----------
+        project_input:
+            A :class:`~models.project.ProjectInput` describing the app idea,
+            target platform, and preferred coding agent.
+        workflow:
+            Optional workflow name or YAML path.  Defaults to ``full-sdlc``.
+        """
+
+        workflow_name = workflow or _DEFAULT_WORKFLOW
+        metadata = project_input.as_metadata()
+        return self.context.workflow_engine.run(workflow_name, metadata=metadata)
 
     def list_agents(self) -> list[str]:
         return self.context.agents.list()

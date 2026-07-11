@@ -373,6 +373,25 @@ slugger run full-sdlc
 slugger status
 ```
 
+### Building an App from a Single Input
+
+The `build` subcommand is the primary user-facing entry point.  Supply your app
+idea, the target platform, and an optional coding agent in one command:
+
+```bash
+# Minimal usage — defaults to the codex coding agent
+slugger build "A task management app" --platform web
+
+# Specify a platform and coding agent explicitly
+slugger build "A fitness tracker" --platform ios --coding-agent anthropic
+
+# Override the default workflow
+slugger build "A real-time chat app" --platform android --workflow requirements-gathering
+```
+
+Supported platforms: `ios`, `android`, `web`.  
+Supported coding agents: `codex` (default), `anthropic`.
+
 The default workflow recipes live in `workflow/recipes/` and can be executed directly by recipe name or by passing a YAML file path.
 
 ## Continuous Integration
