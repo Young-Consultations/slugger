@@ -46,10 +46,15 @@ class WorkflowStateDB:
     # Public API
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _current_timestamp() -> str:
+        """Return the current UTC timestamp as an ISO-8601 string."""
+        return datetime.now(timezone.utc).isoformat()
+
     def save(self, instance: WorkflowInstance) -> None:
         """Upsert *instance* into the database."""
         payload = json.dumps(_serialize_instance(instance))
-        now = datetime.now(timezone.utc).isoformat()
+        now = self._current_timestamp()
         with self._connection() as conn:
             conn.execute(
                 '''

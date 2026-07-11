@@ -140,6 +140,12 @@ class DependencyChecker:
             if latest is None:
                 return None, f"Package '{name}' not found in version map."
             return latest, ''
+        # Validate the package name before constructing the URL to prevent SSRF.
+        # PyPI package names may only contain alphanumerics, hyphens, underscores,
+        # and dots per PEP 508 / the PyPI API specification.
+        import re
+        if not re.match(r'^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$', name):
+            return None, f"Package name '{name}' contains invalid characters."
         # Network lookup
         url = self.PYPI_URL.format(package=name)
         try:

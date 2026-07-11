@@ -170,6 +170,12 @@ class ReleaseAutomation:
         max_count:
             Maximum number of commits.
         """
+        # Validate since_tag to prevent command injection.  Git tag names may
+        # contain alphanumerics, dots, hyphens, underscores, and forward slashes.
+        if since_tag is not None:
+            import re
+            if not re.match(r'^[A-Za-z0-9._/\-]+$', since_tag):
+                raise ValueError(f"Invalid since_tag value: {since_tag!r}")
         cmd = ['git', '-C', str(self.repo_root), 'log',
                '--pretty=format:%H|%s|%an', f'-{max_count}']
         if since_tag:
