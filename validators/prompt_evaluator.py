@@ -24,7 +24,8 @@ class PromptEvaluationResult:
 
 
 def _extract_placeholders(text: str) -> list[str]:
-    """Return the unique placeholder names found in *text*."""
+    """Return the unique placeholder names found in *text*, preserving order."""
+    # dict.fromkeys() deduplicates while maintaining insertion order (Python 3.7+).
     return list(dict.fromkeys(_PLACEHOLDER_RE.findall(text)))
 
 

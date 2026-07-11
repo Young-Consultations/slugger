@@ -72,6 +72,24 @@ class TestWorkflowPersistence:
         assert loaded.run_id == instance.run_id
         assert loaded.status == 'succeeded'
 
+    def test_artifacts_persisted_and_restored(self, tmp_path: Path) -> None:
+        engine, persistence = _build_engine(tmp_path)
+        instance = engine.run('requirements-gathering', project_id='p1')
+        loaded = persistence.load(instance.run_id)
+        assert loaded is not None
+        original_names = {a.name for a in instance.artifacts}
+        restored_names = {a.name for a in loaded.artifacts}
+        assert original_names == restored_names
+
+    def test_step_artifacts_persisted_and_restored(self, tmp_path: Path) -> None:
+        engine, persistence = _build_engine(tmp_path)
+        instance = engine.run('requirements-gathering', project_id='p1')
+        loaded = persistence.load(instance.run_id)
+        assert loaded is not None
+        for si in loaded.step_instances:
+            original_si = next(s for s in instance.step_instances if s.definition.name == si.definition.name)
+            assert [a.name for a in si.artifacts] == [a.name for a in original_si.artifacts]
+
     def test_load_unknown_run_id_returns_none(self, tmp_path: Path) -> None:
         persistence = WorkflowPersistence(tmp_path / 'state.json')
         assert persistence.load('nonexistent-id') is None

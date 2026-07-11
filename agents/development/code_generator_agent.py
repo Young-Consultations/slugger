@@ -20,17 +20,26 @@ _AGENT_NOTES: dict[str, str] = {
     'anthropic': 'Anthropic Claude',
 }
 
+_SAFE_CHARS_RE = None
+
+
+def _sanitize_for_docstring(text: str) -> str:
+    """Strip characters that could break a Python docstring or markdown block."""
+    # Replace triple-quotes to avoid prematurely closing the docstring.
+    return text.replace('"""', "'''").replace('\r', '').strip()
+
 
 def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
     """Return a Python project scaffold as a markdown-formatted code listing."""
 
+    safe_idea = _sanitize_for_docstring(idea)
     platform_note = _PLATFORM_NOTES.get(platform, platform)
     agent_note = _AGENT_NOTES.get(coding_agent, coding_agent)
 
     return textwrap.dedent(f"""\
         # Generated Python Project
 
-        **Idea:** {idea}
+        **Idea:** {safe_idea}
         **Platform:** {platform_note}
         **Coding agent:** {agent_note}
 
@@ -56,14 +65,14 @@ def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
         ## src/app/main.py
 
         ```python
-        \"\"\"Entry point for: {idea}.\"\"\"
+        \"\"\"Entry point for: {safe_idea}.\"\"\"
 
         from __future__ import annotations
 
 
         def run() -> None:
             \"\"\"Run the application.\"\"\"
-            print("Running: {idea}")
+            print("Running: {safe_idea}")
 
 
         if __name__ == "__main__":
@@ -75,7 +84,7 @@ def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
         ## tests/test_main.py
 
         ```python
-        \"\"\"Smoke tests for: {idea}.\"\"\"
+        \"\"\"Smoke tests for: {safe_idea}.\"\"\"
 
         from app.main import run
 

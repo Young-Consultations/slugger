@@ -4,24 +4,75 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from models.artifact import Artifact, ArtifactMetadata, ArtifactStatus, ArtifactType, DocumentArtifact, CodeArtifact, TestArtifact, ConfigArtifact, DiagramArtifact
 from models.workflow import StepStatus
 from workflow.models import StepInstance, WorkflowDefinition, WorkflowInstance, WorkflowStepDefinition
+
+_ARTIFACT_CLASSES: dict[str, type[Artifact]] = {
+    ArtifactType.DOCUMENT.value: DocumentArtifact,
+    ArtifactType.CODE.value: CodeArtifact,
+    ArtifactType.TEST.value: TestArtifact,
+    ArtifactType.CONFIG.value: ConfigArtifact,
+    ArtifactType.DIAGRAM.value: DiagramArtifact,
+}
 
 
 def _new_run_id() -> str:
     return str(uuid4())
 
 
-def _serialize_instance(instance: WorkflowInstance) -> dict:
-    """Convert a :class:`WorkflowInstance` to a JSON-serialisable dict.
+def _serialize_artifact(artifact: Artifact) -> dict:
+    return {
+        'artifact_id': artifact.artifact_id,
+        'name': artifact.name,
+        'artifact_type': artifact.artifact_type.value,
+        'content': artifact.content,
+        'status': artifact.status.value,
+        'format': artifact.format,
+        'tags': artifact.tags,
+        'metadata': {
+            'source_agent': artifact.metadata.source_agent,
+            'source_step': artifact.metadata.source_step,
+            'version': artifact.metadata.version,
+            'project_id': artifact.metadata.project_id,
+            'correlation_id': artifact.metadata.correlation_id,
+            'labels': artifact.metadata.labels,
+            'created_at': artifact.metadata.created_at.isoformat(),
+        },
+    }
 
-    Only the fields needed to reconstruct progress are stored (definition
-    structure, per-step status and attempts).  Artifact *content* is not
-    persisted here; callers may use a separate artifact store for that.
-    """
+
+def _deserialize_artifact(raw: dict) -> Artifact:
+    meta_raw = raw.get('metadata', {})
+    created_at = datetime.fromisoformat(meta_raw['created_at']) if meta_raw.get('created_at') else datetime.utcnow()
+    metadata = ArtifactMetadata(
+        source_agent=meta_raw.get('source_agent', 'unknown'),
+        source_step=meta_raw.get('source_step', 'unknown'),
+        version=meta_raw.get('version', '1.0.0'),
+        project_id=meta_raw.get('project_id'),
+        correlation_id=meta_raw.get('correlation_id'),
+        labels=meta_raw.get('labels', {}),
+        created_at=created_at,
+    )
+    artifact_type = raw.get('artifact_type', ArtifactType.DOCUMENT.value)
+    cls = _ARTIFACT_CLASSES.get(artifact_type, DocumentArtifact)
+    return cls(
+        artifact_id=raw['artifact_id'],
+        name=raw['name'],
+        content=raw['content'],
+        status=ArtifactStatus(raw.get('status', ArtifactStatus.DRAFT.value)),
+        format=raw.get('format', 'markdown'),
+        tags=raw.get('tags', []),
+        metadata=metadata,
+    )
+
+
+def _serialize_instance(instance: WorkflowInstance) -> dict:
+    """Convert a :class:`WorkflowInstance` to a JSON-serialisable dict."""
     return {
         'run_id': instance.run_id,
         'status': instance.status,
@@ -46,9 +97,15 @@ def _serialize_instance(instance: WorkflowInstance) -> dict:
             ],
         },
         'step_instances': [
-            {'name': si.definition.name, 'status': si.status.value, 'attempts': si.attempts}
+            {
+                'name': si.definition.name,
+                'status': si.status.value,
+                'attempts': si.attempts,
+                'artifacts': [_serialize_artifact(a) for a in si.artifacts],
+            }
             for si in instance.step_instances
         ],
+        'artifacts': [_serialize_artifact(a) for a in instance.artifacts],
     }
 
 
@@ -87,11 +144,14 @@ def _deserialize_instance(payload: dict) -> WorkflowInstance:
             definition=step_def,
             status=StepStatus(raw_si.get('status', StepStatus.PENDING.value)),
             attempts=raw_si.get('attempts', 0),
+            artifacts=[_deserialize_artifact(a) for a in raw_si.get('artifacts', [])],
         )
         step_instances.append(si)
+    instance_artifacts = [_deserialize_artifact(a) for a in payload.get('artifacts', [])]
     return WorkflowInstance(
         definition=definition,
         step_instances=step_instances,
+        artifacts=instance_artifacts,
         status=payload.get('status', 'pending'),
         run_id=payload.get('run_id', _new_run_id()),
     )

@@ -10,6 +10,7 @@ from models.workflow import StepStatus
 from workflow.executor import StepExecutor
 from workflow.models import StepInstance, WorkflowDefinition, WorkflowInstance
 from workflow.parser import WorkflowParser
+from workflow.persistence import WorkflowPersistence
 
 
 class WorkflowEngine:
@@ -19,13 +20,13 @@ class WorkflowEngine:
         parser: WorkflowParser,
         executor: StepExecutor,
         artifact_store: InMemoryArtifactStore | None = None,
-        persistence=None,
+        persistence: WorkflowPersistence | None = None,
     ) -> None:
         self.recipe_directory = recipe_directory
         self.parser = parser
         self.executor = executor
         self.artifact_store = artifact_store or InMemoryArtifactStore()
-        self.persistence = persistence  # optional WorkflowPersistence
+        self.persistence = persistence
 
     def list_workflows(self) -> list[str]:
         return sorted(path.stem for path in self.recipe_directory.glob('*.yaml'))
