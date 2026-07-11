@@ -7,8 +7,9 @@ from pathlib import Path
 from core.exceptions import WorkflowError
 from models.artifact_store import InMemoryArtifactStore
 from models.workflow import StepStatus
+from workflow.approvals import ApprovalCheckpoint, ApprovalGateHandler
 from workflow.executor import StepExecutor
-from workflow.models import StepInstance, WorkflowDefinition, WorkflowInstance
+from workflow.models import ApprovalPolicy, StepInstance, WorkflowDefinition, WorkflowInstance
 from workflow.parser import WorkflowParser
 from workflow.persistence import WorkflowPersistence
 
@@ -21,12 +22,14 @@ class WorkflowEngine:
         executor: StepExecutor,
         artifact_store: InMemoryArtifactStore | None = None,
         persistence: WorkflowPersistence | None = None,
+        approval_handler: ApprovalGateHandler | None = None,
     ) -> None:
         self.recipe_directory = recipe_directory
         self.parser = parser
         self.executor = executor
         self.artifact_store = artifact_store or InMemoryArtifactStore()
         self.persistence = persistence
+        self.approval_handler = approval_handler or ApprovalGateHandler()
 
     def list_workflows(self) -> list[str]:
         return sorted(path.stem for path in self.recipe_directory.glob('*.yaml'))
@@ -83,6 +86,32 @@ class WorkflowEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _check_approval(self, step_instance: StepInstance, run_id: str = 'default-run') -> bool:
+        """Evaluate any approval policy for *step_instance*.
+
+        Returns ``True`` if execution may proceed, ``False`` if the workflow
+        should pause pending human approval.
+
+        When the policy is configured as auto-approve (or no policy is set),
+        the approval is granted immediately.
+        """
+        policy: ApprovalPolicy | None = step_instance.definition.approval_policy
+        if policy is None:
+            return True
+        checkpoint = ApprovalCheckpoint(
+            name=f'{step_instance.definition.name}.pre',
+            description=f'Approval required before executing step: {step_instance.definition.name}',
+            required_approvers=policy.required_approvers,
+            auto_approve=policy.auto_approve,
+            timeout_seconds=policy.timeout_seconds,
+            on_timeout=policy.on_timeout,
+            quorum=policy.quorum,
+        )
+        record = self.approval_handler.evaluate(run_id, checkpoint)
+        step_instance.approval_record_id = record.record_id
+        from workflow.approvals import ApprovalDecision
+        return record.decision in (ApprovalDecision.APPROVED, ApprovalDecision.AUTO_APPROVED)
+
     def _execute_instance(
         self,
         instance: WorkflowInstance,
@@ -96,6 +125,14 @@ class WorkflowEngine:
                 for artifact in step_instance.artifacts:
                     artifacts_by_name[artifact.name] = artifact
                 continue
+
+            # Evaluate approval gate before executing the step (WP-022/WP-023)
+            if not self._check_approval(step_instance, run_id=instance.run_id):
+                step_instance.status = StepStatus.AWAITING_APPROVAL
+                instance.status = 'awaiting_approval'
+                if self.persistence is not None:
+                    self.persistence.save(instance)
+                return instance
 
             max_attempts = int(step_instance.definition.retry_policy.get('max_attempts', 1))
             while step_instance.attempts < max_attempts:

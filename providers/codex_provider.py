@@ -11,7 +11,16 @@ import os
 import requests
 
 from core.exceptions import ProviderError
-from models.provider import ProviderConfig
+from models.provider import (
+    GenerationRequest,
+    GenerationResult,
+    HealthResult,
+    ProviderConfig,
+    RefactorRequest,
+    RefactorResult,
+    ReviewRequest,
+    ReviewResult,
+)
 from providers.base import BaseProvider
 
 _OPENAI_API_BASE = 'https://api.openai.com/v1'
@@ -106,7 +115,7 @@ class CodexProvider(BaseProvider):
             raise ProviderError(f'Unexpected Codex response structure: {data}')
         return choices[0]['message']['content']
 
-    def review(self, code: str, *, language: str = 'Python', **kwargs: object) -> str:
+    def _review_raw(self, code: str, *, language: str = 'Python', **kwargs: object) -> str:
         """Request a code review for *code*.
 
         Returns structured review feedback as a string.
@@ -147,7 +156,7 @@ class CodexProvider(BaseProvider):
             raise ProviderError('Unexpected Codex review response structure.')
         return choices[0]['message']['content']
 
-    def refactor(self, code: str, instruction: str, *, language: str = 'Python', **kwargs: object) -> str:
+    def _refactor_raw(self, code: str, instruction: str, *, language: str = 'Python', **kwargs: object) -> str:
         """Refactor *code* according to *instruction*.
 
         Returns the refactored source code as a string.
@@ -218,3 +227,46 @@ class CodexProvider(BaseProvider):
             'model': self._model,
             'status': 'ready' if self.is_available() else 'no_key',
         }
+
+    # ------------------------------------------------------------------
+    # Typed capability methods (WP-001)
+    # ------------------------------------------------------------------
+
+    def generate(self, request: GenerationRequest) -> GenerationResult:
+        """Generate code from a typed :class:`~models.provider.GenerationRequest`."""
+        kwargs: dict[str, object] = {'language': request.language}
+        if request.temperature is not None:
+            kwargs['temperature'] = request.temperature
+        if request.max_tokens is not None:
+            kwargs['max_tokens'] = request.max_tokens
+        content = self.complete(request.prompt, **kwargs)
+        return GenerationResult(
+            content=content,
+            model=self._model,
+            # Note: token counts are rough whitespace-word approximations; for accurate
+            # billing-grade counts use a tokenizer library such as tiktoken.
+            input_tokens=len(request.prompt.split()),
+            output_tokens=len(content.split()),
+        )
+
+    def review(self, request: ReviewRequest) -> ReviewResult:
+        """Review code using a typed :class:`~models.provider.ReviewRequest`."""
+        raw = self._review_raw(request.code, language=request.language)
+        return ReviewResult(summary=raw, score=7.0)
+
+    def refactor(self, request: RefactorRequest) -> RefactorResult:
+        """Refactor code using a typed :class:`~models.provider.RefactorRequest`."""
+        raw = self._refactor_raw(request.code, request.instruction, language=request.language)
+        return RefactorResult(refactored_code=raw, model=self._model)
+
+    def health_check(self) -> HealthResult:
+        """Return a health check for the Codex provider."""
+        available = self.is_available()
+        return HealthResult(
+            provider='codex',
+            available=available,
+            model=self._model,
+            has_credentials=available,
+            reachable=False,
+            diagnostics={'status': 'ready' if available else 'no_key'},
+        )

@@ -42,6 +42,11 @@ class ApprovalCheckpoint:
     timeout_seconds:
         Optional wall-clock timeout after which the gate auto-rejects if
         not yet approved.
+    on_timeout:
+        Action to take when the timeout expires: ``'abort'`` (default) rejects
+        the checkpoint; ``'escalate'`` rejects with an escalation comment.
+    quorum:
+        Minimum number of approvals required (0 = all required_approvers).
     metadata:
         Arbitrary extra configuration for the checkpoint.
     """
@@ -51,6 +56,8 @@ class ApprovalCheckpoint:
     required_approvers: list[str] = field(default_factory=list)
     auto_approve: bool = False
     timeout_seconds: int | None = None
+    on_timeout: str = 'abort'
+    quorum: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -60,6 +67,8 @@ class ApprovalCheckpoint:
             'required_approvers': list(self.required_approvers),
             'auto_approve': self.auto_approve,
             'timeout_seconds': self.timeout_seconds,
+            'on_timeout': self.on_timeout,
+            'quorum': self.quorum,
             'metadata': dict(self.metadata),
         }
 
@@ -71,6 +80,8 @@ class ApprovalCheckpoint:
             required_approvers=list(data.get('required_approvers', [])),
             auto_approve=bool(data.get('auto_approve', False)),
             timeout_seconds=data.get('timeout_seconds'),
+            on_timeout=str(data.get('on_timeout', 'abort')),
+            quorum=int(data.get('quorum', 0)),
             metadata=dict(data.get('metadata', {})),
         )
 
@@ -313,13 +324,18 @@ class ApprovalGateHandler:
             deadline = record.timestamp + timedelta(seconds=checkpoint.timeout_seconds)
             if now < deadline:
                 continue
+            on_timeout = getattr(checkpoint, 'on_timeout', 'abort')
+            if on_timeout == 'escalate':
+                comment = 'Auto-rejected: checkpoint approval timed out (escalation required).'
+            else:
+                comment = 'Auto-rejected: checkpoint approval timed out.'
             timeout_record = ApprovalRecord(
                 record_id=str(uuid4()),
                 checkpoint_name=record.checkpoint_name,
                 run_id=record.run_id,
                 decision=ApprovalDecision.REJECTED,
                 approver='system',
-                comment='Auto-rejected: checkpoint approval timed out.',
+                comment=comment,
             )
             self._audit.append(timeout_record)
             self._resolved_ids.add(record.record_id)
