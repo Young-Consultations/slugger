@@ -314,6 +314,7 @@ class ApprovalGateHandler:
             if now < deadline:
                 continue
             timeout_record = ApprovalRecord(
+                record_id=str(uuid4()),
                 checkpoint_name=record.checkpoint_name,
                 run_id=record.run_id,
                 decision=ApprovalDecision.REJECTED,

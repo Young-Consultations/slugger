@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -119,12 +120,7 @@ def test_timeout_auto_rejects_pending_record() -> None:
     handler = ApprovalGateHandler()
     cp = ApprovalCheckpoint(name='gate', timeout_seconds=1)
     record = handler.evaluate('run-1', cp)
-    handler._audit[-1] = ApprovalRecord(
-        **{
-            **handler._audit[-1].__dict__,
-            'timestamp': handler._audit[-1].timestamp - timedelta(seconds=5),
-        }
-    )
+    handler._audit[-1] = replace(handler._audit[-1], timestamp=handler._audit[-1].timestamp - timedelta(seconds=5))
     with pytest.raises(ValueError, match='not pending'):
         handler.approve(record.record_id, approver='alice')
     rejected = handler.audit_log(decision=ApprovalDecision.REJECTED)
