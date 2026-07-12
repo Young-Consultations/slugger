@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from memory.memory_manager import MemoryManager
-from memory.models import MemoryEntry, MemoryQuery
+from memory.models import MemoryEntry
 
 
 @dataclass
@@ -63,7 +63,7 @@ class AgentMemory:
     def __init__(self, agent_name: str, manager: MemoryManager) -> None:
         self._agent_name = agent_name
         self._manager = manager
-        self._namespace = f'agent:{agent_name}'
+        self._namespace = f"agent:{agent_name}"
 
     @property
     def agent_name(self) -> str:
@@ -108,7 +108,7 @@ class AgentMemory:
             key,
             content,
             namespace=self._namespace,
-            tags=(tags or []) + [f'importance:{importance}'],
+            tags=(tags or []) + [f"importance:{importance}"],
         )
         return record
 
@@ -144,5 +144,5 @@ class AgentMemory:
 
     def all_entries(self) -> list[MemoryEntry]:
         """Return all entries in the agent's namespace."""
-        result = self._manager.search('', namespace=self._namespace)
+        result = self._manager.search("", namespace=self._namespace)
         return result.entries

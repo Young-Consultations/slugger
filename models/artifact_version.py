@@ -36,12 +36,12 @@ def _bump_version(current: str) -> str:
     >>> _bump_version('2.3.9')
     '2.3.10'
     """
-    parts = current.split('.')
+    parts = current.split(".")
     try:
         parts[-1] = str(int(parts[-1]) + 1)
     except (ValueError, IndexError):
-        parts.append('1')
-    return '.'.join(parts)
+        parts.append("1")
+    return ".".join(parts)
 
 
 class ArtifactVersionStore:
@@ -90,7 +90,7 @@ class ArtifactVersionStore:
         if history:
             version = _bump_version(history[-1].version)
         else:
-            version = artifact.metadata.version or '1.0.0'
+            version = artifact.metadata.version or "1.0.0"
 
         entry = ArtifactVersion(
             artifact_id=artifact.artifact_id,
@@ -98,12 +98,12 @@ class ArtifactVersionStore:
             version=version,
             content=artifact.content,
             metadata_snapshot={
-                'source_agent': artifact.metadata.source_agent,
-                'source_step': artifact.metadata.source_step,
-                'project_id': artifact.metadata.project_id,
-                'correlation_id': artifact.metadata.correlation_id,
-                'labels': dict(artifact.metadata.labels),
-                'created_at': artifact.metadata.created_at.isoformat(),
+                "source_agent": artifact.metadata.source_agent,
+                "source_step": artifact.metadata.source_step,
+                "project_id": artifact.metadata.project_id,
+                "correlation_id": artifact.metadata.correlation_id,
+                "labels": dict(artifact.metadata.labels),
+                "created_at": artifact.metadata.created_at.isoformat(),
             },
         )
         history.append(entry)

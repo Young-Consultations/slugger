@@ -16,10 +16,10 @@ from uuid import uuid4
 class MessagePriority(str, Enum):
     """Priority levels for agent messages."""
 
-    LOW = 'low'
-    NORMAL = 'normal'
-    HIGH = 'high'
-    CRITICAL = 'critical'
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 @dataclass(slots=True)
@@ -113,7 +113,7 @@ class MessageBus:
         """
         self._history.append(message)
         dispatched = 0
-        if message.recipient == '*':
+        if message.recipient == "*":
             for handlers in list(self._handlers.values()):
                 for handler in list(handlers):
                     handler(message)
@@ -122,7 +122,7 @@ class MessageBus:
             for handler in list(self._handlers.get(message.recipient, [])):
                 handler(message)
                 dispatched += 1
-            for handler in list(self._handlers.get('*', [])):
+            for handler in list(self._handlers.get("*", [])):
                 handler(message)
                 dispatched += 1
         return dispatched
@@ -131,7 +131,9 @@ class MessageBus:
     # Introspection
     # ------------------------------------------------------------------
 
-    def history(self, *, sender: str | None = None, recipient: str | None = None) -> list[AgentMessage]:
+    def history(
+        self, *, sender: str | None = None, recipient: str | None = None
+    ) -> list[AgentMessage]:
         """Return message history, optionally filtered by sender or recipient."""
         messages = self._history
         if sender is not None:

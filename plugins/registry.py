@@ -28,13 +28,17 @@ class PluginRegistry:
         while remaining:
             progress = False
             for name, plugin in list(remaining.items()):
-                if all(dependency in loaded for dependency in plugin.metadata.dependencies):
+                if all(
+                    dependency in loaded for dependency in plugin.metadata.dependencies
+                ):
                     plugin.load()
                     loaded.add(name)
                     remaining.pop(name)
                     progress = True
             if not progress:
-                raise RuntimeError(f'Unable to resolve plugin dependencies: {", ".join(sorted(remaining))}')
+                raise RuntimeError(
+                    f"Unable to resolve plugin dependencies: {', '.join(sorted(remaining))}"
+                )
 
     def unload_all(self) -> None:
         for plugin in self._plugins.values():

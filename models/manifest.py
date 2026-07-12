@@ -18,7 +18,7 @@ class ManifestDependency:
     """A declared dependency of the project."""
 
     name: str
-    version: str = '*'
+    version: str = "*"
     extras: list[str] = field(default_factory=list)
 
 
@@ -26,9 +26,9 @@ class ManifestDependency:
 class ManifestBuildConfig:
     """Build / generation configuration embedded in the manifest."""
 
-    coding_agent: str = 'codex'
-    platform: str = 'web'
-    workflow: str = 'python-project'
+    coding_agent: str = "codex"
+    platform: str = "web"
+    workflow: str = "python-project"
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -60,8 +60,8 @@ class ProjectManifest:
 
     project_id: str
     name: str
-    version: str = '0.1.0'
-    description: str = ''
+    version: str = "0.1.0"
+    description: str = ""
     dependencies: list[ManifestDependency] = field(default_factory=list)
     dev_dependencies: list[ManifestDependency] = field(default_factory=list)
     build: ManifestBuildConfig = field(default_factory=ManifestBuildConfig)
@@ -76,58 +76,58 @@ class ProjectManifest:
         """Convert the manifest to a JSON/YAML-serialisable dict."""
 
         def _dep(d: ManifestDependency) -> dict[str, Any]:
-            result: dict[str, Any] = {'name': d.name, 'version': d.version}
+            result: dict[str, Any] = {"name": d.name, "version": d.version}
             if d.extras:
-                result['extras'] = d.extras
+                result["extras"] = d.extras
             return result
 
         return {
-            'project_id': self.project_id,
-            'name': self.name,
-            'version': self.version,
-            'description': self.description,
-            'dependencies': [_dep(d) for d in self.dependencies],
-            'dev_dependencies': [_dep(d) for d in self.dev_dependencies],
-            'build': {
-                'coding_agent': self.build.coding_agent,
-                'platform': self.build.platform,
-                'workflow': self.build.workflow,
+            "project_id": self.project_id,
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "dependencies": [_dep(d) for d in self.dependencies],
+            "dev_dependencies": [_dep(d) for d in self.dev_dependencies],
+            "build": {
+                "coding_agent": self.build.coding_agent,
+                "platform": self.build.platform,
+                "workflow": self.build.workflow,
                 **self.build.extra,
             },
-            'tags': self.tags,
-            'metadata': self.metadata,
+            "tags": self.tags,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'ProjectManifest':
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectManifest":
         """Reconstruct a :class:`ProjectManifest` from a plain dict."""
 
         def _dep(raw: dict[str, Any]) -> ManifestDependency:
             return ManifestDependency(
-                name=raw['name'],
-                version=raw.get('version', '*'),
-                extras=raw.get('extras', []),
+                name=raw["name"],
+                version=raw.get("version", "*"),
+                extras=raw.get("extras", []),
             )
 
-        raw_build = data.get('build', {})
-        known_build_keys = {'coding_agent', 'platform', 'workflow'}
+        raw_build = data.get("build", {})
+        known_build_keys = {"coding_agent", "platform", "workflow"}
         build = ManifestBuildConfig(
-            coding_agent=raw_build.get('coding_agent', 'codex'),
-            platform=raw_build.get('platform', 'web'),
-            workflow=raw_build.get('workflow', 'python-project'),
+            coding_agent=raw_build.get("coding_agent", "codex"),
+            platform=raw_build.get("platform", "web"),
+            workflow=raw_build.get("workflow", "python-project"),
             extra={k: v for k, v in raw_build.items() if k not in known_build_keys},
         )
 
         return cls(
-            project_id=data['project_id'],
-            name=data['name'],
-            version=data.get('version', '0.1.0'),
-            description=data.get('description', ''),
-            dependencies=[_dep(d) for d in data.get('dependencies', [])],
-            dev_dependencies=[_dep(d) for d in data.get('dev_dependencies', [])],
+            project_id=data["project_id"],
+            name=data["name"],
+            version=data.get("version", "0.1.0"),
+            description=data.get("description", ""),
+            dependencies=[_dep(d) for d in data.get("dependencies", [])],
+            dev_dependencies=[_dep(d) for d in data.get("dev_dependencies", [])],
             build=build,
-            tags=data.get('tags', []),
-            metadata=data.get('metadata', {}),
+            tags=data.get("tags", []),
+            metadata=data.get("metadata", {}),
         )
 
     # ------------------------------------------------------------------
@@ -137,10 +137,12 @@ class ProjectManifest:
     def save(self, path: Path) -> None:
         """Write the manifest to *path* as YAML."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(yaml.safe_dump(self.to_dict(), sort_keys=False), encoding='utf-8')
+        path.write_text(
+            yaml.safe_dump(self.to_dict(), sort_keys=False), encoding="utf-8"
+        )
 
     @classmethod
-    def load(cls, path: Path) -> 'ProjectManifest':
+    def load(cls, path: Path) -> "ProjectManifest":
         """Load a manifest from a YAML *path*."""
-        data = yaml.safe_load(path.read_text(encoding='utf-8'))
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
         return cls.from_dict(data)

@@ -16,6 +16,7 @@ from pathlib import Path
 # Models                                                                       #
 # --------------------------------------------------------------------------- #
 
+
 @dataclass
 class KnowledgeDocument:
     """A single indexed knowledge-base document.
@@ -37,7 +38,7 @@ class KnowledgeDocument:
     path: str
     title: str
     headings: list[str] = field(default_factory=list)
-    content: str = ''
+    content: str = ""
     tags: list[str] = field(default_factory=list)
 
 
@@ -54,7 +55,7 @@ class SearchResult:
 # Indexer                                                                      #
 # --------------------------------------------------------------------------- #
 
-_HEADING_RE = re.compile(r'^#{1,6}\s+(.+)', re.MULTILINE)
+_HEADING_RE = re.compile(r"^#{1,6}\s+(.+)", re.MULTILINE)
 
 
 def _extract_headings(content: str) -> list[str]:
@@ -63,14 +64,18 @@ def _extract_headings(content: str) -> list[str]:
 
 def _score(document: KnowledgeDocument, terms: list[str]) -> tuple[float, list[str]]:
     """Return a relevance score and list of matched terms."""
-    text = (document.title + ' ' + ' '.join(document.headings) + ' ' + document.content).lower()
+    text = (
+        document.title + " " + " ".join(document.headings) + " " + document.content
+    ).lower()
     matched: list[str] = []
     for term in terms:
         if term.lower() in text:
             matched.append(term)
     # Heading/title matches score higher than body matches
     title_hits = sum(1 for t in matched if t.lower() in document.title.lower())
-    heading_hits = sum(1 for t in matched if any(t.lower() in h.lower() for h in document.headings))
+    heading_hits = sum(
+        1 for t in matched if any(t.lower() in h.lower() for h in document.headings)
+    )
     score = len(matched) + title_hits * 2 + heading_hits
     return float(score), matched
 
@@ -110,15 +115,19 @@ class KnowledgeIndexer:
             Number of documents indexed.
         """
         self._documents.clear()
-        for md_file in sorted(self.root.rglob('*.md')):
+        for md_file in sorted(self.root.rglob("*.md")):
             doc = self._index_file(md_file)
             self._documents.append(doc)
         return len(self._documents)
 
     def _index_file(self, path: Path) -> KnowledgeDocument:
-        content = path.read_text(encoding='utf-8', errors='replace')
+        content = path.read_text(encoding="utf-8", errors="replace")
         headings = _extract_headings(content)
-        title = headings[0] if headings else path.stem.replace('-', ' ').replace('_', ' ').title()
+        title = (
+            headings[0]
+            if headings
+            else path.stem.replace("-", " ").replace("_", " ").title()
+        )
         # Derive tags from directory components relative to root
         rel = path.relative_to(self.root)
         tags = [part for part in rel.parts[:-1]]
@@ -160,7 +169,9 @@ class KnowledgeIndexer:
         for doc in self._documents:
             score, matched = _score(doc, terms)
             if score > 0:
-                results.append(SearchResult(document=doc, score=score, matched_terms=matched))
+                results.append(
+                    SearchResult(document=doc, score=score, matched_terms=matched)
+                )
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:limit]
 

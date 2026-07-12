@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from validators.base import BaseValidator, ValidationError, ValidationResult
 
-_PLACEHOLDER_RE = re.compile(r'\{\{\s*(\w+)\s*\}\}')
+_PLACEHOLDER_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
 @dataclass(slots=True)
@@ -60,16 +60,20 @@ class PromptTemplateValidator(BaseValidator):
     def validate(self, target: str, **kwargs: Any) -> ValidationResult:
         errors: list[ValidationError] = []
         if len(target.strip()) < self.min_length:
-            errors.append(ValidationError(
-                field='content',
-                message=f'Rendered prompt is shorter than minimum length ({self.min_length} chars).',
-            ))
+            errors.append(
+                ValidationError(
+                    field="content",
+                    message=f"Rendered prompt is shorter than minimum length ({self.min_length} chars).",
+                )
+            )
         for section in self.required_sections:
             if section not in target:
-                errors.append(ValidationError(
-                    field='section',
-                    message=f'Required section not found in rendered prompt: {section!r}',
-                ))
+                errors.append(
+                    ValidationError(
+                        field="section",
+                        message=f"Required section not found in rendered prompt: {section!r}",
+                    )
+                )
         return ValidationResult(valid=not errors, errors=errors)
 
 
@@ -100,18 +104,18 @@ class PromptEvaluator:
 
     def list_templates(self) -> list[str]:
         """Return the stems of all ``*.md`` files in the template directory."""
-        return sorted(p.stem for p in self.template_dir.glob('*.md'))
+        return sorted(p.stem for p in self.template_dir.glob("*.md"))
 
     def load_template(self, name: str) -> str:
         """Return the raw text of the named template."""
         candidates = [
             self.template_dir / name,
-            self.template_dir / f'{name}.md',
+            self.template_dir / f"{name}.md",
         ]
         for path in candidates:
             if path.exists():
-                return path.read_text(encoding='utf-8')
-        raise FileNotFoundError(f'Template not found: {name!r} in {self.template_dir}')
+                return path.read_text(encoding="utf-8")
+        raise FileNotFoundError(f"Template not found: {name!r} in {self.template_dir}")
 
     def extract_placeholders(self, name: str) -> list[str]:
         """Return placeholder names declared in the named template."""
@@ -147,7 +151,8 @@ class PromptEvaluator:
         validator = self.validator
         if extra_sections:
             validator = PromptTemplateValidator(
-                required_sections=list(self.validator.required_sections) + extra_sections,
+                required_sections=list(self.validator.required_sections)
+                + extra_sections,
                 min_length=self.validator.min_length,
             )
         validation = validator.validate(rendered)
@@ -159,7 +164,9 @@ class PromptEvaluator:
             validation=validation,
         )
 
-    def evaluate_all(self, variables_map: dict[str, dict[str, str]]) -> dict[str, PromptEvaluationResult]:
+    def evaluate_all(
+        self, variables_map: dict[str, dict[str, str]]
+    ) -> dict[str, PromptEvaluationResult]:
         """Evaluate every template in *template_dir*.
 
         Parameters

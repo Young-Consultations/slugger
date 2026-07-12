@@ -48,12 +48,12 @@ class PluginManifest:
 
     name: str
     version: str
-    description: str = ''
-    author: str = ''
-    license: str = 'MIT'
-    main: str = ''
+    description: str = ""
+    author: str = ""
+    license: str = "MIT"
+    main: str = ""
     capabilities: list[str] = field(default_factory=list)
-    requires: str = '>=0.1.0'
+    requires: str = ">=0.1.0"
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_plugin_metadata(self) -> PluginMetadata:
@@ -68,29 +68,29 @@ class PluginManifest:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'name': self.name,
-            'version': self.version,
-            'description': self.description,
-            'author': self.author,
-            'license': self.license,
-            'main': self.main,
-            'capabilities': self.capabilities,
-            'requires': self.requires,
-            'metadata': self.metadata,
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "author": self.author,
+            "license": self.license,
+            "main": self.main,
+            "capabilities": self.capabilities,
+            "requires": self.requires,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'PluginManifest':
+    def from_dict(cls, data: dict[str, Any]) -> "PluginManifest":
         return cls(
-            name=data['name'],
-            version=data.get('version', '0.1.0'),
-            description=data.get('description', ''),
-            author=data.get('author', ''),
-            license=data.get('license', 'MIT'),
-            main=data.get('main', ''),
-            capabilities=data.get('capabilities', []),
-            requires=data.get('requires', '>=0.1.0'),
-            metadata=data.get('metadata', {}),
+            name=data["name"],
+            version=data.get("version", "0.1.0"),
+            description=data.get("description", ""),
+            author=data.get("author", ""),
+            license=data.get("license", "MIT"),
+            main=data.get("main", ""),
+            capabilities=data.get("capabilities", []),
+            requires=data.get("requires", ">=0.1.0"),
+            metadata=data.get("metadata", {}),
         )
 
 
@@ -138,7 +138,7 @@ class PluginSDK:
         name: str,
         version: str,
         description: str,
-        author: str = '',
+        author: str = "",
         capabilities: list[str] | None = None,
         **kwargs: Any,
     ) -> PluginManifest:
@@ -167,19 +167,22 @@ class PluginSDK:
         ValidationReport
         """
         import re
+
         errors: list[str] = []
         warnings: list[str] = []
 
         if not manifest.name:
             errors.append("Plugin 'name' must not be empty.")
-        elif not re.match(r'^[a-z0-9][a-z0-9\-]*$', manifest.name):
+        elif not re.match(r"^[a-z0-9][a-z0-9\-]*$", manifest.name):
             errors.append("Plugin 'name' must match [a-z0-9][a-z0-9-]*.")
 
         if not manifest.version:
             errors.append("Plugin 'version' must not be empty.")
 
         if manifest.capabilities and not manifest.main:
-            warnings.append("'main' entry point is not set — the plugin cannot be loaded at runtime.")
+            warnings.append(
+                "'main' entry point is not set — the plugin cannot be loaded at runtime."
+            )
 
         if not manifest.description:
             warnings.append("'description' is empty — provide a one-line description.")

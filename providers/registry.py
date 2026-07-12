@@ -18,7 +18,7 @@ class ProviderRegistry:
         try:
             return self._providers[name]
         except KeyError as error:
-            raise KeyError(f'Unknown provider: {name}') from error
+            raise KeyError(f"Unknown provider: {name}") from error
 
     def list(self) -> list[str]:
         return sorted(self._providers)

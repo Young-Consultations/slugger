@@ -10,17 +10,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
-from uuid import uuid4
 
 
 class PromptApprovalStatus(str, Enum):
     """Lifecycle status for a prompt version."""
 
-    DRAFT = 'draft'
-    PENDING_REVIEW = 'pending_review'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-    DEPRECATED = 'deprecated'
+    DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    DEPRECATED = "deprecated"
 
 
 @dataclass
@@ -54,41 +53,41 @@ class PromptVersion:
     prompt_id: str
     name: str
     content: str
-    version: str = '1.0.0'
-    author: str = 'unknown'
+    version: str = "1.0.0"
+    author: str = "unknown"
     status: PromptApprovalStatus = PromptApprovalStatus.DRAFT
     quality_score: float | None = None
-    change_notes: str = ''
+    change_notes: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'prompt_id': self.prompt_id,
-            'name': self.name,
-            'version': self.version,
-            'author': self.author,
-            'status': self.status.value,
-            'quality_score': self.quality_score,
-            'change_notes': self.change_notes,
-            'metadata': dict(self.metadata),
-            'created_at': self.created_at.isoformat(),
-            'content_length': len(self.content),
+            "prompt_id": self.prompt_id,
+            "name": self.name,
+            "version": self.version,
+            "author": self.author,
+            "status": self.status.value,
+            "quality_score": self.quality_score,
+            "change_notes": self.change_notes,
+            "metadata": dict(self.metadata),
+            "created_at": self.created_at.isoformat(),
+            "content_length": len(self.content),
         }
 
 
 def _bump_minor(version: str) -> str:
     """Increment the minor component of a SemVer string."""
-    parts = version.split('.')
+    parts = version.split(".")
     try:
         parts[1] = str(int(parts[1]) + 1)
         if len(parts) > 2:
-            parts[2] = '0'
+            parts[2] = "0"
         elif len(parts) == 2:
-            parts.append('0')
+            parts.append("0")
     except (ValueError, IndexError):
-        parts = ['1', '0', '0']
-    return '.'.join(parts)
+        parts = ["1", "0", "0"]
+    return ".".join(parts)
 
 
 class PromptQualityScorer:
@@ -104,11 +103,34 @@ class PromptQualityScorer:
     - Clarity (0–1): absence of vague filler words
     """
 
-    _ACTION_VERBS = {'generate', 'create', 'write', 'produce', 'list', 'describe', 'summarise',
-                     'summarize', 'explain', 'review', 'analyse', 'analyze', 'compare', 'return'}
-    _VAGUE_WORDS = {'stuff', 'things', 'etc', 'somehow', 'kind of', 'sort of'}
-    _FORMAT_HINTS = {'json', 'yaml', 'markdown', 'table', 'bullet', 'numbered', 'output:', 'format:'}
-    _ROLE_HINTS = {'you are', 'act as', 'as a', 'role:', 'persona:'}
+    _ACTION_VERBS = {
+        "generate",
+        "create",
+        "write",
+        "produce",
+        "list",
+        "describe",
+        "summarise",
+        "summarize",
+        "explain",
+        "review",
+        "analyse",
+        "analyze",
+        "compare",
+        "return",
+    }
+    _VAGUE_WORDS = {"stuff", "things", "etc", "somehow", "kind of", "sort of"}
+    _FORMAT_HINTS = {
+        "json",
+        "yaml",
+        "markdown",
+        "table",
+        "bullet",
+        "numbered",
+        "output:",
+        "format:",
+    }
+    _ROLE_HINTS = {"you are", "act as", "as a", "role:", "persona:"}
 
     def score(self, content: str) -> float:
         if not content.strip():
@@ -126,16 +148,21 @@ class PromptQualityScorer:
         # Specificity (0–3): action verbs and constraints
         verbs_found = sum(1 for v in self._ACTION_VERBS if v in lower)
         total += min(verbs_found * 0.5, 1.5)
-        if any(kw in lower for kw in ('must', 'should', 'only', 'exactly', 'always', 'never', 'do not')):
+        if any(
+            kw in lower
+            for kw in ("must", "should", "only", "exactly", "always", "never", "do not")
+        ):
             total += 1.0
-        if any(char in content for char in (':', '-', '•')):
+        if any(char in content for char in (":", "-", "•")):
             total += 0.5
 
         # Structure (0–2)
         lines = content.splitlines()
-        if any(line.strip().startswith(('1.', '2.', '3.', '-', '*', '•')) for line in lines):
+        if any(
+            line.strip().startswith(("1.", "2.", "3.", "-", "*", "•")) for line in lines
+        ):
             total += 1.0
-        if any(line.strip().endswith(':') for line in lines):
+        if any(line.strip().endswith(":") for line in lines):
             total += 1.0
 
         # Context (0–2): format hints and role hints
@@ -176,7 +203,7 @@ class PromptRegistry:
         prompt_id: str,
         name: str,
         content: str,
-        author: str = 'unknown',
+        author: str = "unknown",
         metadata: dict[str, Any] | None = None,
     ) -> PromptVersion:
         """Register a new prompt and return its first version."""
@@ -185,7 +212,7 @@ class PromptRegistry:
             prompt_id=prompt_id,
             name=name,
             content=content,
-            version='1.0.0',
+            version="1.0.0",
             author=author,
             quality_score=quality,
             metadata=metadata or {},
@@ -198,7 +225,7 @@ class PromptRegistry:
         prompt_id: str,
         content: str,
         author: str | None = None,
-        change_notes: str = '',
+        change_notes: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> PromptVersion:
         """Create a new minor version of an existing prompt.
@@ -207,7 +234,7 @@ class PromptRegistry:
         """
         history = self._store.get(prompt_id)
         if not history:
-            raise KeyError(f'Prompt not registered: {prompt_id!r}')
+            raise KeyError(f"Prompt not registered: {prompt_id!r}")
         latest = history[-1]
         quality = self._scorer.score(content)
         new_version = PromptVersion(
@@ -223,23 +250,23 @@ class PromptRegistry:
         history.append(new_version)
         return new_version
 
-    def approve(self, prompt_id: str, approver: str = 'system') -> PromptVersion:
+    def approve(self, prompt_id: str, approver: str = "system") -> PromptVersion:
         """Set the latest version of *prompt_id* to APPROVED."""
         version = self.latest(prompt_id)
         if version is None:
-            raise KeyError(f'Prompt not registered: {prompt_id!r}')
+            raise KeyError(f"Prompt not registered: {prompt_id!r}")
         version.status = PromptApprovalStatus.APPROVED
-        version.metadata['approved_by'] = approver
+        version.metadata["approved_by"] = approver
         return version
 
-    def reject(self, prompt_id: str, reason: str = '') -> PromptVersion:
+    def reject(self, prompt_id: str, reason: str = "") -> PromptVersion:
         """Set the latest version of *prompt_id* to REJECTED."""
         version = self.latest(prompt_id)
         if version is None:
-            raise KeyError(f'Prompt not registered: {prompt_id!r}')
+            raise KeyError(f"Prompt not registered: {prompt_id!r}")
         version.status = PromptApprovalStatus.REJECTED
         if reason:
-            version.metadata['rejection_reason'] = reason
+            version.metadata["rejection_reason"] = reason
         return version
 
     def latest(self, prompt_id: str) -> PromptVersion | None:

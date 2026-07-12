@@ -16,7 +16,6 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
@@ -26,39 +25,51 @@ _LOG = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 120
 MAX_OUTPUT_BYTES = 64 * 1024  # 64 KiB cap on captured output
-DEFAULT_ALLOWED_COMMANDS = frozenset({'python', 'pip', 'pytest'})
+DEFAULT_ALLOWED_COMMANDS = frozenset({"python", "pip", "pytest"})
 
 # Allowed environment variable names passed to the subprocess.
 # Host secrets (tokens, keys, etc.) are excluded.
-_ALLOWED_ENV_KEYS = frozenset({
-    'PATH', 'HOME', 'USER', 'TMPDIR', 'TMP', 'TEMP',
-    'PYTHONPATH', 'PYTHONDONTWRITEBYTECODE',
-    'VIRTUAL_ENV', 'VIRTUAL_ENV_PROMPT',
-})
+_ALLOWED_ENV_KEYS = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "PYTHONPATH",
+        "PYTHONDONTWRITEBYTECODE",
+        "VIRTUAL_ENV",
+        "VIRTUAL_ENV_PROMPT",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Domain models
 # ---------------------------------------------------------------------------
 
+
 class BuildPhase(str, Enum):
     """Ordered build phases."""
-    INSTALL = 'install'
-    IMPORT_CHECK = 'import_check'
-    TEST = 'test'
-    SMOKE = 'smoke'
+
+    INSTALL = "install"
+    IMPORT_CHECK = "import_check"
+    TEST = "test"
+    SMOKE = "smoke"
 
 
 class PhaseStatus(str, Enum):
-    PASSED = 'passed'
-    FAILED = 'failed'
-    SKIPPED = 'skipped'
-    NOT_AVAILABLE = 'not_available'
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    NOT_AVAILABLE = "not_available"
 
 
 @dataclass
 class CommandEvidence:
     """Raw evidence from running a command."""
+
     command: str
     exit_code: int
     stdout: str
@@ -74,10 +85,11 @@ class CommandEvidence:
 @dataclass
 class PhaseResult:
     """Result of a single build phase."""
+
     phase: BuildPhase
     status: PhaseStatus
     evidence: list[CommandEvidence] = field(default_factory=list)
-    message: str = ''
+    message: str = ""
 
     @property
     def passed(self) -> bool:
@@ -87,11 +99,12 @@ class PhaseResult:
 @dataclass
 class BuildResult:
     """Complete result of an isolated build run."""
+
     app_id: str
     workspace_root: Path
     phases: list[PhaseResult] = field(default_factory=list)
     overall_success: bool = False
-    inventory_hash: str = ''
+    inventory_hash: str = ""
     evidence_path: Path | None = None
 
     def phase_result(self, phase: BuildPhase) -> PhaseResult | None:
@@ -101,6 +114,7 @@ class BuildResult:
 # ---------------------------------------------------------------------------
 # Build runner
 # ---------------------------------------------------------------------------
+
 
 class IsolatedBuildRunner:
     """Run build and test phases in a subprocess-isolated environment.
@@ -121,7 +135,9 @@ class IsolatedBuildRunner:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, workspace_root: Path, commands: list[str], app_id: str = '') -> BuildResult:
+    def run(
+        self, workspace_root: Path, commands: list[str], app_id: str = ""
+    ) -> BuildResult:
         """Run all applicable build phases for the workspace."""
         self._ensure_commands_allowed(commands)
         result = BuildResult(app_id=app_id, workspace_root=workspace_root)
@@ -134,21 +150,39 @@ class IsolatedBuildRunner:
         phases_results.append(self._run_import_check(workspace_root))
 
         # Phase 3: Tests (from manifest commands)
-        test_cmds = [c for c in commands if 'pytest' in c or 'test' in c.lower()]
+        test_cmds = [c for c in commands if "pytest" in c or "test" in c.lower()]
         if test_cmds:
-            phases_results.append(self._run_phase(BuildPhase.TEST, workspace_root, test_cmds))
+            phases_results.append(
+                self._run_phase(BuildPhase.TEST, workspace_root, test_cmds)
+            )
         else:
-            phases_results.append(PhaseResult(phase=BuildPhase.TEST, status=PhaseStatus.SKIPPED, message='No test commands'))
+            phases_results.append(
+                PhaseResult(
+                    phase=BuildPhase.TEST,
+                    status=PhaseStatus.SKIPPED,
+                    message="No test commands",
+                )
+            )
 
         # Phase 4: Smoke run
-        smoke_cmds = [c for c in commands if 'smoke' in c.lower() or 'run' in c.lower()]
+        smoke_cmds = [c for c in commands if "smoke" in c.lower() or "run" in c.lower()]
         if smoke_cmds:
-            phases_results.append(self._run_phase(BuildPhase.SMOKE, workspace_root, smoke_cmds[:1]))
+            phases_results.append(
+                self._run_phase(BuildPhase.SMOKE, workspace_root, smoke_cmds[:1])
+            )
         else:
-            phases_results.append(PhaseResult(phase=BuildPhase.SMOKE, status=PhaseStatus.SKIPPED, message='No smoke commands'))
+            phases_results.append(
+                PhaseResult(
+                    phase=BuildPhase.SMOKE,
+                    status=PhaseStatus.SKIPPED,
+                    message="No smoke commands",
+                )
+            )
 
         result.phases = phases_results
-        result.overall_success = all(p.passed or p.status == PhaseStatus.SKIPPED for p in phases_results)
+        result.overall_success = all(
+            p.passed or p.status == PhaseStatus.SKIPPED for p in phases_results
+        )
         return result
 
     # ------------------------------------------------------------------
@@ -156,31 +190,54 @@ class IsolatedBuildRunner:
     # ------------------------------------------------------------------
 
     def _run_install(self, workspace_root: Path) -> PhaseResult:
-        pyproject = workspace_root / 'pyproject.toml'
+        pyproject = workspace_root / "pyproject.toml"
         if not pyproject.exists():
-            return PhaseResult(phase=BuildPhase.INSTALL, status=PhaseStatus.SKIPPED, message='No pyproject.toml')
-        evidence = self._run_command(['pip', 'install', '-e', '.[test]', '--quiet'], workspace_root)
+            return PhaseResult(
+                phase=BuildPhase.INSTALL,
+                status=PhaseStatus.SKIPPED,
+                message="No pyproject.toml",
+            )
+        evidence = self._run_command(
+            ["pip", "install", "-e", ".[test]", "--quiet"], workspace_root
+        )
         status = PhaseStatus.PASSED if evidence.passed else PhaseStatus.FAILED
         return PhaseResult(phase=BuildPhase.INSTALL, status=status, evidence=[evidence])
 
     def _run_import_check(self, workspace_root: Path) -> PhaseResult:
-        src_dir = workspace_root / 'src'
+        src_dir = workspace_root / "src"
         if not src_dir.exists():
-            return PhaseResult(phase=BuildPhase.IMPORT_CHECK, status=PhaseStatus.SKIPPED, message='No src/ directory')
-        py_files = list(src_dir.rglob('*.py'))
+            return PhaseResult(
+                phase=BuildPhase.IMPORT_CHECK,
+                status=PhaseStatus.SKIPPED,
+                message="No src/ directory",
+            )
+        py_files = list(src_dir.rglob("*.py"))
         if not py_files:
-            return PhaseResult(phase=BuildPhase.IMPORT_CHECK, status=PhaseStatus.SKIPPED, message='No .py files in src/')
-        evidence = self._run_command(['python', '-m', 'py_compile'] + [str(f) for f in py_files[:5]], workspace_root)
+            return PhaseResult(
+                phase=BuildPhase.IMPORT_CHECK,
+                status=PhaseStatus.SKIPPED,
+                message="No .py files in src/",
+            )
+        evidence = self._run_command(
+            ["python", "-m", "py_compile"] + [str(f) for f in py_files[:5]],
+            workspace_root,
+        )
         status = PhaseStatus.PASSED if evidence.passed else PhaseStatus.FAILED
-        return PhaseResult(phase=BuildPhase.IMPORT_CHECK, status=status, evidence=[evidence])
+        return PhaseResult(
+            phase=BuildPhase.IMPORT_CHECK, status=status, evidence=[evidence]
+        )
 
-    def _run_phase(self, phase: BuildPhase, workspace_root: Path, commands: list[str]) -> PhaseResult:
+    def _run_phase(
+        self, phase: BuildPhase, workspace_root: Path, commands: list[str]
+    ) -> PhaseResult:
         evidences: list[CommandEvidence] = []
         for cmd in commands:
             parts = cmd.split()
             evidences.append(self._run_command(parts, workspace_root))
         if not evidences:
-            return PhaseResult(phase=phase, status=PhaseStatus.SKIPPED, message='No allowed commands')
+            return PhaseResult(
+                phase=phase, status=PhaseStatus.SKIPPED, message="No allowed commands"
+            )
         all_passed = all(e.passed for e in evidences)
         status = PhaseStatus.PASSED if all_passed else PhaseStatus.FAILED
         return PhaseResult(phase=phase, status=status, evidence=evidences)
@@ -190,9 +247,11 @@ class IsolatedBuildRunner:
         for cmd in commands:
             parts = cmd.split()
             if not parts:
-                raise ValueError('Build commands must not be empty')
+                raise ValueError("Build commands must not be empty")
             if parts[0] not in self._allowed_commands:
-                raise ValueError(f'Command {parts[0]!r} is not in the template command allowlist')
+                raise ValueError(
+                    f"Command {parts[0]!r} is not in the template command allowlist"
+                )
 
     def _run_command(self, cmd: list[str], cwd: Path) -> CommandEvidence:
         """Run a command in the workspace, capturing output."""
@@ -211,18 +270,18 @@ class IsolatedBuildRunner:
             exit_code = proc.returncode
             stdout = proc.stdout[:MAX_OUTPUT_BYTES]
             stderr = proc.stderr[:MAX_OUTPUT_BYTES]
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             exit_code = -1
-            stdout = ''
-            stderr = f'Command timed out after {self._timeout}s'
+            stdout = ""
+            stderr = f"Command timed out after {self._timeout}s"
             timed_out = True
         except Exception as exc:  # noqa: BLE001
             exit_code = -1
-            stdout = ''
+            stdout = ""
             stderr = str(exc)
         duration_ms = (time.monotonic() - start) * 1000
         return CommandEvidence(
-            command=' '.join(cmd),
+            command=" ".join(cmd),
             exit_code=exit_code,
             stdout=stdout,
             stderr=stderr,
@@ -234,6 +293,7 @@ class IsolatedBuildRunner:
 # ---------------------------------------------------------------------------
 # Fake runner for testing (no subprocess)
 # ---------------------------------------------------------------------------
+
 
 class FakeIsolatedBuildRunner(IsolatedBuildRunner):
     """Deterministic fake build runner — no subprocess required.
@@ -250,17 +310,41 @@ class FakeIsolatedBuildRunner(IsolatedBuildRunner):
         self._fail_phases = fail_phases or set()
         self.calls: list[dict[str, object]] = []
 
-    def run(self, workspace_root: Path, commands: list[str], app_id: str = '') -> BuildResult:
-        self.calls.append({'workspace_root': str(workspace_root), 'commands': commands, 'app_id': app_id})
+    def run(
+        self, workspace_root: Path, commands: list[str], app_id: str = ""
+    ) -> BuildResult:
+        self.calls.append(
+            {
+                "workspace_root": str(workspace_root),
+                "commands": commands,
+                "app_id": app_id,
+            }
+        )
         result = BuildResult(app_id=app_id, workspace_root=workspace_root)
         phases_results: list[PhaseResult] = []
         for phase in [BuildPhase.INSTALL, BuildPhase.IMPORT_CHECK, BuildPhase.TEST]:
             if phase in self._fail_phases:
-                evidence = CommandEvidence(command='fake', exit_code=1, stdout='', stderr='Fake failure', duration_ms=1.0)
-                phases_results.append(PhaseResult(phase=phase, status=PhaseStatus.FAILED, evidence=[evidence]))
+                evidence = CommandEvidence(
+                    command="fake",
+                    exit_code=1,
+                    stdout="",
+                    stderr="Fake failure",
+                    duration_ms=1.0,
+                )
+                phases_results.append(
+                    PhaseResult(
+                        phase=phase, status=PhaseStatus.FAILED, evidence=[evidence]
+                    )
+                )
             else:
-                evidence = CommandEvidence(command='fake', exit_code=0, stdout='OK', stderr='', duration_ms=1.0)
-                phases_results.append(PhaseResult(phase=phase, status=PhaseStatus.PASSED, evidence=[evidence]))
+                evidence = CommandEvidence(
+                    command="fake", exit_code=0, stdout="OK", stderr="", duration_ms=1.0
+                )
+                phases_results.append(
+                    PhaseResult(
+                        phase=phase, status=PhaseStatus.PASSED, evidence=[evidence]
+                    )
+                )
         result.phases = phases_results
         result.overall_success = all(p.passed for p in phases_results)
         return result

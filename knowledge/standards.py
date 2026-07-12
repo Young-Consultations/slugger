@@ -16,15 +16,15 @@ from typing import Any
 class StandardCategory(str, Enum):
     """Categories of engineering standards."""
 
-    ARCHITECTURE = 'architecture'
-    CODING = 'coding'
-    TESTING = 'testing'
-    SECURITY = 'security'
-    DOCUMENTATION = 'documentation'
-    DEPLOYMENT = 'deployment'
-    PROMPT_ENGINEERING = 'prompt_engineering'
-    WORKFLOW = 'workflow'
-    OTHER = 'other'
+    ARCHITECTURE = "architecture"
+    CODING = "coding"
+    TESTING = "testing"
+    SECURITY = "security"
+    DOCUMENTATION = "documentation"
+    DEPLOYMENT = "deployment"
+    PROMPT_ENGINEERING = "prompt_engineering"
+    WORKFLOW = "workflow"
+    OTHER = "other"
 
 
 @dataclass
@@ -59,7 +59,7 @@ class EngineeringStandard:
     title: str
     description: str
     category: StandardCategory = StandardCategory.OTHER
-    rationale: str = ''
+    rationale: str = ""
     examples: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
@@ -68,15 +68,15 @@ class EngineeringStandard:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'standard_id': self.standard_id,
-            'title': self.title,
-            'description': self.description,
-            'category': self.category.value,
-            'rationale': self.rationale,
-            'examples': list(self.examples),
-            'references': list(self.references),
-            'tags': list(self.tags),
-            'mandatory': self.mandatory,
+            "standard_id": self.standard_id,
+            "title": self.title,
+            "description": self.description,
+            "category": self.category.value,
+            "rationale": self.rationale,
+            "examples": list(self.examples),
+            "references": list(self.references),
+            "tags": list(self.tags),
+            "mandatory": self.mandatory,
         }
 
 
@@ -110,23 +110,23 @@ class Pattern:
     name: str
     description: str
     category: StandardCategory = StandardCategory.OTHER
-    problem: str = ''
-    solution: str = ''
-    consequences: str = ''
+    problem: str = ""
+    solution: str = ""
+    consequences: str = ""
     tags: list[str] = field(default_factory=list)
-    template: str = ''
+    template: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'pattern_id': self.pattern_id,
-            'name': self.name,
-            'description': self.description,
-            'category': self.category.value,
-            'problem': self.problem,
-            'solution': self.solution,
-            'consequences': self.consequences,
-            'tags': list(self.tags),
-            'has_template': bool(self.template),
+            "pattern_id": self.pattern_id,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category.value,
+            "problem": self.problem,
+            "solution": self.solution,
+            "consequences": self.consequences,
+            "tags": list(self.tags),
+            "has_template": bool(self.template),
         }
 
 
@@ -166,7 +166,9 @@ class StandardsRepository:
         """Return the standard with *standard_id*, or ``None``."""
         return self._standards.get(standard_id)
 
-    def standards_by_category(self, category: StandardCategory) -> list[EngineeringStandard]:
+    def standards_by_category(
+        self, category: StandardCategory
+    ) -> list[EngineeringStandard]:
         """Return all standards in *category*."""
         return [s for s in self._standards.values() if s.category == category]
 
@@ -180,8 +182,9 @@ class StandardsRepository:
         if not terms:
             return list(self._standards.values())
         return [
-            s for s in self._standards.values()
-            if _matches(s.title + ' ' + s.description + ' ' + ' '.join(s.tags), terms)
+            s
+            for s in self._standards.values()
+            if _matches(s.title + " " + s.description + " " + " ".join(s.tags), terms)
         ]
 
     def all_standards(self) -> list[EngineeringStandard]:
@@ -210,8 +213,9 @@ class StandardsRepository:
         if not terms:
             return list(self._patterns.values())
         return [
-            p for p in self._patterns.values()
-            if _matches(p.name + ' ' + p.description + ' ' + ' '.join(p.tags), terms)
+            p
+            for p in self._patterns.values()
+            if _matches(p.name + " " + p.description + " " + " ".join(p.tags), terms)
         ]
 
     def all_patterns(self) -> list[Pattern]:
@@ -225,8 +229,11 @@ class StandardsRepository:
     def summary(self) -> dict[str, Any]:
         """Return a summary of the repository contents."""
         return {
-            'standards_count': len(self._standards),
-            'patterns_count': len(self._patterns),
-            'mandatory_standards': len(self.mandatory_standards()),
-            'categories': sorted({s.category.value for s in self._standards.values()} | {p.category.value for p in self._patterns.values()}),
+            "standards_count": len(self._standards),
+            "patterns_count": len(self._patterns),
+            "mandatory_standards": len(self.mandatory_standards()),
+            "categories": sorted(
+                {s.category.value for s in self._standards.values()}
+                | {p.category.value for p in self._patterns.values()}
+            ),
         }

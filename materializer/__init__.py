@@ -17,15 +17,15 @@ from materializer.workspace import (
 )
 
 __all__ = [
-    'BuildPhase',
-    'BuildResult',
-    'CommandEvidence',
-    'FakeIsolatedBuildRunner',
-    'IsolatedBuildRunner',
-    'MaterializationResult',
-    'PhaseResult',
-    'PhaseStatus',
-    'ProjectMaterializer',
-    'WorkspaceRecord',
-    'WorkspaceState',
+    "BuildPhase",
+    "BuildResult",
+    "CommandEvidence",
+    "FakeIsolatedBuildRunner",
+    "IsolatedBuildRunner",
+    "MaterializationResult",
+    "PhaseResult",
+    "PhaseStatus",
+    "ProjectMaterializer",
+    "WorkspaceRecord",
+    "WorkspaceState",
 ]

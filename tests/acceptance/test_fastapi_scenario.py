@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from models.app_manifest import AppManifest, AppTemplate, FileEntry, validate_app_manifest
+from models.app_manifest import (
+    AppManifest,
+    AppTemplate,
+    FileEntry,
+    validate_app_manifest,
+)
 from models.artifact import DocumentArtifact
 from models.artifact_store_sqlite import SQLiteArtifactStore
 from orchestrator.orchestrator import _DEFAULT_WORKFLOW
@@ -31,8 +36,14 @@ class TestFastAPIScenario:
                     content='[project]\nname = "fastapi-demo"\nversion = "0.1.0"\ndependencies = ["fastapi", "uvicorn"]\n',
                 ),
                 FileEntry(path="README.md", content="# FastAPI Demo\n"),
-                FileEntry(path="src/main.py", content="from fastapi import FastAPI\n\napp = FastAPI()\n"),
-                FileEntry(path="tests/test_api.py", content="def test_placeholder() -> None:\n    assert True\n"),
+                FileEntry(
+                    path="src/main.py",
+                    content="from fastapi import FastAPI\n\napp = FastAPI()\n",
+                ),
+                FileEntry(
+                    path="tests/test_api.py",
+                    content="def test_placeholder() -> None:\n    assert True\n",
+                ),
             ],
         )
 
@@ -48,7 +59,12 @@ class TestFastAPIScenario:
             FileEntry(path="../outside.py", content="evil")
 
     def test_canonical_recipe_file_valid_yaml(self) -> None:
-        recipe = Path(__file__).resolve().parents[2] / "workflow" / "recipes" / "full-sdlc-v2.yaml"
+        recipe = (
+            Path(__file__).resolve().parents[2]
+            / "workflow"
+            / "recipes"
+            / "full-sdlc-v2.yaml"
+        )
         with recipe.open(encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
         assert data["name"] == "full-sdlc-v2"

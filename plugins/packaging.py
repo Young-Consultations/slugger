@@ -47,10 +47,10 @@ class PackageResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'archive_path': str(self.archive_path),
-            'manifest': self.manifest.to_dict(),
-            'included_files': self.included_files,
-            'size_bytes': self.size_bytes,
+            "archive_path": str(self.archive_path),
+            "manifest": self.manifest.to_dict(),
+            "included_files": self.included_files,
+            "size_bytes": self.size_bytes,
         }
 
 
@@ -70,8 +70,8 @@ class MarketplacePackager:
     PosixPath('dist/my-plugin-1.0.0.slugger-plugin')
     """
 
-    ARCHIVE_EXT = '.slugger-plugin'
-    MANIFEST_FILENAME = 'plugin.yaml'
+    ARCHIVE_EXT = ".slugger-plugin"
+    MANIFEST_FILENAME = "plugin.yaml"
 
     def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
@@ -107,15 +107,15 @@ class MarketplacePackager:
         -------
         PackageResult
         """
-        archive_name = f'{manifest.name}-{manifest.version}{self.ARCHIVE_EXT}'
+        archive_name = f"{manifest.name}-{manifest.version}{self.ARCHIVE_EXT}"
         archive_path = self.output_dir / archive_name
 
-        include_patterns = include_patterns or ['**/*']
-        exclude_set = set(exclude_patterns or ['**/__pycache__/**', '**/*.pyc'])
+        include_patterns = include_patterns or ["**/*"]
+        exclude_set = set(exclude_patterns or ["**/__pycache__/**", "**/*.pyc"])
 
         included_files: list[str] = []
 
-        with zipfile.ZipFile(archive_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             # Embed the manifest
             manifest_yaml = yaml.safe_dump(manifest.to_dict(), sort_keys=False)
             zf.writestr(self.MANIFEST_FILENAME, manifest_yaml)
@@ -161,6 +161,6 @@ class MarketplacePackager:
         KeyError
             If the archive does not contain a ``plugin.yaml`` file.
         """
-        with zipfile.ZipFile(archive_path, 'r') as zf:
-            manifest_data = yaml.safe_load(zf.read('plugin.yaml').decode('utf-8'))
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            manifest_data = yaml.safe_load(zf.read("plugin.yaml").decode("utf-8"))
         return PluginManifest.from_dict(manifest_data)

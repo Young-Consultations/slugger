@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 class ExecutionState(str, Enum):
     """State of a runtime execution."""
 
-    PENDING = 'pending'
-    RUNNING = 'running'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 @dataclass(slots=True)
@@ -74,15 +74,15 @@ class ExecutionContext:
 
         if self.project_brief is not None and self.project_brief.idea:
             return self.project_brief.idea
-        return self.metadata.get('idea', '')
+        return self.metadata.get("idea", "")
 
     def artifact_content(self, name: str) -> str:
         """Return the content of a named input artifact without producing a Python repr."""
 
         artifact = self.inputs.get(name)
         if artifact is None:
-            return ''
-        content = getattr(artifact, 'content', None)
+            return ""
+        content = getattr(artifact, "content", None)
         if content is None:
             return str(artifact)
         return content

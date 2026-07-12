@@ -12,4 +12,4 @@ class ObservabilityReporter:
         self.tracer = tracer
 
     def summarize(self) -> dict[str, int]:
-        return {'metrics': len(self.collector.list()), 'spans': len(self.tracer.list())}
+        return {"metrics": len(self.collector.list()), "spans": len(self.tracer.list())}

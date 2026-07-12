@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from services.canva.models import CanvaBrandTemplate, CanvaDesign, CanvaExportFormat, CanvaExportJob, CanvaFolder
+from services.canva.models import (
+    CanvaBrandTemplate,
+    CanvaDesign,
+    CanvaExportFormat,
+    CanvaExportJob,
+    CanvaFolder,
+)
 
 
 class ICanvaService(ABC):
@@ -19,7 +25,9 @@ class ICanvaService(ABC):
         """Return metadata for a single design."""
 
     @abstractmethod
-    def export_design(self, design_id: str, export_format: CanvaExportFormat) -> CanvaExportJob:
+    def export_design(
+        self, design_id: str, export_format: CanvaExportFormat
+    ) -> CanvaExportJob:
         """Initiate an export job for the given design and format."""
 
     @abstractmethod

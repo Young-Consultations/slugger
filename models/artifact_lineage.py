@@ -22,15 +22,15 @@ from typing import Any
 class SdlcStage(str, Enum):
     """Standard SDLC stages used for lineage linking."""
 
-    IDEA = 'idea'
-    REQUIREMENTS = 'requirements'
-    STORIES = 'stories'
-    ARCHITECTURE = 'architecture'
-    ADR = 'adr'
-    TASKS = 'tasks'
-    CODE = 'code'
-    TESTS = 'tests'
-    RELEASE = 'release'
+    IDEA = "idea"
+    REQUIREMENTS = "requirements"
+    STORIES = "stories"
+    ARCHITECTURE = "architecture"
+    ADR = "adr"
+    TASKS = "tasks"
+    CODE = "code"
+    TESTS = "tests"
+    RELEASE = "release"
 
 
 @dataclass
@@ -61,21 +61,21 @@ class ArtifactLineageNode:
     name: str
     stage: SdlcStage
     parent_ids: list[str] = field(default_factory=list)
-    agent_name: str = 'unknown'
+    agent_name: str = "unknown"
     project_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'artifact_id': self.artifact_id,
-            'name': self.name,
-            'stage': self.stage.value,
-            'parent_ids': list(self.parent_ids),
-            'agent_name': self.agent_name,
-            'project_id': self.project_id,
-            'created_at': self.created_at.isoformat(),
-            'metadata': dict(self.metadata),
+            "artifact_id": self.artifact_id,
+            "name": self.name,
+            "stage": self.stage.value,
+            "parent_ids": list(self.parent_ids),
+            "agent_name": self.agent_name,
+            "project_id": self.project_id,
+            "created_at": self.created_at.isoformat(),
+            "metadata": dict(self.metadata),
         }
 
 
@@ -194,4 +194,4 @@ class LineageGraph:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise the graph to a JSON-compatible dictionary."""
-        return {'nodes': [node.to_dict() for node in self._nodes.values()]}
+        return {"nodes": [node.to_dict() for node in self._nodes.values()]}

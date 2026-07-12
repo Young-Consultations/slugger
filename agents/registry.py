@@ -21,9 +21,13 @@ class AgentRegistry:
         return sorted(self._agents)
 
     def by_capability(self, capability: str) -> list[IAgent]:
-        return [agent for agent in self._agents.values() if any(cap.name == capability for cap in agent.capabilities)]
+        return [
+            agent
+            for agent in self._agents.values()
+            if any(cap.name == capability for cap in agent.capabilities)
+        ]
 
     def discover_from_plugins(self, plugins: list[object]) -> None:
         for plugin in plugins:
-            for agent in getattr(plugin, 'agents', []):
+            for agent in getattr(plugin, "agents", []):
                 self.register(agent)

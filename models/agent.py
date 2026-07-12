@@ -9,11 +9,11 @@ from enum import Enum
 class AgentStatus(str, Enum):
     """Runtime status for an agent."""
 
-    IDLE = 'idle'
-    RUNNING = 'running'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
-    DISABLED = 'disabled'
+    IDLE = "idle"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DISABLED = "disabled"
 
 
 @dataclass(slots=True, frozen=True)

@@ -14,7 +14,7 @@ class InMemoryBackend(IMemoryBackend):
         self._entries[(entry.namespace, entry.key)] = entry
         return entry
 
-    def retrieve(self, key: str, namespace: str = 'default') -> MemoryEntry | None:
+    def retrieve(self, key: str, namespace: str = "default") -> MemoryEntry | None:
         return self._entries.get((namespace, key))
 
     def search(self, query: MemoryQuery) -> MemoryResult:
@@ -22,12 +22,16 @@ class InMemoryBackend(IMemoryBackend):
         for entry in self._entries.values():
             if query.namespace and entry.namespace != query.namespace:
                 continue
-            if query.text and query.text.lower() not in str(entry.value).lower() and query.text.lower() not in entry.key.lower():
+            if (
+                query.text
+                and query.text.lower() not in str(entry.value).lower()
+                and query.text.lower() not in entry.key.lower()
+            ):
                 continue
             if query.tags and not set(query.tags).issubset(set(entry.tags)):
                 continue
             filtered.append(entry)
         return MemoryResult(entries=filtered[: query.limit], total=len(filtered))
 
-    def forget(self, key: str, namespace: str = 'default') -> None:
+    def forget(self, key: str, namespace: str = "default") -> None:
         self._entries.pop((namespace, key), None)

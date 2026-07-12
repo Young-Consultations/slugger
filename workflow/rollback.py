@@ -34,10 +34,10 @@ class RollbackStep:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'step_name': self.step_name,
-            'description': self.description,
-            'commands': self.commands,
-            'metadata': self.metadata,
+            "step_name": self.step_name,
+            "description": self.description,
+            "commands": self.commands,
+            "metadata": self.metadata,
         }
 
 
@@ -56,7 +56,7 @@ class RollbackGuidance:
     'Delete the deployed resources'
     """
 
-    def __init__(self, run_id: str = '') -> None:
+    def __init__(self, run_id: str = "") -> None:
         self.run_id = run_id
         self._steps: dict[str, RollbackStep] = {}
 
@@ -68,7 +68,9 @@ class RollbackGuidance:
         """Register *step* guidance.  Overwrites any previous guidance for the same step."""
         self._steps[step.step_name] = step
 
-    def register_simple(self, step_name: str, description: str, commands: list[str] | None = None) -> RollbackStep:
+    def register_simple(
+        self, step_name: str, description: str, commands: list[str] | None = None
+    ) -> RollbackStep:
         """Convenience helper — build and register a :class:`RollbackStep`.
 
         Returns the created step.
@@ -96,21 +98,21 @@ class RollbackGuidance:
     def to_dict(self) -> dict[str, Any]:
         """Serialise the full guidance to a JSON-compatible dict."""
         return {
-            'run_id': self.run_id,
-            'steps': [s.to_dict() for s in self._steps.values()],
+            "run_id": self.run_id,
+            "steps": [s.to_dict() for s in self._steps.values()],
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'RollbackGuidance':
+    def from_dict(cls, data: dict[str, Any]) -> "RollbackGuidance":
         """Reconstruct guidance from a serialised dict."""
-        guidance = cls(run_id=data.get('run_id', ''))
-        for raw in data.get('steps', []):
+        guidance = cls(run_id=data.get("run_id", ""))
+        for raw in data.get("steps", []):
             guidance.register(
                 RollbackStep(
-                    step_name=raw['step_name'],
-                    description=raw['description'],
-                    commands=raw.get('commands', []),
-                    metadata=raw.get('metadata', {}),
+                    step_name=raw["step_name"],
+                    description=raw["description"],
+                    commands=raw.get("commands", []),
+                    metadata=raw.get("metadata", {}),
                 )
             )
         return guidance

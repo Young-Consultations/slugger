@@ -17,7 +17,7 @@ class StructuredLogger:
     def log(self, level: str, message: str, **context: object) -> LogEntry:
         entry = LogEntry(level=level, message=message, context=dict(context))
         payload = asdict(entry)
-        payload['timestamp'] = entry.timestamp.isoformat()
-        with self.path.open('a', encoding='utf-8') as handle:
-            handle.write(json.dumps(payload) + '\n')
+        payload["timestamp"] = entry.timestamp.isoformat()
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
         return entry

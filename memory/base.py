@@ -13,7 +13,7 @@ class IMemoryBackend(ABC):
         """Persist a memory entry."""
 
     @abstractmethod
-    def retrieve(self, key: str, namespace: str = 'default') -> MemoryEntry | None:
+    def retrieve(self, key: str, namespace: str = "default") -> MemoryEntry | None:
         """Retrieve a memory entry."""
 
     @abstractmethod
@@ -21,5 +21,5 @@ class IMemoryBackend(ABC):
         """Search stored memories."""
 
     @abstractmethod
-    def forget(self, key: str, namespace: str = 'default') -> None:
+    def forget(self, key: str, namespace: str = "default") -> None:
         """Delete a memory entry."""

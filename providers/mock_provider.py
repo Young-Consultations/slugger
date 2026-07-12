@@ -22,9 +22,11 @@ from providers.base import BaseProvider
 class MockProvider(BaseProvider):
     """Provider returning deterministic configurable responses."""
 
-    def __init__(self, config: ProviderConfig, responses: list[str] | None = None) -> None:
+    def __init__(
+        self, config: ProviderConfig, responses: list[str] | None = None
+    ) -> None:
         super().__init__(config)
-        self._responses: deque[str] = deque(responses or ['mock response'])
+        self._responses: deque[str] = deque(responses or ["mock response"])
 
     def complete(self, prompt: str, **kwargs: object) -> str:
         if len(self._responses) > 1:
@@ -38,7 +40,7 @@ class MockProvider(BaseProvider):
         return True
 
     def get_metadata(self) -> dict[str, str]:
-        return {'provider': 'mock', 'model': self.config.model, 'status': 'ready'}
+        return {"provider": "mock", "model": self.config.model, "status": "ready"}
 
     # ------------------------------------------------------------------
     # Typed capability methods
@@ -46,13 +48,15 @@ class MockProvider(BaseProvider):
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
         content = self.complete(request.prompt)
-        return GenerationResult(content=content, model=self.config.model, input_tokens=10, output_tokens=10)
+        return GenerationResult(
+            content=content, model=self.config.model, input_tokens=10, output_tokens=10
+        )
 
     def review(self, request: ReviewRequest) -> ReviewResult:
         return ReviewResult(
-            summary='Mock review: code looks acceptable.',
+            summary="Mock review: code looks acceptable.",
             issues=[],
-            suggestions=['Consider adding docstrings.'],
+            suggestions=["Consider adding docstrings."],
             score=8.0,
         )
 
@@ -72,5 +76,5 @@ class MockProvider(BaseProvider):
             model=self.config.model,
             has_credentials=True,
             reachable=True,
-            diagnostics={'status': 'ready', 'mode': 'mock'},
+            diagnostics={"status": "ready", "mode": "mock"},
         )

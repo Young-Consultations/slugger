@@ -37,7 +37,7 @@ class BenchmarkResult:
     iterations: int
     avg_ms: float
     metadata: dict[str, Any] = field(default_factory=dict)
-    error: str = ''
+    error: str = ""
 
     @property
     def passed(self) -> bool:
@@ -45,13 +45,13 @@ class BenchmarkResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'name': self.name,
-            'elapsed_ms': round(self.elapsed_ms, 3),
-            'iterations': self.iterations,
-            'avg_ms': round(self.avg_ms, 3),
-            'passed': self.passed,
-            'error': self.error,
-            'metadata': self.metadata,
+            "name": self.name,
+            "elapsed_ms": round(self.elapsed_ms, 3),
+            "iterations": self.iterations,
+            "avg_ms": round(self.avg_ms, 3),
+            "passed": self.passed,
+            "error": self.error,
+            "metadata": self.metadata,
         }
 
 
@@ -114,7 +114,10 @@ class BenchmarkSuite:
         iterations:
             Override the default iteration count.
         """
-        self._benchmarks[name] = (fn, iterations if iterations is not None else self._default_iterations)
+        self._benchmarks[name] = (
+            fn,
+            iterations if iterations is not None else self._default_iterations,
+        )
 
     def set_budget(self, budget: BudgetSpec) -> None:
         """Declare a performance budget for a benchmark."""
@@ -134,7 +137,7 @@ class BenchmarkSuite:
         """
         fn, iters = self._benchmarks[name]
         start = time.perf_counter()
-        error = ''
+        error = ""
         metadata: dict[str, Any] = {}
         try:
             for _ in range(iters):
@@ -178,4 +181,4 @@ class BenchmarkSuite:
                 violations.append(
                     f"'{name}': avg {result.avg_ms:.1f}ms exceeds budget {budget.max_avg_ms:.1f}ms"
                 )
-        return {'passed': not violations, 'violations': violations}
+        return {"passed": not violations, "violations": violations}

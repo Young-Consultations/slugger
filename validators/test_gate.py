@@ -100,16 +100,16 @@ class MandatoryTestGate:
         * ``failures`` — list of failing command strings.
         """
         results = self.run()
-        failures = [' '.join(r.command) for r in results if not r.passed]
+        failures = [" ".join(r.command) for r in results if not r.passed]
         return {
-            'passed': len(failures) == 0,
-            'results': [
+            "passed": len(failures) == 0,
+            "results": [
                 {
-                    'command': ' '.join(r.command),
-                    'returncode': r.returncode,
-                    'passed': r.passed,
+                    "command": " ".join(r.command),
+                    "returncode": r.returncode,
+                    "passed": r.passed,
                 }
                 for r in results
             ],
-            'failures': failures,
+            "failures": failures,
         }

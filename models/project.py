@@ -10,33 +10,33 @@ from enum import Enum
 class Platform(str, Enum):
     """Target output platform for a generated application."""
 
-    IOS = 'ios'
-    ANDROID = 'android'
-    WEB = 'web'
+    IOS = "ios"
+    ANDROID = "android"
+    WEB = "web"
 
 
 class CodingAgent(str, Enum):
     """Coding agent (AI provider) used for code generation."""
 
-    CODEX = 'codex'
-    ANTHROPIC = 'anthropic'
+    CODEX = "codex"
+    ANTHROPIC = "anthropic"
 
 
 class AppType(str, Enum):
     """Type of application being built."""
 
-    CLI = 'cli'
-    WEB = 'web'
-    API = 'api'
-    MOBILE = 'mobile'
+    CLI = "cli"
+    WEB = "web"
+    API = "api"
+    MOBILE = "mobile"
 
 
 class DesignPreference(str, Enum):
     """Design tooling preference for the project."""
 
-    NONE = 'none'
-    CANVA = 'canva'
-    CUSTOM = 'custom'
+    NONE = "none"
+    CANVA = "canva"
+    CUSTOM = "custom"
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class ProjectBrief:
     idea: str
     platform: Platform
     app_type: AppType = AppType.CLI
-    target_users: str = ''
+    target_users: str = ""
     constraints: list[str] = field(default_factory=list)
     nonfunctional_requirements: list[str] = field(default_factory=list)
     coding_agent: CodingAgent = CodingAgent.CODEX
@@ -60,50 +60,50 @@ class ProjectBrief:
         """Return a plain-string dict suitable for workflow metadata."""
 
         return {
-            'idea': self.idea,
-            'platform': self.platform.value,
-            'app_type': self.app_type.value,
-            'target_users': self.target_users,
-            'constraints': ','.join(self.constraints),
-            'nonfunctional_requirements': ','.join(self.nonfunctional_requirements),
-            'coding_agent': self.coding_agent.value,
-            'design_preference': self.design_preference.value,
+            "idea": self.idea,
+            "platform": self.platform.value,
+            "app_type": self.app_type.value,
+            "target_users": self.target_users,
+            "constraints": ",".join(self.constraints),
+            "nonfunctional_requirements": ",".join(self.nonfunctional_requirements),
+            "coding_agent": self.coding_agent.value,
+            "design_preference": self.design_preference.value,
         }
 
     @classmethod
     def from_metadata(cls, metadata: dict[str, str]) -> ProjectBrief:
         """Reconstruct a brief from workflow metadata (supports resume/migration)."""
 
-        idea = metadata.get('idea', '')
-        platform_raw = metadata.get('platform', Platform.WEB.value)
+        idea = metadata.get("idea", "")
+        platform_raw = metadata.get("platform", Platform.WEB.value)
         try:
             platform = Platform(platform_raw)
         except ValueError:
             platform = Platform.WEB
-        app_type_raw = metadata.get('app_type', AppType.CLI.value)
+        app_type_raw = metadata.get("app_type", AppType.CLI.value)
         try:
             app_type = AppType(app_type_raw)
         except ValueError:
             app_type = AppType.CLI
-        coding_agent_raw = metadata.get('coding_agent', CodingAgent.CODEX.value)
+        coding_agent_raw = metadata.get("coding_agent", CodingAgent.CODEX.value)
         try:
             coding_agent = CodingAgent(coding_agent_raw)
         except ValueError:
             coding_agent = CodingAgent.CODEX
-        design_raw = metadata.get('design_preference', DesignPreference.NONE.value)
+        design_raw = metadata.get("design_preference", DesignPreference.NONE.value)
         try:
             design_preference = DesignPreference(design_raw)
         except ValueError:
             design_preference = DesignPreference.NONE
-        constraints_raw = metadata.get('constraints', '')
-        constraints = [c for c in constraints_raw.split(',') if c]
-        nfr_raw = metadata.get('nonfunctional_requirements', '')
-        nonfunctional_requirements = [n for n in nfr_raw.split(',') if n]
+        constraints_raw = metadata.get("constraints", "")
+        constraints = [c for c in constraints_raw.split(",") if c]
+        nfr_raw = metadata.get("nonfunctional_requirements", "")
+        nonfunctional_requirements = [n for n in nfr_raw.split(",") if n]
         return cls(
             idea=idea,
             platform=platform,
             app_type=app_type,
-            target_users=metadata.get('target_users', ''),
+            target_users=metadata.get("target_users", ""),
             constraints=constraints,
             nonfunctional_requirements=nonfunctional_requirements,
             coding_agent=coding_agent,
@@ -126,9 +126,9 @@ class ProjectInput:
         """Return a plain-string dict suitable for workflow metadata."""
 
         return {
-            'idea': self.idea,
-            'platform': self.platform.value,
-            'coding_agent': self.coding_agent.value,
+            "idea": self.idea,
+            "platform": self.platform.value,
+            "coding_agent": self.coding_agent.value,
         }
 
     def to_brief(self) -> ProjectBrief:
@@ -144,24 +144,24 @@ class ProjectInput:
 class ProjectStatus(str, Enum):
     """High-level project status."""
 
-    DRAFT = 'draft'
-    ACTIVE = 'active'
-    BLOCKED = 'blocked'
-    COMPLETED = 'completed'
-    ARCHIVED = 'archived'
+    DRAFT = "draft"
+    ACTIVE = "active"
+    BLOCKED = "blocked"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"
 
 
 class ProjectPhase(str, Enum):
     """Lifecycle phase tracked by the AI-SDLC."""
 
-    IDEA = 'idea'
-    REQUIREMENTS = 'requirements'
-    ARCHITECTURE = 'architecture'
-    PLANNING = 'planning'
-    IMPLEMENTATION = 'implementation'
-    TESTING = 'testing'
-    DEPLOYMENT = 'deployment'
-    REFLECTION = 'reflection'
+    IDEA = "idea"
+    REQUIREMENTS = "requirements"
+    ARCHITECTURE = "architecture"
+    PLANNING = "planning"
+    IMPLEMENTATION = "implementation"
+    TESTING = "testing"
+    DEPLOYMENT = "deployment"
+    REFLECTION = "reflection"
 
 
 @dataclass(slots=True)

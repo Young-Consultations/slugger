@@ -29,7 +29,7 @@ class TaskNode:
     """
 
     name: str
-    description: str = ''
+    description: str = ""
     depends_on: list[str] = field(default_factory=list)
     metadata: dict[str, str] = field(default_factory=dict)
 
@@ -106,7 +106,9 @@ class TaskDependencyGraph:
         for task in self._nodes.values():
             for dep in task.depends_on:
                 if dep not in self._nodes:
-                    raise ValueError(f"Task '{task.name}' depends on unknown task '{dep}'.")
+                    raise ValueError(
+                        f"Task '{task.name}' depends on unknown task '{dep}'."
+                    )
                 adjacency[dep].append(task.name)
                 in_degree[task.name] += 1
 
@@ -122,7 +124,7 @@ class TaskDependencyGraph:
                     queue.append(successor)
 
         if len(result) != len(self._nodes):
-            raise ValueError('Task dependency graph contains a cycle.')
+            raise ValueError("Task dependency graph contains a cycle.")
         return result
 
     def transitive_dependencies(self, name: str) -> set[str]:

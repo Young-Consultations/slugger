@@ -9,9 +9,9 @@ from enum import Enum
 class ChatGPTRole(str, Enum):
     """Chat message roles."""
 
-    SYSTEM = 'system'
-    USER = 'user'
-    ASSISTANT = 'assistant'
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 @dataclass(slots=True)
@@ -31,7 +31,7 @@ class PromptExecutionResult:
     model: str
     input_tokens: int = 0
     output_tokens: int = 0
-    finish_reason: str = 'stop'
+    finish_reason: str = "stop"
     metadata: dict[str, str] = field(default_factory=dict)
 
 

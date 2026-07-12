@@ -14,20 +14,37 @@ class SecurityReviewAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='security_review_agent',
-                version='1.0.0',
-                description='Create security review artifacts.',
-                category='qa',
+                name="security_review_agent",
+                version="1.0.0",
+                description="Create security review artifacts.",
+                category="qa",
                 inputs=[],
-                outputs=['security_review'],
-                tags=['qa', 'security_review'],
-                provider='mock',
+                outputs=["security_review"],
+                tags=["qa", "security_review"],
+                provider="mock",
             ),
-            capabilities=[AgentCapability(name='security_review', description='Create security review artifacts.', outputs=('security_review',))],
+            capabilities=[
+                AgentCapability(
+                    name="security_review",
+                    description="Create security review artifacts.",
+                    outputs=("security_review",),
+                )
+            ],
         )
 
     def _execute(self, context: ExecutionContext):
         idea = context.get_idea()
-        input_summaries = {name: context.artifact_content(name) for name in context.inputs}
-        content = f"# Security Review\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n" + "\n\n".join(f"**{name}:**\n{content}" for name, content in input_summaries.items() if content)
-        return [self.create_artifact(context, 'security_review', content, DocumentArtifact)]
+        input_summaries = {
+            name: context.artifact_content(name) for name in context.inputs
+        }
+        content = (
+            f"# Security Review\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n"
+            + "\n\n".join(
+                f"**{name}:**\n{content}"
+                for name, content in input_summaries.items()
+                if content
+            )
+        )
+        return [
+            self.create_artifact(context, "security_review", content, DocumentArtifact)
+        ]

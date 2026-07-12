@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 class GitHubRepo:
     owner: str
     name: str
-    default_branch: str = 'main'
+    default_branch: str = "main"
 
 
 @dataclass(slots=True)
@@ -17,7 +17,7 @@ class GitHubIssue:
     number: int
     title: str
     body: str
-    state: str = 'open'
+    state: str = "open"
     labels: list[str] = field(default_factory=list)
     milestone_number: int | None = None
 
@@ -27,9 +27,9 @@ class GitHubPR:
     number: int
     title: str
     body: str
-    state: str = 'open'
-    head: str = ''
-    base: str = 'main'
+    state: str = "open"
+    head: str = ""
+    base: str = "main"
     draft: bool = False
     merged: bool = False
     milestone_number: int | None = None
@@ -47,8 +47,8 @@ class GitHubMilestone:
 
     number: int
     title: str
-    description: str = ''
-    state: str = 'open'
+    description: str = ""
+    state: str = "open"
     due_on: str | None = None
     open_issues: int = 0
     closed_issues: int = 0
@@ -60,12 +60,12 @@ class GitHubRelease:
 
     tag_name: str
     name: str
-    body: str = ''
+    body: str = ""
     draft: bool = False
     prerelease: bool = False
-    html_url: str = ''
-    created_at: str = ''
-    published_at: str = ''
+    html_url: str = ""
+    created_at: str = ""
+    published_at: str = ""
 
 
 @dataclass(slots=True)
@@ -74,9 +74,9 @@ class GitHubWorkflowRun:
 
     id: int
     name: str
-    status: str = 'queued'
+    status: str = "queued"
     conclusion: str | None = None
     workflow_id: int = 0
-    head_branch: str = 'main'
-    html_url: str = ''
-    created_at: str = ''
+    head_branch: str = "main"
+    html_url: str = ""
+    created_at: str = ""

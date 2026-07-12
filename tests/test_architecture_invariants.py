@@ -17,26 +17,26 @@ LEGACY_ERROR = (
 
 
 def test_default_workflow_is_full_sdlc_v2() -> None:
-    assert _DEFAULT_WORKFLOW == 'full-sdlc-v2'
+    assert _DEFAULT_WORKFLOW == "full-sdlc-v2"
 
 
 def test_adr_0017_exists() -> None:
-    assert (ROOT / 'docs' / 'adr' / '0017-canonical-execution-path.md').exists()
+    assert (ROOT / "docs" / "adr" / "0017-canonical-execution-path.md").exists()
 
 
 def test_full_sdlc_v2_recipe_exists() -> None:
-    assert (ROOT / 'workflow' / 'recipes' / 'full-sdlc-v2.yaml').exists()
+    assert (ROOT / "workflow" / "recipes" / "full-sdlc-v2.yaml").exists()
 
 
 def test_legacy_full_sdlc_recipe_is_archived() -> None:
-    assert not (ROOT / 'workflow' / 'recipes' / 'full-sdlc.yaml').exists()
-    assert (ROOT / 'workflow' / 'recipes' / 'archived' / 'full-sdlc.yaml').exists()
+    assert not (ROOT / "workflow" / "recipes" / "full-sdlc.yaml").exists()
+    assert (ROOT / "workflow" / "recipes" / "archived" / "full-sdlc.yaml").exists()
 
 
 def test_build_rejects_legacy_full_sdlc_workflow() -> None:
     context = MagicMock()
     slugger = Slugger(context)
-    brief = ProjectBrief(idea='Task tracker', platform=Platform.WEB)
+    brief = ProjectBrief(idea="Task tracker", platform=Platform.WEB)
     with pytest.raises(ValueError, match=re.escape(LEGACY_ERROR)):
-        slugger.build(brief, workflow='full-sdlc')
+        slugger.build(brief, workflow="full-sdlc")
     context.workflow_engine.run.assert_not_called()

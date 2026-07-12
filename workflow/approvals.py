@@ -17,10 +17,10 @@ from uuid import uuid4
 class ApprovalDecision(str, Enum):
     """Possible approval decisions."""
 
-    PENDING = 'pending'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-    AUTO_APPROVED = 'auto_approved'
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    AUTO_APPROVED = "auto_approved"
 
 
 @dataclass
@@ -52,37 +52,37 @@ class ApprovalCheckpoint:
     """
 
     name: str
-    description: str = ''
+    description: str = ""
     required_approvers: list[str] = field(default_factory=list)
     auto_approve: bool = False
     timeout_seconds: int | None = None
-    on_timeout: str = 'abort'
+    on_timeout: str = "abort"
     quorum: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'name': self.name,
-            'description': self.description,
-            'required_approvers': list(self.required_approvers),
-            'auto_approve': self.auto_approve,
-            'timeout_seconds': self.timeout_seconds,
-            'on_timeout': self.on_timeout,
-            'quorum': self.quorum,
-            'metadata': dict(self.metadata),
+            "name": self.name,
+            "description": self.description,
+            "required_approvers": list(self.required_approvers),
+            "auto_approve": self.auto_approve,
+            "timeout_seconds": self.timeout_seconds,
+            "on_timeout": self.on_timeout,
+            "quorum": self.quorum,
+            "metadata": dict(self.metadata),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ApprovalCheckpoint:
         return cls(
-            name=data['name'],
-            description=data.get('description', ''),
-            required_approvers=list(data.get('required_approvers', [])),
-            auto_approve=bool(data.get('auto_approve', False)),
-            timeout_seconds=data.get('timeout_seconds'),
-            on_timeout=str(data.get('on_timeout', 'abort')),
-            quorum=int(data.get('quorum', 0)),
-            metadata=dict(data.get('metadata', {})),
+            name=data["name"],
+            description=data.get("description", ""),
+            required_approvers=list(data.get("required_approvers", [])),
+            auto_approve=bool(data.get("auto_approve", False)),
+            timeout_seconds=data.get("timeout_seconds"),
+            on_timeout=str(data.get("on_timeout", "abort")),
+            quorum=int(data.get("quorum", 0)),
+            metadata=dict(data.get("metadata", {})),
         )
 
 
@@ -114,22 +114,22 @@ class ApprovalRecord:
     """
 
     record_id: str = field(default_factory=lambda: str(uuid4()))
-    checkpoint_name: str = ''
-    run_id: str = ''
+    checkpoint_name: str = ""
+    run_id: str = ""
     decision: ApprovalDecision = ApprovalDecision.PENDING
-    approver: str = 'system'
-    comment: str = ''
+    approver: str = "system"
+    comment: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'record_id': self.record_id,
-            'checkpoint_name': self.checkpoint_name,
-            'run_id': self.run_id,
-            'decision': self.decision.value,
-            'approver': self.approver,
-            'comment': self.comment,
-            'timestamp': self.timestamp.isoformat(),
+            "record_id": self.record_id,
+            "checkpoint_name": self.checkpoint_name,
+            "run_id": self.run_id,
+            "decision": self.decision.value,
+            "approver": self.approver,
+            "comment": self.comment,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
@@ -163,8 +163,8 @@ class ApprovalGateHandler:
         self,
         run_id: str,
         checkpoint: ApprovalCheckpoint,
-        approver: str = 'system',
-        comment: str = '',
+        approver: str = "system",
+        comment: str = "",
     ) -> ApprovalRecord:
         """Evaluate *checkpoint* for *run_id*.
 
@@ -179,7 +179,7 @@ class ApprovalGateHandler:
         """
         if self._force_auto or checkpoint.auto_approve:
             decision = ApprovalDecision.AUTO_APPROVED
-            used_approver = approver or 'auto'
+            used_approver = approver or "auto"
         else:
             decision = ApprovalDecision.PENDING
             used_approver = approver
@@ -196,7 +196,9 @@ class ApprovalGateHandler:
             self._pending_checkpoints[record.record_id] = checkpoint
         return record
 
-    def approve(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
+    def approve(
+        self, record_id: str, approver: str, comment: str = ""
+    ) -> ApprovalRecord:
         """Record an APPROVED decision for an existing PENDING record.
 
         The original PENDING record (identified by *record_id*) is retained
@@ -213,11 +215,22 @@ class ApprovalGateHandler:
         record = self._find(record_id)
         # First check catches non-PENDING records (e.g. AUTO_APPROVED).
         # Second check catches PENDING records that have already been resolved.
-        if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
-            raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
+        if (
+            record.decision != ApprovalDecision.PENDING
+            or record_id in self._resolved_ids
+        ):
+            raise ValueError(
+                f"Record {record_id!r} is not pending (current: {record.decision.value})."
+            )
         checkpoint = self._pending_checkpoints.get(record_id)
-        if checkpoint and checkpoint.required_approvers and approver not in checkpoint.required_approvers:
-            raise ValueError(f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}.")
+        if (
+            checkpoint
+            and checkpoint.required_approvers
+            and approver not in checkpoint.required_approvers
+        ):
+            raise ValueError(
+                f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}."
+            )
         new_record = ApprovalRecord(
             checkpoint_name=record.checkpoint_name,
             run_id=record.run_id,
@@ -230,7 +243,9 @@ class ApprovalGateHandler:
         self._pending_checkpoints.pop(record_id, None)
         return new_record
 
-    def reject(self, record_id: str, approver: str, comment: str = '') -> ApprovalRecord:
+    def reject(
+        self, record_id: str, approver: str, comment: str = ""
+    ) -> ApprovalRecord:
         """Record a REJECTED decision for an existing PENDING record.
 
         The original PENDING record (identified by *record_id*) is retained
@@ -247,11 +262,22 @@ class ApprovalGateHandler:
         record = self._find(record_id)
         # First check catches non-PENDING records (e.g. AUTO_APPROVED).
         # Second check catches PENDING records that have already been resolved.
-        if record.decision != ApprovalDecision.PENDING or record_id in self._resolved_ids:
-            raise ValueError(f'Record {record_id!r} is not pending (current: {record.decision.value}).')
+        if (
+            record.decision != ApprovalDecision.PENDING
+            or record_id in self._resolved_ids
+        ):
+            raise ValueError(
+                f"Record {record_id!r} is not pending (current: {record.decision.value})."
+            )
         checkpoint = self._pending_checkpoints.get(record_id)
-        if checkpoint and checkpoint.required_approvers and approver not in checkpoint.required_approvers:
-            raise ValueError(f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}.")
+        if (
+            checkpoint
+            and checkpoint.required_approvers
+            and approver not in checkpoint.required_approvers
+        ):
+            raise ValueError(
+                f"Approver {approver!r} is not allowed for checkpoint {checkpoint.name!r}."
+            )
         new_record = ApprovalRecord(
             checkpoint_name=record.checkpoint_name,
             run_id=record.run_id,
@@ -296,11 +322,17 @@ class ApprovalGateHandler:
         self._expire_pending_records()
         active = [r for r in self._audit if r.record_id not in self._resolved_ids]
         return {
-            'total': len(active),
-            'approved': sum(1 for r in active if r.decision == ApprovalDecision.APPROVED),
-            'auto_approved': sum(1 for r in active if r.decision == ApprovalDecision.AUTO_APPROVED),
-            'rejected': sum(1 for r in active if r.decision == ApprovalDecision.REJECTED),
-            'pending': sum(1 for r in active if r.decision == ApprovalDecision.PENDING),
+            "total": len(active),
+            "approved": sum(
+                1 for r in active if r.decision == ApprovalDecision.APPROVED
+            ),
+            "auto_approved": sum(
+                1 for r in active if r.decision == ApprovalDecision.AUTO_APPROVED
+            ),
+            "rejected": sum(
+                1 for r in active if r.decision == ApprovalDecision.REJECTED
+            ),
+            "pending": sum(1 for r in active if r.decision == ApprovalDecision.PENDING),
         }
 
     # ------------------------------------------------------------------
@@ -311,12 +343,15 @@ class ApprovalGateHandler:
         for record in self._audit:
             if record.record_id == record_id:
                 return record
-        raise KeyError(f'Approval record not found: {record_id!r}')
+        raise KeyError(f"Approval record not found: {record_id!r}")
 
     def _expire_pending_records(self) -> None:
         now = datetime.now(timezone.utc)
         for record in list(self._audit):
-            if record.decision != ApprovalDecision.PENDING or record.record_id in self._resolved_ids:
+            if (
+                record.decision != ApprovalDecision.PENDING
+                or record.record_id in self._resolved_ids
+            ):
                 continue
             checkpoint = self._pending_checkpoints.get(record.record_id)
             if checkpoint is None or checkpoint.timeout_seconds is None:
@@ -324,17 +359,17 @@ class ApprovalGateHandler:
             deadline = record.timestamp + timedelta(seconds=checkpoint.timeout_seconds)
             if now < deadline:
                 continue
-            on_timeout = getattr(checkpoint, 'on_timeout', 'abort')
-            if on_timeout == 'escalate':
-                comment = 'Auto-rejected: checkpoint approval timed out (escalation required).'
+            on_timeout = getattr(checkpoint, "on_timeout", "abort")
+            if on_timeout == "escalate":
+                comment = "Auto-rejected: checkpoint approval timed out (escalation required)."
             else:
-                comment = 'Auto-rejected: checkpoint approval timed out.'
+                comment = "Auto-rejected: checkpoint approval timed out."
             timeout_record = ApprovalRecord(
                 record_id=str(uuid4()),
                 checkpoint_name=record.checkpoint_name,
                 run_id=record.run_id,
                 decision=ApprovalDecision.REJECTED,
-                approver='system',
+                approver="system",
                 comment=comment,
             )
             self._audit.append(timeout_record)

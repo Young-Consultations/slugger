@@ -33,7 +33,9 @@ class InMemoryArtifactStore:
         return list(self._artifacts.values())
 
     def find_by_name(self, name: str) -> list[Artifact]:
-        return [artifact for artifact in self._artifacts.values() if artifact.name == name]
+        return [
+            artifact for artifact in self._artifacts.values() if artifact.name == name
+        ]
 
     def extend(self, artifacts: Iterable[Artifact]) -> None:
         for artifact in artifacts:
