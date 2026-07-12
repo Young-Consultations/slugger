@@ -10,9 +10,12 @@ Non-converging remediation ends in `manual_intervention_required`.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+_LOG = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +165,9 @@ class BoundedRemediationLoop:
                     finding.attempt_count += 1
                     try:
                         success = bool(attempt_fn(finding))
-                    except Exception:  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
+                        _LOG.warning('Remediation attempt %d for finding %r raised: %s: %s',
+                                     att_idx + 1, finding.finding_id, type(exc).__name__, exc)
                         success = False
                     attempt = RemediationAttempt(
                         attempt_number=attempt_number,

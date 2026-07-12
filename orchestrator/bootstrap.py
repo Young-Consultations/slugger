@@ -71,6 +71,7 @@ class Bootstrap:
         knowledge_indexer = self._build_knowledge_indexer()
         validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
         canva_service = self._build_canva_service(settings)
+        chatgpt_service = self._build_chatgpt_service(settings)
         agents = self._build_agents(canva_service)
         parser = WorkflowParser(validators['workflow_validator'])
         executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service)
@@ -91,7 +92,6 @@ class Bootstrap:
                 github_service = GitHubClient(owner=github_settings.owner, repo=github_settings.repo, token=token)
             else:
                 github_service = MockGitHubService()
-        chatgpt_service = self._build_chatgpt_service(settings)
         strict_mode = getattr(getattr(settings, 'environment', None), 'strict_mode', False) if hasattr(settings, 'environment') else False
         if isinstance(strict_mode, str):
             strict_mode = strict_mode.lower() in ('true', '1', 'yes')

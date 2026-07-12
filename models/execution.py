@@ -52,6 +52,8 @@ class ExecutionContext:
     """ChatGPT service for planning-agent prompt execution and prompt review."""
     codex_agent_client: object | None = field(default=None)
     """Codex coding-agent client for workspace-level code generation (CC-005)."""
+    knowledge_context: list[str] = field(default_factory=list)
+    """Relevant knowledge snippets injected by the knowledge indexer (CC-013)."""
     prompt_id: str | None = field(default=None)
     """Approved prompt ID used by the agent for this execution step."""
     prompt_version: str | None = field(default=None)

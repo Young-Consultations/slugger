@@ -1,0 +1,177 @@
+name: full-sdlc-v2
+version: 2.0.0
+description: >
+  Complete AI-SDLC workflow: idea → planning → design → architecture →
+  code generation → QA → security → deployment → release.
+  Replaces the eight-step placeholder recipe (CC-015).
+tags: [sdlc, ai-sdlc, production]
+
+steps:
+  # -----------------------------------------------------------------------
+  # Phase 1: Planning
+  # -----------------------------------------------------------------------
+  - name: product_vision
+    agent: product_vision_agent
+    inputs: []
+    outputs: [product_vision]
+    quality_gates:
+      - validator: artifact_validator
+        on_failure: stop
+
+  - name: requirements
+    agent: requirements_agent
+    inputs: [product_vision]
+    outputs: [requirements]
+    quality_gates:
+      - validator: artifact_validator
+    retry_policy:
+      max_attempts: 2
+      on_failure: stop
+
+  - name: user_stories
+    agent: user_story_agent
+    inputs: [product_vision, requirements]
+    outputs: [user_stories]
+    retry_policy:
+      max_attempts: 2
+
+  - name: project_plan
+    agent: project_plan_agent
+    inputs: [requirements, user_stories]
+    outputs: [project_plan]
+
+  # -----------------------------------------------------------------------
+  # Phase 2: Architecture & Design
+  # -----------------------------------------------------------------------
+  - name: system_design
+    agent: system_design_agent
+    inputs: [requirements, user_stories]
+    outputs: [system_design]
+    quality_gates:
+      - validator: artifact_validator
+
+  - name: adr
+    agent: adr_agent
+    inputs: [system_design]
+    outputs: [adr]
+
+  - name: api_design
+    agent: api_design_agent
+    inputs: [system_design, requirements]
+    outputs: [api_design]
+
+  - name: canva_design
+    agent: canva_design_agent
+    inputs: [requirements, user_stories]
+    outputs: [design_artifact]
+    on_failure: continue
+
+  # -----------------------------------------------------------------------
+  # Phase 3: Development
+  # -----------------------------------------------------------------------
+  - name: code_generation
+    agent: code_generator_agent
+    inputs: [requirements, system_design, api_design]
+    outputs: [generated_code]
+    quality_gates:
+      - validator: artifact_validator
+        on_failure: stop
+    retry_policy:
+      max_attempts: 3
+
+  - name: code_review
+    agent: code_review_agent
+    inputs: [generated_code]
+    outputs: [code_review]
+    approval_policy:
+      name: code_review_approval
+      description: Human approval required for code review findings
+      auto_approve: false
+      quorum: 1
+      on_timeout: abort
+      timeout_seconds: 3600
+
+  - name: refactor
+    agent: refactor_agent
+    inputs: [generated_code, code_review]
+    outputs: [refactored_code]
+    retry_policy:
+      max_attempts: 2
+
+  - name: documentation
+    agent: documentation_agent
+    inputs: [refactored_code, api_design]
+    outputs: [documentation]
+
+  # -----------------------------------------------------------------------
+  # Phase 4: QA & Security
+  # -----------------------------------------------------------------------
+  - name: test_generation
+    agent: test_generator_agent
+    inputs: [refactored_code, requirements]
+    outputs: [tests]
+
+  - name: test_execution
+    agent: test_runner_agent
+    inputs: [refactored_code, tests]
+    outputs: [test_results]
+    quality_gates:
+      - validator: artifact_validator
+        on_failure: stop
+
+  - name: security_review
+    agent: security_review_agent
+    inputs: [refactored_code]
+    outputs: [security_report]
+    quality_gates:
+      - validator: artifact_validator
+
+  - name: performance_check
+    agent: performance_agent
+    inputs: [refactored_code, test_results]
+    outputs: [performance_report]
+    on_failure: continue
+
+  # -----------------------------------------------------------------------
+  # Phase 5: Operations & Release
+  # -----------------------------------------------------------------------
+  - name: cicd_setup
+    agent: cicd_agent
+    inputs: [refactored_code, test_results]
+    outputs: [cicd_config]
+
+  - name: deployment_plan
+    agent: deployment_agent
+    inputs: [refactored_code, cicd_config, security_report]
+    outputs: [deployment_plan]
+    approval_policy:
+      name: deployment_approval
+      description: Human approval required before deployment
+      auto_approve: false
+      quorum: 1
+      on_timeout: abort
+      timeout_seconds: 7200
+
+  - name: monitoring_setup
+    agent: monitoring_agent
+    inputs: [deployment_plan]
+    outputs: [monitoring_config]
+
+  - name: release_candidate
+    agent: release_agent
+    inputs: [deployment_plan, documentation, test_results, security_report]
+    outputs: [release_notes]
+    quality_gates:
+      - validator: artifact_validator
+        on_failure: stop
+
+  - name: changelog
+    agent: changelog_agent
+    inputs: [release_notes, user_stories]
+    outputs: [changelog]
+
+  - name: reflection
+    agent: reflection_agent
+    inputs: [release_notes, test_results, security_report]
+    outputs: [retrospective]
+    on_failure: continue

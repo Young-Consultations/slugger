@@ -263,3 +263,102 @@ class ProductionReadinessEngine:
         if score >= 50.0:
             return ReadinessLevel.NEEDS_WORK
         return ReadinessLevel.NOT_READY
+
+
+# ---------------------------------------------------------------------------
+# CC-016: Evidence-backed readiness gate collector
+# ---------------------------------------------------------------------------
+
+class EvidenceGateStatus(str, Enum):
+    """Status of a single evidence gate."""
+    PASSED = 'passed'
+    FAILED = 'failed'
+    MISSING = 'missing'
+    WAIVED = 'waived'
+
+
+@dataclass
+class EvidenceGate:
+    """Evidence record for a single mandatory release gate."""
+    name: str
+    status: EvidenceGateStatus
+    evidence_id: str = ''
+    evidence_summary: str = ''
+    artifact_version: str = ''
+
+
+@dataclass
+class ReleaseReadinessReport:
+    """Evidence-backed readiness report for a release candidate.
+
+    No model output can pass a gate — only command/tool evidence counts.
+    """
+    app_id: str
+    run_id: str
+    gates: list[EvidenceGate] = field(default_factory=list)
+    release_candidate: bool = False
+    blocking_gates: list[str] = field(default_factory=list)
+
+    def evaluate(self) -> None:
+        """Set release_candidate based on gate statuses."""
+        failed = [g for g in self.gates if g.status in (EvidenceGateStatus.FAILED, EvidenceGateStatus.MISSING)]
+        self.blocking_gates = [g.name for g in failed]
+        self.release_candidate = len(self.blocking_gates) == 0
+
+    def to_dict(self) -> dict:
+        return {
+            'app_id': self.app_id,
+            'run_id': self.run_id,
+            'release_candidate': self.release_candidate,
+            'blocking_gates': self.blocking_gates,
+            'gates': [
+                {
+                    'name': g.name,
+                    'status': g.status.value,
+                    'evidence_id': g.evidence_id,
+                    'evidence_summary': g.evidence_summary,
+                    'artifact_version': g.artifact_version,
+                }
+                for g in self.gates
+            ],
+        }
+
+
+class ReleaseGateCollector:
+    """Collect evidence and enforce release gates.
+
+    Mandatory gates: build, tests, security.
+    A changed file inventory invalidates all previously collected evidence.
+    """
+
+    MANDATORY: list[str] = ['build', 'tests', 'security']
+
+    def __init__(self, app_id: str, run_id: str) -> None:
+        self._app_id = app_id
+        self._run_id = run_id
+        self._evidence: dict[str, EvidenceGate] = {}
+        self._inventory_hash = ''
+
+    def record(self, gate: EvidenceGate) -> None:
+        self._evidence[gate.name] = gate
+
+    def record_passed(self, name: str, evidence_id: str = '', summary: str = '', version: str = '') -> None:
+        self.record(EvidenceGate(name=name, status=EvidenceGateStatus.PASSED, evidence_id=evidence_id, evidence_summary=summary, artifact_version=version))
+
+    def record_failed(self, name: str, reason: str = '', evidence_id: str = '') -> None:
+        self.record(EvidenceGate(name=name, status=EvidenceGateStatus.FAILED, evidence_id=evidence_id, evidence_summary=reason))
+
+    def invalidate_on_change(self, new_hash: str) -> None:
+        if self._inventory_hash and self._inventory_hash != new_hash:
+            self._evidence.clear()
+        self._inventory_hash = new_hash
+
+    def collect(self) -> ReleaseReadinessReport:
+        report = ReleaseReadinessReport(app_id=self._app_id, run_id=self._run_id)
+        for evidence in self._evidence.values():
+            report.gates.append(evidence)
+        for gate_name in self.MANDATORY:
+            if gate_name not in self._evidence:
+                report.gates.append(EvidenceGate(name=gate_name, status=EvidenceGateStatus.MISSING, evidence_summary=f'No evidence for {gate_name}'))
+        report.evaluate()
+        return report
