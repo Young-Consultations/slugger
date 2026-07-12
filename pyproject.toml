@@ -28,7 +28,7 @@ slugger = "cli.main:main"
 include = [
   "agents*", "benchmarks*", "cli*", "config*", "core*", "docs*", "knowledge*",
   "materializer*", "memory*", "models*", "observability*", "orchestrator*",
-  "plugins*", "prompts*", "providers*", "scripts*", "services*", "state_machine*",
+  "mvp*", "plugins*", "prompts*", "providers*", "scripts*", "services*", "state_machine*",
   "validators*", "workflow*"
 ]
 
