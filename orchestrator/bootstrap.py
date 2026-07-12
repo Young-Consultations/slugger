@@ -13,6 +13,7 @@ from config.loader import ConfigLoader
 from knowledge.indexer import KnowledgeIndexer
 from memory import FileMemoryBackend, InMemoryBackend, MemoryManager
 from models.artifact_store import InMemoryArtifactStore
+from models.artifact_store_sqlite import SQLiteArtifactStore
 from models.provider import ProviderConfig, ProviderType
 from observability import ExecutionTracer, MetricsCollector, ObservabilityReporter
 from observability.cost_tracker import CostTracker
@@ -57,7 +58,7 @@ class Bootstrap:
                 chatgpt_settings = getattr(settings, 'chatgpt', None)
                 codex_model = getattr(chatgpt_settings, 'model', 'gpt-4o') if chatgpt_settings is not None else 'gpt-4o'
                 providers.register('codex', CodexProvider(ProviderConfig(name='codex', provider_type=ProviderType.CODEX, api_key=codex_key, model=codex_model)))
-        artifact_store = InMemoryArtifactStore()
+        artifact_store = self._build_artifact_store(settings, profile)
         backend = InMemoryBackend() if settings.memory.backend == 'in_memory' else FileMemoryBackend(self.root_path / settings.memory.storage_path)
         memory = MemoryManager(backend)
         message_bus = MessageBus()
@@ -156,6 +157,15 @@ class Bootstrap:
                 timeout=chatgpt_settings.timeout_seconds,
             )
         return MockChatGPTService()
+
+    def _build_artifact_store(self, settings: object, profile: str):
+        """Resolve the artifact store: SQLite for durable environments, in-memory for tests only."""
+        normalized = profile.lower()
+        if normalized in ('test', 'testing'):
+            return InMemoryArtifactStore()
+        artifact_settings = getattr(settings, 'artifact_store', None)
+        db_path = getattr(artifact_settings, 'db_path', 'artifacts.db') if artifact_settings is not None else 'artifacts.db'
+        return SQLiteArtifactStore(self.root_path / db_path)
 
     def _build_codex_agent_client(self, settings: object, profile: str):
         """Resolve the Codex agent client for the active environment profile."""

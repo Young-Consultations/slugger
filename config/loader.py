@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from config.settings import AgentSettings, CanvaSettings, CodexSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
+from config.settings import AgentSettings, ArtifactStoreSettings, CanvaSettings, CodexSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
 from core.exceptions import ConfigurationError
 from models.provider import ProviderConfig, ProviderType
 
@@ -105,6 +105,7 @@ class ConfigLoader:
             providers=providers,
             agents=AgentSettings(**data.get('agents', {})),
             workflow=WorkflowSettings(**data.get('workflow', {})),
+            artifact_store=ArtifactStoreSettings(**data.get('artifact_store', {})),
             observability=ObservabilitySettings(**data.get('observability', {})),
             memory=MemorySettings(**data.get('memory', {})),
             github=github,

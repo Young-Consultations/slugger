@@ -61,8 +61,10 @@ tasks:
   depends_on:
   - GA-001
   - GA-006
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Bootstrap now selects SQLiteArtifactStore by default outside test mode, with schema versioning and deduplicated append-only writes'
+  - 'Tests: tests/test_artifact_versioning.py and tests/test_workflow_persistence.py cover restart durability, schema versioning, idempotency, and bootstrap selection'
 - id: GA-008
   title: Secure and connect the single materialization and build path
   depends_on:

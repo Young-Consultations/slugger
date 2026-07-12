@@ -8,7 +8,9 @@ from models.artifact import Artifact
 
 
 class InMemoryArtifactStore:
-    """Simple artifact store implementation backed by a dictionary."""
+    """Simple test-only artifact store implementation backed by a dictionary."""
+
+    TEST_ONLY = True
 
     def __init__(self) -> None:
         self._artifacts: dict[str, Artifact] = {}

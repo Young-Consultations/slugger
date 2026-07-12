@@ -10,9 +10,13 @@ import pytest
 
 from agents.base import BaseAgent
 from agents.registry import AgentRegistry
+from config.settings import Settings
 from models import AgentCapability, AgentMetadata, DocumentArtifact
+from models.artifact_store import InMemoryArtifactStore
+from models.artifact_store_sqlite import SQLiteArtifactStore
 from models.execution import ExecutionContext
 from models.workflow import StepStatus
+from orchestrator.bootstrap import Bootstrap
 from validators import ArtifactValidator, QualityGateEvaluator, WorkflowValidator
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser, WorkflowPersistence
 from workflow.models import WorkflowInstance
@@ -107,6 +111,17 @@ class TestWorkflowPersistence:
         instance = engine.run('requirements-gathering', project_id='p1')
         loaded = persistence.load(instance.run_id)
         assert all(si.status == StepStatus.SUCCEEDED for si in loaded.step_instances)
+
+    def test_bootstrap_uses_sqlite_artifact_store_outside_tests(self, tmp_path: Path) -> None:
+        bootstrap = Bootstrap(tmp_path)
+        store = bootstrap._build_artifact_store(Settings(environment='development'), 'development')
+        assert isinstance(store, SQLiteArtifactStore)
+        assert store.schema_version() == 1
+
+    def test_bootstrap_uses_in_memory_artifact_store_in_tests(self, tmp_path: Path) -> None:
+        bootstrap = Bootstrap(tmp_path)
+        store = bootstrap._build_artifact_store(Settings(environment='test'), 'test')
+        assert isinstance(store, InMemoryArtifactStore)
 
 
 # ---------------------------------------------------------------------------

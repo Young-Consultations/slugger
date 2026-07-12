@@ -34,6 +34,13 @@ class WorkflowSettings:
 
 
 @dataclass(slots=True)
+class ArtifactStoreSettings:
+    """Artifact store configuration section."""
+
+    db_path: str = 'artifacts.db'
+
+
+@dataclass(slots=True)
 class ObservabilitySettings:
     """Observability configuration section."""
 
@@ -101,6 +108,7 @@ class Settings:
     providers: ProviderSettings = field(default_factory=ProviderSettings)
     agents: AgentSettings = field(default_factory=AgentSettings)
     workflow: WorkflowSettings = field(default_factory=WorkflowSettings)
+    artifact_store: ArtifactStoreSettings = field(default_factory=ArtifactStoreSettings)
     observability: ObservabilitySettings = field(default_factory=ObservabilitySettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)

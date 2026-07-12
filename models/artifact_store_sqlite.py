@@ -59,6 +59,20 @@ _CREATE_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_artifacts_artifact_id ON artifacts(artifact_id);
 """
 
+_CREATE_DEDUP_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_artifacts_dedup
+ON artifacts(artifact_id, checksum);
+"""
+
+_CREATE_SCHEMA_VERSION_TABLE = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER NOT NULL PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+_SCHEMA_VERSION = 1
+
 
 def _row_checksum(data: dict[str, Any]) -> str:
     """Compute a deterministic checksum of a row dict."""
@@ -131,21 +145,31 @@ class SQLiteArtifactStore:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
+        conn = sqlite3.connect(str(self._db_path), timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA busy_timeout = 30000')
         return conn
 
     def _init_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(_CREATE_ARTIFACTS_TABLE)
-            conn.execute(_CREATE_INDEX)
+            conn.execute(_CREATE_SCHEMA_VERSION_TABLE)
+            version = conn.execute('SELECT MAX(version) FROM schema_version').fetchone()[0] or 0
+            if version < 1:
+                conn.execute(_CREATE_ARTIFACTS_TABLE)
+                conn.execute(_CREATE_INDEX)
+                conn.execute(_CREATE_DEDUP_INDEX)
+                conn.execute(
+                    'INSERT INTO schema_version(version) VALUES (?) ON CONFLICT(version) DO NOTHING',
+                    (_SCHEMA_VERSION,),
+                )
 
     def create(self, artifact: Artifact) -> Artifact:
         data = _serialize(artifact)
         data['checksum'] = _row_checksum(data)
         with self._connect() as conn:
             conn.execute(
-                'INSERT INTO artifacts (artifact_id, name, artifact_type, content, status, format, tags, metadata, extra, checksum) '
+                'INSERT OR IGNORE INTO artifacts (artifact_id, name, artifact_type, content, status, format, tags, metadata, extra, checksum) '
                 'VALUES (:artifact_id, :name, :artifact_type, :content, :status, :format, :tags, :metadata, :extra, :checksum)',
                 data,
             )
@@ -214,3 +238,8 @@ class SQLiteArtifactStore:
                 (artifact_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def schema_version(self) -> int:
+        with self._connect() as conn:
+            row = conn.execute('SELECT MAX(version) AS version FROM schema_version').fetchone()
+        return int(row['version'] or 0)

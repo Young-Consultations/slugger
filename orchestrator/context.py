@@ -12,6 +12,7 @@ from knowledge.indexer import KnowledgeIndexer
 from memory.memory_manager import MemoryManager
 from models.artifact_lineage import LineageGraph
 from models.artifact_store import InMemoryArtifactStore
+from models.artifact_store_sqlite import SQLiteArtifactStore
 from observability.collector import MetricsCollector
 from observability.cost_tracker import CostTracker
 from observability.dashboard import FailureAnalytics, MetricsDashboard
@@ -37,7 +38,7 @@ class ApplicationContext:
     providers: ProviderRegistry
     agents: AgentRegistry
     workflow_engine: WorkflowEngine
-    artifact_store: InMemoryArtifactStore
+    artifact_store: InMemoryArtifactStore | SQLiteArtifactStore
     memory: MemoryManager
     github: IGitHubService
     metrics: MetricsCollector
