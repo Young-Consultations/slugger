@@ -298,19 +298,35 @@ class ReleaseReadinessReport:
     gates: list[EvidenceGate] = field(default_factory=list)
     release_candidate: bool = False
     blocking_gates: list[str] = field(default_factory=list)
+    passed: bool = False
+    mandatory_gates_failed: list[str] = field(default_factory=list)
+    score: float = 0.0
+    invalidated: bool = False
 
-    def evaluate(self) -> None:
+    def evaluate(self, mandatory_gates: list[str], invalidated: bool = False) -> None:
         """Set release_candidate based on gate statuses."""
         failed = [g for g in self.gates if g.status in (EvidenceGateStatus.FAILED, EvidenceGateStatus.MISSING)]
         self.blocking_gates = [g.name for g in failed]
-        self.release_candidate = len(self.blocking_gates) == 0
+        self.mandatory_gates_failed = [
+            g.name for g in failed if g.name in mandatory_gates
+        ]
+        passed_count = sum(1 for g in self.gates if g.status == EvidenceGateStatus.PASSED)
+        total_count = len(self.gates)
+        self.score = round((passed_count / total_count) * 100, 1) if total_count else 0.0
+        self.invalidated = invalidated
+        self.release_candidate = not invalidated and len(self.blocking_gates) == 0
+        self.passed = not invalidated and len(self.mandatory_gates_failed) == 0 and len(self.blocking_gates) == 0
 
     def to_dict(self) -> dict:
         return {
             'app_id': self.app_id,
             'run_id': self.run_id,
             'release_candidate': self.release_candidate,
+            'passed': self.passed,
             'blocking_gates': self.blocking_gates,
+            'mandatory_gates_failed': self.mandatory_gates_failed,
+            'score': self.score,
+            'invalidated': self.invalidated,
             'gates': [
                 {
                     'name': g.name,
@@ -338,6 +354,7 @@ class ReleaseGateCollector:
         self._run_id = run_id
         self._evidence: dict[str, EvidenceGate] = {}
         self._inventory_hash = ''
+        self._frozen_checksums: dict[str, str] = {}
 
     def record(self, gate: EvidenceGate) -> None:
         self._evidence[gate.name] = gate
@@ -353,12 +370,22 @@ class ReleaseGateCollector:
             self._evidence.clear()
         self._inventory_hash = new_hash
 
-    def collect(self) -> ReleaseReadinessReport:
+    def freeze_candidate(self, checksums: dict[str, str]) -> None:
+        """Record the exact candidate state that gate evidence applies to."""
+        self._frozen_checksums = dict(checksums)
+
+    def evaluate(self, current_checksums: dict[str, str] | None = None) -> ReleaseReadinessReport:
         report = ReleaseReadinessReport(app_id=self._app_id, run_id=self._run_id)
         for evidence in self._evidence.values():
             report.gates.append(evidence)
         for gate_name in self.MANDATORY:
             if gate_name not in self._evidence:
                 report.gates.append(EvidenceGate(name=gate_name, status=EvidenceGateStatus.MISSING, evidence_summary=f'No evidence for {gate_name}'))
-        report.evaluate()
+        invalidated = current_checksums is not None and self._frozen_checksums and dict(current_checksums) != self._frozen_checksums
+        if invalidated:
+            report.gates.append(EvidenceGate(name='candidate_state', status=EvidenceGateStatus.FAILED, evidence_summary='Frozen candidate checksums changed'))
+        report.evaluate(self.MANDATORY, invalidated=invalidated)
         return report
+
+    def collect(self) -> ReleaseReadinessReport:
+        return self.evaluate()

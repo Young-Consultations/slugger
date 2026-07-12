@@ -9,6 +9,7 @@ from validators.readiness import (
     DocumentationGate,
     ProductionReadinessEngine,
     ReadinessLevel,
+    ReleaseGateCollector,
     SecurityGate,
 )
 
@@ -171,4 +172,56 @@ def test_zero_coverage_threshold_does_not_divide_by_zero(engine: ProductionReadi
         security=SecurityGate(findings_count=0),
         documentation=DocumentationGate(required_artifacts=[], present_artifacts=[]),
     )
+    assert report.score == 100.0
+
+
+def test_failed_mandatory_gate_blocks_release() -> None:
+    collector = ReleaseGateCollector('app-1', 'run-1')
+    collector.record_failed('build', 'build failed')
+    collector.record_passed('tests', 'ev-tests')
+    collector.record_passed('security', 'ev-security')
+    collector.record_passed('coverage', 'ev-coverage')
+    collector.record_passed('lint', 'ev-lint')
+    collector.record_passed('type', 'ev-type')
+    collector.record_passed('approvals', 'ev-approvals')
+
+    report = collector.evaluate()
+
+    assert report.score > 80.0
+    assert report.passed is False
+    assert report.release_candidate is False
+    assert report.mandatory_gates_failed == ['build']
+
+
+def test_readiness_invalidated_on_file_change() -> None:
+    collector = ReleaseGateCollector('app-1', 'run-1')
+    collector.record_passed('build', 'ev-build')
+    collector.record_passed('tests', 'ev-tests')
+    collector.record_passed('security', 'ev-security')
+    collector.freeze_candidate({'src/app.py': 'abc123'})
+
+    report = collector.evaluate({'src/app.py': 'def456'})
+
+    assert report.invalidated is True
+    assert report.passed is False
+    assert 'candidate_state' in report.blocking_gates
+
+
+def test_all_gates_passing_produces_release_candidate() -> None:
+    collector = ReleaseGateCollector('app-1', 'run-1')
+    collector.record_passed('build', 'ev-build')
+    collector.record_passed('tests', 'ev-tests')
+    collector.record_passed('security', 'ev-security')
+    collector.record_passed('coverage', 'ev-coverage')
+    collector.record_passed('lint', 'ev-lint')
+    collector.record_passed('type', 'ev-type')
+    collector.record_passed('approvals', 'ev-approvals')
+    checksums = {'src/app.py': 'abc123'}
+    collector.freeze_candidate(checksums)
+
+    report = collector.evaluate(dict(checksums))
+
+    assert report.passed is True
+    assert report.release_candidate is True
+    assert report.mandatory_gates_failed == []
     assert report.score == 100.0

@@ -98,8 +98,10 @@ tasks:
   - GA-008
   - GA-009
   - GA-010
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime: validators.readiness.ReleaseGateCollector now separates mandatory gate failures from score and invalidates frozen candidates when checksums change'
+  - 'Tests: tests/test_readiness_engine.py and tests/test_release_automation.py'
 - id: GA-012
   title: Connect one GitHub delivery path and complete CI/package distribution
   depends_on:
