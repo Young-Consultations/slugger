@@ -11,6 +11,7 @@ from models.artifact import Artifact
 
 if TYPE_CHECKING:
     from agents.messaging import MessageBus
+    from models.project import ProjectBrief
 
 
 class ExecutionState(str, Enum):
@@ -45,8 +46,27 @@ class ExecutionContext:
     metadata: dict[str, Any] = field(default_factory=dict)
     events: list[ExecutionEvent] = field(default_factory=list)
     message_bus: MessageBus | None = field(default=None)
+    project_brief: ProjectBrief | None = field(default=None)
 
     def add_event(self, event: ExecutionEvent) -> None:
         """Attach an execution event to the context."""
 
         self.events.append(event)
+
+    def get_idea(self) -> str:
+        """Return the project idea from the brief or metadata, never empty for a valid run."""
+
+        if self.project_brief is not None and self.project_brief.idea:
+            return self.project_brief.idea
+        return self.metadata.get('idea', '')
+
+    def artifact_content(self, name: str) -> str:
+        """Return the content of a named input artifact without producing a Python repr."""
+
+        artifact = self.inputs.get(name)
+        if artifact is None:
+            return ''
+        content = getattr(artifact, 'content', None)
+        if content is None:
+            return str(artifact)
+        return content

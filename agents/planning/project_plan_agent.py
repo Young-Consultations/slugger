@@ -27,6 +27,10 @@ class ProjectPlanAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Project Plan\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        requirements_content = context.artifact_content('requirements')
+        sections = [f"# Project Plan\n\n**Idea:** {idea}\n"]
+        if requirements_content:
+            sections.append(f"**Requirements:**\n{requirements_content}\n")
+        content = '\n'.join(sections)
         return [self.create_artifact(context, 'project_plan', content, DocumentArtifact)]

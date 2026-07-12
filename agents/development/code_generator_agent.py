@@ -135,8 +135,12 @@ class CodeGeneratorAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        idea = context.metadata.get('idea', 'Unspecified idea')
+        idea = context.get_idea() or 'Unspecified idea'
         platform = context.metadata.get('platform', 'web')
+        if context.project_brief is not None:
+            platform = context.project_brief.platform.value
         coding_agent = context.metadata.get('coding_agent', 'codex')
+        if context.project_brief is not None:
+            coding_agent = context.project_brief.coding_agent.value
         content = _python_scaffold(idea, platform, coding_agent)
         return [self.create_artifact(context, 'generated_code', content, CodeArtifact)]

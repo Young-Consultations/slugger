@@ -27,6 +27,10 @@ class UserStoryAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# User Stories\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        requirements_content = context.artifact_content('requirements')
+        sections = [f"# User Stories\n\n**Idea:** {idea}\n"]
+        if requirements_content:
+            sections.append(f"**Requirements:**\n{requirements_content}\n")
+        content = '\n'.join(sections)
         return [self.create_artifact(context, 'user_stories', content, DocumentArtifact)]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from models.project import ProjectInput
+from models.project import ProjectBrief, ProjectInput
 from orchestrator.context import ApplicationContext
 from workflow.models import WorkflowInstance
 
@@ -16,23 +16,28 @@ class Slugger:
     def run_workflow(self, workflow_name: str):
         return self.context.workflow_engine.run(workflow_name)
 
-    def build(self, project_input: ProjectInput, workflow: str | None = None) -> WorkflowInstance:
-        """Run a workflow initialised with the supplied :class:`ProjectInput`.
+    def build(self, project_input: ProjectInput | ProjectBrief, workflow: str | None = None) -> WorkflowInstance:
+        """Run a workflow initialised with the supplied project input.
 
         Parameters
         ----------
         project_input:
-            A :class:`~models.project.ProjectInput` describing the app idea,
+            A :class:`~models.project.ProjectBrief` (preferred) or a
+            :class:`~models.project.ProjectInput` describing the app idea,
             target platform, and preferred coding agent.
         workflow:
             Optional workflow name or YAML path.  Defaults to ``full-sdlc``.
         """
 
         workflow_name = workflow or _DEFAULT_WORKFLOW
-        metadata = project_input.as_metadata()
-        return self.context.workflow_engine.run(workflow_name, metadata=metadata)
+        if isinstance(project_input, ProjectInput):
+            brief = project_input.to_brief()
+        else:
+            brief = project_input
+        metadata = brief.as_metadata()
+        return self.context.workflow_engine.run(workflow_name, metadata=metadata, project_brief=brief)
 
-    def resume(self, run_id: str, project_input: ProjectInput | None = None) -> WorkflowInstance:
+    def resume(self, run_id: str, project_input: ProjectInput | ProjectBrief | None = None) -> WorkflowInstance:
         """Resume a previously interrupted workflow run.
 
         Parameters
@@ -45,8 +50,15 @@ class Slugger:
             steps.  If omitted the steps receive no metadata.
         """
 
-        metadata = project_input.as_metadata() if project_input is not None else None
-        return self.context.workflow_engine.resume(run_id, metadata=metadata)
+        metadata = None
+        brief = None
+        if project_input is not None:
+            if isinstance(project_input, ProjectInput):
+                brief = project_input.to_brief()
+            else:
+                brief = project_input
+            metadata = brief.as_metadata()
+        return self.context.workflow_engine.resume(run_id, metadata=metadata, project_brief=brief)
 
     def list_agents(self) -> list[str]:
         return self.context.agents.list()

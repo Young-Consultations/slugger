@@ -27,6 +27,10 @@ class RequirementsAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Requirements\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        vision_content = context.artifact_content('product_vision')
+        sections = [f"# Requirements\n\n**Idea:** {idea}\n"]
+        if vision_content:
+            sections.append(f"**Vision:**\n{vision_content}\n")
+        content = '\n'.join(sections)
         return [self.create_artifact(context, 'requirements', content, DocumentArtifact)]

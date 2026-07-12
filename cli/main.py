@@ -94,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
             coding_agent=CodingAgent(args.coding_agent),
         )
         result = slugger.build(project_input, workflow=args.workflow)
+        outcome = result.outcome.value if result.outcome is not None else 'unknown'
         print(json.dumps({
             'run_id': result.run_id,
             'idea': project_input.idea,
@@ -101,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             'coding_agent': project_input.coding_agent.value,
             'workflow': result.definition.name,
             'status': result.status,
+            'outcome': outcome,
             'artifacts': len(result.artifacts),
         }))
         return 0
@@ -113,16 +115,19 @@ def main(argv: list[str] | None = None) -> int:
                 coding_agent=CodingAgent(args.coding_agent) if args.coding_agent else CodingAgent.CODEX,
             )
         result = slugger.resume(args.run_id, project_input=project_input)
+        outcome = result.outcome.value if result.outcome is not None else 'unknown'
         print(json.dumps({
             'run_id': result.run_id,
             'workflow': result.definition.name,
             'status': result.status,
+            'outcome': outcome,
             'artifacts': len(result.artifacts),
         }))
         return 0
     if args.command == 'run':
         result = slugger.run_workflow(args.workflow)
-        print(json.dumps({'workflow': result.definition.name, 'status': result.status, 'artifacts': len(result.artifacts)}))
+        outcome = result.outcome.value if result.outcome is not None else 'unknown'
+        print(json.dumps({'workflow': result.definition.name, 'status': result.status, 'outcome': outcome, 'artifacts': len(result.artifacts)}))
         return 0
     if args.command == 'list' and args.list_command == 'agents':
         print('\n'.join(slugger.list_agents()))

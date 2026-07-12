@@ -27,6 +27,16 @@ class ProductVisionAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Product Vision\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        platform = ''
+        if context.project_brief is not None:
+            platform = context.project_brief.platform.value
+        elif context.metadata.get('platform'):
+            platform = context.metadata['platform']
+        content = (
+            f"# Product Vision\n\n"
+            f"**Idea:** {idea}\n\n"
+            f"**Platform:** {platform}\n\n"
+            f"Agent: {self.metadata.name}\n"
+        )
         return [self.create_artifact(context, 'product_vision', content, DocumentArtifact)]
