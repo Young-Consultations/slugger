@@ -8,3 +8,12 @@ config/secrets.yaml
 
 # Packaging build artifacts
 *.egg-info/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime state and persistence files
+workflow/state.json
+*.db

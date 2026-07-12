@@ -186,6 +186,11 @@ class BoundedRemediationLoop:
                 result.resolved_findings.append(finding)
             elif finding.status == FindingStatus.WAIVED:
                 result.waived_findings.append(finding)
+            elif attempt_fn is None:
+                # Classification-only mode: findings are classified but not remediated
+                result.open_findings.append(finding)
+                if finding.is_blocking or finding.requires_human_waiver:
+                    result.all_resolved = False
             elif not resolved:
                 # Escalate non-converging findings
                 if finding.is_blocking or finding.requires_human_waiver:

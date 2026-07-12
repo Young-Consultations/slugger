@@ -353,6 +353,10 @@ def make_fastapi_manifest(app_id: str, name: str, idea: str = '') -> AppManifest
                 content=f'# {name}\n\n{idea or name}\n',
             ),
             FileEntry(
+                path='src/__init__.py',
+                content='',
+            ),
+            FileEntry(
                 path='src/main.py',
                 content='"""FastAPI application."""\n\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get("/")\ndef root() -> dict:\n    return {"status": "ok"}\n',
                 requirement_ids=['REQ-001'],

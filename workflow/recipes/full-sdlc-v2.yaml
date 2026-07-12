@@ -63,7 +63,7 @@ steps:
   - name: canva_design
     agent: canva_design_agent
     inputs: [requirements, user_stories]
-    outputs: [design_artifact]
+    outputs: [design_brief, design_manifest, design_artifact]
     on_failure: continue
 
   # -----------------------------------------------------------------------

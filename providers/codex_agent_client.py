@@ -18,6 +18,19 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _is_within(resolved_path: Path, allowed: Path) -> bool:
+    """Return True if *resolved_path* is within *allowed* (after resolving *allowed*)."""
+    try:
+        resolved_path.relative_to(allowed.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Domain models
 # ---------------------------------------------------------------------------
 
@@ -80,14 +93,18 @@ class CodexWorkspace:
 
     def is_path_allowed(self, path: str) -> bool:
         """Return True if *path* is within an allowed write location."""
+        resolved = Path(path).resolve()
         if not self.write_allowed_paths:
             # Default: allow anything within root
             try:
-                Path(path).resolve().relative_to(self.root.resolve())
+                resolved.relative_to(self.root.resolve())
                 return True
             except ValueError:
                 return False
-        return any(path.startswith(allowed) for allowed in self.write_allowed_paths)
+        return any(
+            _is_within(resolved, Path(allowed))
+            for allowed in self.write_allowed_paths
+        )
 
     def is_command_allowed(self, command: str) -> bool:
         """Return True if the leading command token is allowed."""

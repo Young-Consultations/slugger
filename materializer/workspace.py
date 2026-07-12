@@ -223,7 +223,9 @@ class ProjectMaterializer:
     def _safe_path(self, subdir: str, workspace_id: str) -> Path:
         """Build and validate a path within the workspace root."""
         path = (self._root / subdir / workspace_id).resolve()
-        if not str(path).startswith(str(self._root)):
+        try:
+            path.relative_to(self._root.resolve())
+        except ValueError:
             raise ValueError(f'Computed path {path} is outside workspace root {self._root}')
         return path
 
@@ -242,7 +244,9 @@ class ProjectMaterializer:
         for entry in files:
             dest = (staging_dir / entry.path).resolve()
             # Path traversal check — must remain within staging_dir
-            if not str(dest).startswith(str(staging_dir.resolve())):
+            try:
+                dest.relative_to(staging_dir.resolve())
+            except ValueError:
                 raise ValueError(f'Path {entry.path!r} would escape staging directory')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(entry.content, encoding='utf-8')

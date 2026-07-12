@@ -65,15 +65,18 @@ class DurableApprovalStore:
             conn.execute(_CREATE_APPROVALS_INDEX)
 
     def save(self, record: ApprovalRecord) -> None:
-        """Persist an approval record."""
+        """Persist an approval record (append-only; raises on duplicate record_id)."""
         data = record.to_dict()
         checksum = _record_checksum(data)
-        with self._connect() as conn:
-            conn.execute(
-                'INSERT OR REPLACE INTO approvals (record_id, checkpoint_name, run_id, decision, approver, comment, timestamp, checksum) '
-                'VALUES (:record_id, :checkpoint_name, :run_id, :decision, :approver, :comment, :timestamp, :checksum)',
-                {**data, 'checksum': checksum},
-            )
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    'INSERT INTO approvals (record_id, checkpoint_name, run_id, decision, approver, comment, timestamp, checksum) '
+                    'VALUES (:record_id, :checkpoint_name, :run_id, :decision, :approver, :comment, :timestamp, :checksum)',
+                    {**data, 'checksum': checksum},
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(f'Approval record {record.record_id!r} already exists in audit log') from exc
 
     def get_by_run(self, run_id: str) -> list[ApprovalRecord]:
         """Return all approval records for a run, verifying checksums."""
@@ -93,13 +96,28 @@ class DurableApprovalStore:
         return records
 
     def has_approval(self, run_id: str, checkpoint_name: str) -> bool:
-        """Return True if the checkpoint has been APPROVED for the given run."""
+        """Return True if the checkpoint has been APPROVED for the given run.
+
+        Fails closed on checksum mismatches — a tampered row is treated as no
+        approval rather than silently accepted.
+        """
         with self._connect() as conn:
-            row = conn.execute(
-                'SELECT 1 FROM approvals WHERE run_id = ? AND checkpoint_name = ? AND decision IN (?, ?) LIMIT 1',
+            rows = conn.execute(
+                'SELECT * FROM approvals WHERE run_id = ? AND checkpoint_name = ? AND decision IN (?, ?)',
                 (run_id, checkpoint_name, ApprovalDecision.APPROVED.value, ApprovalDecision.AUTO_APPROVED.value),
-            ).fetchone()
-        return row is not None
+            ).fetchall()
+        for row in rows:
+            row_dict = dict(row)
+            stored_checksum = row_dict.pop('checksum', '')
+            row_dict.pop('rowid', None)
+            if not stored_checksum or _record_checksum(row_dict) != stored_checksum:
+                _LOG.error(
+                    'Checksum mismatch for approval record %s — record rejected for authorization',
+                    row_dict.get('record_id'),
+                )
+                continue
+            return True
+        return False
 
     def get_pending(self, run_id: str) -> list[ApprovalRecord]:
         """Return all PENDING approval records for a run (for resume security)."""
