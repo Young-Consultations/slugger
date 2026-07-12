@@ -76,7 +76,7 @@ class DurableApprovalStore:
                     {**data, 'checksum': checksum},
                 )
         except sqlite3.IntegrityError as exc:
-            raise ValueError(f'Approval record {record.record_id!r} already exists in audit log') from exc
+            raise sqlite3.IntegrityError(f'Approval record {record.record_id!r} already exists in audit log') from exc
 
     def get_by_run(self, run_id: str) -> list[ApprovalRecord]:
         """Return all approval records for a run, verifying checksums."""
@@ -110,7 +110,13 @@ class DurableApprovalStore:
             row_dict = dict(row)
             stored_checksum = row_dict.pop('checksum', '')
             row_dict.pop('rowid', None)
-            if not stored_checksum or _record_checksum(row_dict) != stored_checksum:
+            if not stored_checksum:
+                _LOG.error(
+                    'Approval record %s is missing integrity data — record rejected for authorization',
+                    row_dict.get('record_id'),
+                )
+                continue
+            if _record_checksum(row_dict) != stored_checksum:
                 _LOG.error(
                     'Checksum mismatch for approval record %s — record rejected for authorization',
                     row_dict.get('record_id'),
