@@ -202,7 +202,7 @@ class TestResumeCLI:
         fake_slugger = MagicMock()
         result = MagicMock()
         result.run_id = 'test-run-id-123'
-        result.definition.name = 'full-sdlc'
+        result.definition.name = 'full-sdlc-v2'
         result.status = 'succeeded'
         result.artifacts = []
         result.outcome = None

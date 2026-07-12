@@ -270,7 +270,7 @@ class TestIdeaPropagation:
         fake_slugger = MagicMock()
         result = MagicMock()
         result.run_id = 'outcome-test-run'
-        result.definition.name = 'full-sdlc'
+        result.definition.name = 'full-sdlc-v2'
         result.status = 'succeeded'
         result.artifacts = []
         result.outcome = WorkflowOutcome.ARTIFACTS_GENERATED

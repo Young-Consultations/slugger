@@ -28,6 +28,7 @@ class WorkflowSettings:
     """Workflow configuration section."""
 
     recipe_directory: str = 'workflow/recipes'
+    default_workflow: str = 'full-sdlc-v2'  # Fallback when defaults.yaml is not loaded.
     max_retries: int = 2
     state_store: str = 'workflow/state.json'
 

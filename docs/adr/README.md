@@ -47,3 +47,7 @@ What are the positive and negative outcomes?
 | [0011](0011-observability-and-telemetry.md) | Observability and Telemetry Architecture | Accepted |
 | [0012](0012-security-architecture-principles.md) | Security Architecture Principles | Accepted |
 | [0013](0013-domain-driven-design.md) | Domain-Driven Design Approach | Accepted |
+| [0014](0014-canva-api-integration.md) | Canva API Integration | Accepted |
+| [0015](0015-build-command-single-input.md) | Build Command Single-Input Interface | Accepted |
+| [0016](0016-codex-agent-adapter.md) | Codex Agent Adapter | Accepted |
+| [0017](0017-canonical-execution-path.md) | Canonical Execution Path | Accepted |

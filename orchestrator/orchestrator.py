@@ -6,7 +6,7 @@ from models.project import ProjectBrief, ProjectInput
 from orchestrator.context import ApplicationContext
 from workflow.models import WorkflowInstance
 
-_DEFAULT_WORKFLOW = 'full-sdlc'
+_DEFAULT_WORKFLOW = 'full-sdlc-v2'
 
 
 class Slugger:
@@ -26,9 +26,13 @@ class Slugger:
             :class:`~models.project.ProjectInput` describing the app idea,
             target platform, and preferred coding agent.
         workflow:
-            Optional workflow name or YAML path.  Defaults to ``full-sdlc``.
+            Optional workflow name or YAML path.  Defaults to ``full-sdlc-v2``.
         """
 
+        if workflow == 'full-sdlc':
+            raise ValueError(
+                "The 'full-sdlc' workflow has been superseded by 'full-sdlc-v2'. Resume existing runs using 'full-sdlc-v2' or start a new build."
+            )
         workflow_name = workflow or _DEFAULT_WORKFLOW
         if isinstance(project_input, ProjectInput):
             brief = project_input.to_brief()

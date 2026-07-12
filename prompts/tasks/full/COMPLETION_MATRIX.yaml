@@ -5,8 +5,11 @@ tasks:
 - id: GA-001
   title: Freeze the canonical architecture and delete alternate runtime paths
   depends_on: []
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Commit: GA-001: Freeze the canonical architecture and delete alternate runtime
+    paths'
+  - 'Test: tests/test_architecture_invariants.py'
 - id: GA-002
   title: Make managed prompts the only runtime prompt source
   depends_on:
