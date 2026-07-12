@@ -51,3 +51,4 @@ What are the positive and negative outcomes?
 | [0015](0015-build-command-single-input.md) | Build Command Single-Input Interface | Accepted |
 | [0016](0016-codex-agent-adapter.md) | Codex Agent Adapter | Accepted |
 | [0017](0017-canonical-execution-path.md) | Canonical Execution Path | Accepted |
+| [0018](0018-mvp-execution-path.md) | MVP Execution Path | Accepted |
