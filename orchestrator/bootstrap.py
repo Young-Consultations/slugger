@@ -136,16 +136,17 @@ class Bootstrap:
         failure_analytics = FailureAnalytics()
         knowledge_indexer = self._build_knowledge_indexer()
         prompt_catalog = build_default_catalog()
+        workflow_validator = WorkflowValidator()
         validators = {
             "artifact_validator": ArtifactValidator(),
-            "workflow_validator": WorkflowValidator(),
+            "workflow_validator": workflow_validator,
             "agent_validator": AgentValidator(),
         }
         canva_service = self._build_canva_service(settings)
         chatgpt_service = self._build_chatgpt_service(settings)
         codex_agent_client = self._build_codex_agent_client(settings, profile)
         agents = self._build_agents(canva_service)
-        parser = WorkflowParser(validators["workflow_validator"])
+        parser = WorkflowParser(workflow_validator)
         executor = StepExecutor(
             agents,
             QualityGateEvaluator(

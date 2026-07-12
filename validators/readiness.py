@@ -424,7 +424,7 @@ class ReleaseGateCollector:
                         evidence_summary=f"No evidence for {gate_name}",
                     )
                 )
-        invalidated = (
+        invalidated = bool(
             current_checksums is not None
             and self._frozen_checksums
             and dict(current_checksums) != self._frozen_checksums

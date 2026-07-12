@@ -185,7 +185,7 @@ class ProjectMaterializer:
             return MaterializationResult(success=False, errors=errors)
 
         inventory: list[FileInventoryEntry] = []
-        errors: list[str] = []
+        errors = []  # list[str]
         for entry in manifest.files:
             dest = self._resolve_workspace_file(active_dir, entry.path)
             expected = hashlib.sha256(entry.content.encode("utf-8")).hexdigest()

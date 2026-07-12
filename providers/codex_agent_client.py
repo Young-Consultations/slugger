@@ -344,10 +344,10 @@ class CodexCliAdapter(ICodexAgentClient):
     ) -> CodexTaskResult:
         root = self._ensure_workspace(workspace)
         command = [self.command, "exec", "--model", self.model, prompt]
-        env = {
+        env: dict[str, str] = {
             **os.environ,
-            "CODEX_API_KEY": self.api_key,
-            "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", self.api_key),
+            "CODEX_API_KEY": self.api_key or "",
+            "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", self.api_key or ""),
         }
         completed = subprocess.run(
             command,

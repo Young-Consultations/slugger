@@ -157,9 +157,9 @@ class LineageGraph:
             if child_id in visited:
                 continue
             visited.add(child_id)
-            node = self._nodes.get(child_id)
-            if node is not None:
-                result.append(node)
+            child_node = self._nodes.get(child_id)
+            if child_node is not None:
+                result.append(child_node)
                 queue.extend(c for c in children.get(child_id, []) if c not in visited)
         return result
 

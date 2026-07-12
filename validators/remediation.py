@@ -11,6 +11,7 @@ Non-converging remediation ends in `manual_intervention_required`.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -159,7 +160,7 @@ class BoundedRemediationLoop:
     def process(
         self,
         findings: list[Finding],
-        attempt_fn: object | None = None,
+        attempt_fn: Callable[[Finding], bool] | None = None,
     ) -> RemediationLoopResult:
         """Process findings through bounded remediation attempts.
 

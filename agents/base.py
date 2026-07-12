@@ -88,7 +88,7 @@ class BaseAgent(IAgent, ABC):
         *,
         format: str | None = None,
     ) -> Artifact:
-        artifact = artifact_class(
+        artifact = artifact_class(  # type: ignore[call-arg]
             artifact_id=str(uuid4()),
             name=name,
             content=content,

@@ -92,10 +92,10 @@ class PromptEvaluator:
 
     def __init__(
         self,
-        template_dir: Path,
+        template_dir: Path | None = None,
         validator: PromptTemplateValidator | None = None,
     ) -> None:
-        self.template_dir = template_dir
+        self.template_dir = template_dir or Path("prompts")
         self.validator = validator or PromptTemplateValidator()
 
     # ------------------------------------------------------------------

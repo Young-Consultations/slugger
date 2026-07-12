@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 import requests
 
@@ -49,7 +50,7 @@ class ChatGPTClient(IChatGPTService):
         self,
         messages: list[dict[str, str]],
         **kwargs: object,
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         payload: dict[str, object] = {"model": self._model, "messages": messages}
         for key in ("temperature", "max_tokens", "top_p", "stop"):
             if key in kwargs:

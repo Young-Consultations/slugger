@@ -14,7 +14,7 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 
 from models.artifact import (
     Artifact,
@@ -116,7 +116,7 @@ def _deserialize(row: dict[str, Any]) -> Artifact | None:
             correlation_id=meta_data.get("correlation_id"),
             labels=meta_data.get("labels", {}),
         )
-        artifact = klass(
+        artifact = klass(  # type: ignore[call-arg]
             artifact_id=row["artifact_id"],
             name=row["name"],
             content=row["content"],
@@ -225,7 +225,7 @@ class SQLiteArtifactStore:
                 artifacts.append(a)
         return artifacts
 
-    def find_by_name(self, name: str) -> list[Artifact]:
+    def find_by_name(self, name: str) -> List[Artifact]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT *, MAX(rowid) as max_rowid FROM artifacts WHERE name = ? GROUP BY artifact_id ORDER BY max_rowid DESC",
@@ -247,7 +247,7 @@ class SQLiteArtifactStore:
         for a in artifacts:
             self.create(a)
 
-    def history(self, artifact_id: str) -> list[dict[str, Any]]:
+    def history(self, artifact_id: str) -> List[dict[str, Any]]:
         """Return all version rows for an artifact (for lineage queries)."""
         with self._connect() as conn:
             rows = conn.execute(

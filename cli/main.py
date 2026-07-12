@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
@@ -165,16 +166,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "resume":
         slugger = get_slugger()
-        project_input = None
+        resume_input: ProjectInput | None = None
         if args.idea and args.platform:
-            project_input = ProjectInput(
+            resume_input = ProjectInput(
                 idea=args.idea,
                 platform=Platform(args.platform),
                 coding_agent=CodingAgent(args.coding_agent)
                 if args.coding_agent
                 else CodingAgent.CODEX,
             )
-        result = slugger.resume(args.run_id, project_input=project_input)
+        result = slugger.resume(args.run_id, project_input=resume_input)
         outcome = result.outcome.value if result.outcome is not None else "unknown"
         print(
             json.dumps(
@@ -221,13 +222,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.lineage_format == "json":
             print(json.dumps(lineage_data, indent=2))
         else:
-            nodes = lineage_data.get("nodes", [])
+            nodes = cast(list[dict[str, object]], lineage_data.get("nodes") or [])
             if not nodes:
                 print("No lineage data available.")
             else:
                 print(f"Artifact lineage: {len(nodes)} node(s)")
                 for node in nodes:
-                    parents = ", ".join(node.get("parent_ids", [])) or "none"
+                    parents = (
+                        ", ".join(cast(list[str], node.get("parent_ids") or []))
+                        or "none"
+                    )
                     print(
                         f"  [{node.get('stage', '?')}] {node.get('name', '?')} "
                         f"(id={node.get('artifact_id', '?')}, parents={parents})"

@@ -107,7 +107,7 @@ def _deserialize_artifact(raw: dict) -> Artifact:
     )
     artifact_type = raw.get("artifact_type", ArtifactType.DOCUMENT.value)
     cls = _ARTIFACT_CLASSES.get(artifact_type, DocumentArtifact)
-    return cls(
+    return cls(  # type: ignore[call-arg]
         artifact_id=raw["artifact_id"],
         name=raw["name"],
         content=raw["content"],

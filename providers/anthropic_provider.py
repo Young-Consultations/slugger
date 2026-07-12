@@ -37,7 +37,7 @@ class AnthropicProvider(BaseProvider):
 
     def complete(self, prompt: str, **kwargs: object) -> str:
         headers = self._auth_headers()
-        max_tokens = int(kwargs.get("max_tokens", 1024))  # type: ignore[arg-type]
+        max_tokens = int(kwargs.get("max_tokens", 1024))  # type: ignore[call-overload]
         payload: dict[str, object] = {
             "model": self.config.model,
             "max_tokens": max_tokens,

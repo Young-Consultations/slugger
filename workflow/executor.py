@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from agents.messaging import MessageBus
+from models.artifact import Artifact
 from models.artifact_lineage import ArtifactLineageNode, LineageGraph, SdlcStage
 from models.execution import ExecutionContext
 from models.project import ProjectBrief
+from services.chatgpt import IChatGPTService
 from validators.quality_gate import QualityGateEvaluator
 from workflow.models import StepInstance
 
@@ -64,7 +66,7 @@ class StepExecutor:
         quality_gate_evaluator: QualityGateEvaluator,
         message_bus: MessageBus | None = None,
         lineage_graph: LineageGraph | None = None,
-        chatgpt_service: object | None = None,
+        chatgpt_service: IChatGPTService | None = None,
         codex_agent_client: object | None = None,
         prompt_catalog: SdlcPromptCatalog | None = None,
     ) -> None:
@@ -91,9 +93,10 @@ class StepExecutor:
             for name in step_instance.definition.inputs
             if name in available_artifacts
         }
-        prior_artifacts = [
-            a for a in available_artifacts.values() if hasattr(a, "artifact_id")
-        ]
+        prior_artifacts = cast(
+            list[Artifact],
+            [a for a in available_artifacts.values() if hasattr(a, "artifact_id")],
+        )
         parent_ids = [
             aid
             for a in prior_artifacts
