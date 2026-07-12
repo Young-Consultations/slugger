@@ -56,22 +56,29 @@ def test_agent_name(agent: CanvaDesignAgent) -> None:
 def test_execute_with_design_id(agent: CanvaDesignAgent) -> None:
     context = _context(design_id='d1')
     artifacts = agent.execute(context)
-    assert len(artifacts) == 1
-    assert artifacts[0].name == 'design_artifact'
-    assert 'd1' in artifacts[0].content
+    # CC-006: now returns design_brief, design_manifest, and design_artifact
+    assert len(artifacts) == 3
+    names = [a.name for a in artifacts]
+    assert 'design_brief' in names
+    assert 'design_manifest' in names
+    assert 'design_artifact' in names
+    design_art = next(a for a in artifacts if a.name == 'design_artifact')
+    assert 'd1' in design_art.content
 
 
 def test_execute_without_design_id_uses_first(agent: CanvaDesignAgent) -> None:
     context = _context()
     artifacts = agent.execute(context)
-    assert len(artifacts) == 1
-    assert 'Architecture Diagram' in artifacts[0].content
+    assert len(artifacts) == 3
+    design_art = next(a for a in artifacts if a.name == 'design_artifact')
+    assert 'Architecture Diagram' in design_art.content
 
 
 def test_execute_export_url_in_content(agent: CanvaDesignAgent) -> None:
     context = _context(design_id='d1', export_format='pdf')
     artifacts = agent.execute(context)
-    assert 'Export URL' in artifacts[0].content
+    design_art = next(a for a in artifacts if a.name == 'design_artifact')
+    assert 'Export URL' in design_art.content
 
 
 def test_execute_no_designs_returns_placeholder() -> None:
@@ -79,13 +86,19 @@ def test_execute_no_designs_returns_placeholder() -> None:
     agent = CanvaDesignAgent(empty_svc)
     context = _context()
     artifacts = agent.execute(context)
-    assert len(artifacts) == 1
-    assert 'No Canva designs' in artifacts[0].content
+    # CC-006: manual handoff — returns design_brief + handoff artifact
+    assert len(artifacts) == 2
+    handoff = next(a for a in artifacts if a.name == 'design_artifact')
+    assert handoff.extra.get('requires_manual_handoff') is True
 
 
-def test_execute_unknown_design_id_raises() -> None:
+def test_execute_unknown_design_id_returns_manual_handoff() -> None:
+    """When the design ID doesn't exist, the agent enters manual handoff state."""
     svc = MockCanvaService()
     agent = CanvaDesignAgent(svc)
     context = _context(design_id='nonexistent')
-    with pytest.raises(Exception):
-        agent.execute(context)
+    artifacts = agent.execute(context)
+    # Should produce manual handoff, not raise
+    assert len(artifacts) == 2
+    handoff = next(a for a in artifacts if a.name == 'design_artifact')
+    assert handoff.extra.get('requires_manual_handoff') is True
