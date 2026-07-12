@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from models.artifact import Artifact
+from models.app_manifest import AppManifest
 from validators.base import BaseValidator, ValidationError, ValidationResult
 
 
@@ -16,6 +17,11 @@ class ArtifactValidator(BaseValidator):
             errors.append(ValidationError(field='name', message='Artifact name is required.'))
         if require_content and not target.content.strip():
             errors.append(ValidationError(field='content', message='Artifact content is required.'))
+        if target.name == 'generated_code' and target.format == 'json' and target.content.strip():
+            try:
+                AppManifest.from_json(target.content)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(ValidationError(field='content', message=f'Generated code must be a valid AppManifest: {exc}'))
         return ValidationResult(valid=not errors, errors=errors)
 
 

@@ -47,6 +47,7 @@ class TestAppManifestSchema:
     def test_manifest_has_commands(self) -> None:
         manifest = make_cli_manifest('app-1', 'MyApp')
         assert len(manifest.commands) >= 1
+        assert manifest.application_id == 'app-1'
 
     def test_fastapi_manifest_valid(self) -> None:
         manifest = make_fastapi_manifest('app-2', 'MyAPI', 'REST API')
@@ -61,24 +62,28 @@ class TestAppManifestSchema:
 
 class TestManifestValidation:
     def test_rejects_absolute_path(self) -> None:
-        manifest = make_cli_manifest('app-1', 'MyApp')
-        manifest.files.append(FileEntry(path='/etc/passwd', content='root:x:0:0'))
-        result = validate_app_manifest(manifest)
-        assert not result.valid
-        assert any('/etc/passwd' in e.message for e in result.errors)
+        with pytest.raises(ValueError, match='Unsafe file path'):
+            FileEntry(path='/etc/passwd', content='root:x:0:0')
 
     def test_rejects_traversal_path(self) -> None:
-        manifest = make_cli_manifest('app-1', 'MyApp')
-        manifest.files.append(FileEntry(path='../../evil.sh', content='rm -rf /'))
-        result = validate_app_manifest(manifest)
-        assert not result.valid
+        with pytest.raises(ValueError, match='Unsafe file path|escapes workspace root'):
+            FileEntry(path='../../evil.sh', content='rm -rf /\n')
 
     def test_rejects_duplicate_paths(self) -> None:
-        manifest = make_cli_manifest('app-1', 'MyApp')
-        manifest.files.append(FileEntry(path='pyproject.toml', content='[project]\nname="dup"\n'))
-        result = validate_app_manifest(manifest)
-        assert not result.valid
-        assert any('Duplicate' in e.message for e in result.errors)
+        with pytest.raises(ValueError, match='Duplicate file paths'):
+            AppManifest(
+                app_id='app-1',
+                name='MyApp',
+                template=AppTemplate.CLI,
+                files=[
+                    FileEntry(path='pyproject.toml', content='[project]\nname="dup"\n'),
+                    FileEntry(path='pyproject.toml', content='[project]\nname="dup2"\n'),
+                ],
+            )
+
+    def test_rejects_empty_file_content(self) -> None:
+        with pytest.raises(ValueError, match='non-empty'):
+            FileEntry(path='src/empty.py', content='   ')
 
     def test_rejects_credential_filename(self) -> None:
         manifest = make_cli_manifest('app-1', 'MyApp')
@@ -163,15 +168,13 @@ class TestProjectMaterializer:
 
     def test_rejects_invalid_manifest(self, tmp_path: Path) -> None:
         mat = ProjectMaterializer(tmp_path / 'workspaces')
-        manifest = AppManifest(
-            app_id='bad',
-            name='Bad',
-            template=AppTemplate.CLI,
-            files=[FileEntry(path='/etc/passwd', content='root:x:0:0')],
-        )
-        result = mat.materialize(manifest)
-        assert not result.success
-        assert result.errors
+        with pytest.raises(ValueError, match='Unsafe file path'):
+            AppManifest(
+                app_id='bad',
+                name='Bad',
+                template=AppTemplate.CLI,
+                files=[FileEntry(path='/etc/passwd', content='root:x:0:0')],
+            )
 
     def test_idempotent_resume(self, tmp_path: Path) -> None:
         mat = ProjectMaterializer(tmp_path / 'workspaces')
@@ -195,22 +198,20 @@ class TestProjectMaterializer:
 
     def test_path_traversal_denied(self, tmp_path: Path) -> None:
         mat = ProjectMaterializer(tmp_path / 'workspaces')
-        manifest = AppManifest(
-            app_id='app-1',
-            name='Traversal',
-            template=AppTemplate.CLI,
-            files=[
-                FileEntry(path='pyproject.toml', content='[project]\nname = "t"\n'),
-                FileEntry(path='README.md', content='# T\n'),
-                FileEntry(path='src/main.py', content='def main(): pass\n'),
-                FileEntry(path='tests/__init__.py', content=''),
-                FileEntry(path='tests/test_t.py', content='def test_x(): pass\n'),
-                FileEntry(path='../../evil.txt', content='boom'),
-            ],
-        )
-        result = mat.materialize(manifest)
-        # Validation should block this before materialization
-        assert not result.success
+        with pytest.raises(ValueError, match='Unsafe file path|escapes workspace root'):
+            AppManifest(
+                app_id='app-1',
+                name='Traversal',
+                template=AppTemplate.CLI,
+                files=[
+                    FileEntry(path='pyproject.toml', content='[project]\nname = "t"\n'),
+                    FileEntry(path='README.md', content='# T\n'),
+                    FileEntry(path='src/main.py', content='def main(): pass\n'),
+                    FileEntry(path='tests/__init__.py', content='"""tests."""\n'),
+                    FileEntry(path='tests/test_t.py', content='def test_x(): pass\n'),
+                    FileEntry(path='../../evil.txt', content='boom'),
+                ],
+            )
 
     def test_existing_non_slugger_dir_rejected(self, tmp_path: Path) -> None:
         mat = ProjectMaterializer(tmp_path / 'workspaces')
@@ -239,14 +240,13 @@ class TestGoldenFixtures:
         assert result.valid
 
     def test_malformed_no_files(self) -> None:
-        manifest = AppManifest(
-            app_id='empty',
-            name='Empty',
-            template=AppTemplate.CLI,
-            files=[],
-        )
-        result = validate_app_manifest(manifest)
-        assert not result.valid
+        with pytest.raises(ValueError, match='at least one'):
+            AppManifest(
+                app_id='empty',
+                name='Empty',
+                template=AppTemplate.CLI,
+                files=[],
+            )
 
     def test_malformed_no_pyproject(self) -> None:
         manifest = AppManifest(
@@ -261,3 +261,20 @@ class TestGoldenFixtures:
         result = validate_app_manifest(manifest)
         assert not result.valid
         assert any('pyproject.toml' in e.message for e in result.errors)
+
+    def test_manifest_requires_application_id_and_schema_version(self) -> None:
+        with pytest.raises(ValueError, match='application_id'):
+            AppManifest(
+                app_id='',
+                name='NoId',
+                template=AppTemplate.CLI,
+                files=[FileEntry(path='README.md', content='# NoId\n')],
+            )
+        with pytest.raises(ValueError, match='schema_version'):
+            AppManifest(
+                app_id='app-1',
+                name='NoSchema',
+                template=AppTemplate.CLI,
+                schema_version='',
+                files=[FileEntry(path='README.md', content='# NoSchema\n')],
+            )

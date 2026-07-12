@@ -52,8 +52,10 @@ tasks:
   depends_on:
   - GA-004
   - GA-005
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Generation path: code_generator_agent now emits AppManifest JSON artifacts with schema_version, application_id, and file inventory metadata'
+  - 'Validation: AppManifest creation now rejects unsafe paths, duplicate files, empty content, and missing minimum fields'
 - id: GA-007
   title: Use one durable artifact, lineage, and workflow persistence system
   depends_on:

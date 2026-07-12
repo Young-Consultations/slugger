@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # P0-001: Idea to planning artifacts
@@ -95,14 +97,12 @@ class TestP0ManifestToWorkspace:
         assert result.success
 
     def test_unsafe_manifest_rejected(self, tmp_path: Path) -> None:
-        from models.app_manifest import AppManifest, AppTemplate, FileEntry, validate_app_manifest
-        from materializer import ProjectMaterializer
-        manifest = AppManifest(
-            app_id='unsafe', name='Unsafe', template=AppTemplate.CLI,
-            files=[FileEntry(path='../../evil.py', content='import os')],
-        )
-        result = validate_app_manifest(manifest)
-        assert not result.valid
+        from models.app_manifest import AppManifest, AppTemplate, FileEntry
+        with pytest.raises(ValueError):
+            AppManifest(
+                app_id='unsafe', name='Unsafe', template=AppTemplate.CLI,
+                files=[FileEntry(path='../../evil.py', content='import os')],
+            )
 
     def test_idempotent_resume(self, tmp_path: Path) -> None:
         from models.app_manifest import make_cli_manifest

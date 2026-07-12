@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from core.exceptions import CodexNotAvailableError
+from models.app_manifest import AppManifest
 from providers.codex_agent_client import (
     CodexCliAdapter,
     CodexEvent,
@@ -143,8 +144,8 @@ class TestCodeGeneratorWithCodexClient:
         agent = CodeGeneratorAgent()
         artifacts = agent.execute(ctx)
         assert len(artifacts) == 1
-        content = artifacts[0].content
-        assert 'from codex' in content
+        manifest = AppManifest.from_json(artifacts[0].content)
+        assert any('from codex' in entry.content for entry in manifest.files)
         assert any(c['method'] == 'start_task' for c in client.calls)
 
     def test_falls_back_without_codex_client(self) -> None:
@@ -158,7 +159,9 @@ class TestCodeGeneratorWithCodexClient:
             metadata={'idea': 'hello world app'},
         )
         artifacts = CodeGeneratorAgent().execute(ctx)
-        assert 'Generated Python Project' in artifacts[0].content
+        manifest = AppManifest.from_json(artifacts[0].content)
+        assert manifest.metadata['idea'] == 'hello world app'
+        assert manifest.application_id
 
     def test_falls_back_on_codex_client_error(self, tmp_path: Path) -> None:
         from agents.development.code_generator_agent import CodeGeneratorAgent
@@ -175,8 +178,8 @@ class TestCodeGeneratorWithCodexClient:
         )
         ctx.codex_agent_client = client
         artifacts = CodeGeneratorAgent().execute(ctx)
-        # Should fall back to scaffold, not raise
-        assert 'Generated Python Project' in artifacts[0].content
+        manifest = AppManifest.from_json(artifacts[0].content)
+        assert manifest.metadata['idea'] == 'hello world app'
 
 
 # ---------------------------------------------------------------------------

@@ -3,120 +3,61 @@
 from __future__ import annotations
 
 import logging
-import textwrap
 from pathlib import Path
+import re
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
 from models.artifact import CodeArtifact
+from models.app_manifest import AppManifest, FileEntry, make_cli_manifest, make_fastapi_manifest
 from models.execution import ExecutionContext
 
 _LOG = logging.getLogger(__name__)
 
-_PLATFORM_NOTES: dict[str, str] = {
-    'web': 'FastAPI web application with REST endpoints',
-    'ios': 'Python back-end service powering an iOS application',
-    'android': 'Python back-end service powering an Android application',
-}
-
-_AGENT_NOTES: dict[str, str] = {
-    'codex': 'OpenAI Codex',
-    'anthropic': 'Anthropic Claude',
-}
-
-def _escape_triple_quotes(text: str) -> str:
-    """Escape triple-quote sequences so *text* is safe to embed in string literals.
-
-    Both ``\"\"\"`` and ``'''`` are replaced with escaped equivalents to prevent
-    either from prematurely closing a surrounding docstring or code block.
-    """
-    return (
-        text
-        .replace('"""', '\\"\\"\\"')
-        .replace("'''", "\\'\\'\\'")
-        .replace('\r', '')
-        .strip()
-    )
+def _slug(value: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '-', value.lower()).strip('-') or 'generated-app'
 
 
-def _python_scaffold(idea: str, platform: str, coding_agent: str) -> str:
-    """Return a Python project scaffold as a markdown-formatted code listing."""
-
-    safe_idea = _escape_triple_quotes(idea)
-    platform_note = _PLATFORM_NOTES.get(platform, platform)
-    agent_note = _AGENT_NOTES.get(coding_agent, coding_agent)
-
-    return textwrap.dedent(f"""\
-        # Generated Python Project
-
-        **Idea:** {safe_idea}
-        **Platform:** {platform_note}
-        **Coding agent:** {agent_note}
-
-        ---
-
-        ## Project Structure
-
-        ```
-        project/
-        ├── README.md
-        ├── pyproject.toml
-        ├── src/
-        │   └── app/
-        │       ├── __init__.py
-        │       └── main.py
-        └── tests/
-            ├── __init__.py
-            └── test_main.py
-        ```
-
-        ---
-
-        ## src/app/main.py
-
-        ```python
-        \"\"\"Entry point for: {safe_idea}.\"\"\"
-
-        from __future__ import annotations
+def _base_manifest(idea: str, platform: str, coding_agent: str) -> AppManifest:
+    name = idea[:40].strip() or 'Generated App'
+    app_id = _slug(name)
+    if platform == 'web':
+        manifest = make_fastapi_manifest(app_id, name, idea)
+    else:
+        manifest = make_cli_manifest(app_id, name, idea)
+    manifest.metadata.update({'idea': idea, 'platform': platform, 'coding_agent': coding_agent})
+    return manifest
 
 
-        def run() -> None:
-            \"\"\"Run the application.\"\"\"
-            print("Running: {safe_idea}")
+def _manifest_to_artifact_content(manifest: AppManifest) -> str:
+    return manifest.to_json()
 
 
-        if __name__ == "__main__":
-            run()
-        ```
-
-        ---
-
-        ## tests/test_main.py
-
-        ```python
-        \"\"\"Smoke tests for: {safe_idea}.\"\"\"
-
-        from app.main import run
-
-
-        def test_run_executes_without_error() -> None:
-            run()
-        ```
-
-        ---
-
-        ## pyproject.toml
-
-        ```toml
-        [project]
-        name = "project"
-        version = "0.1.0"
-        requires-python = ">=3.11"
-
-        [project.optional-dependencies]
-        test = ["pytest"]
-        ```
-    """)
+def _manifest_from_codex_result(
+    idea: str,
+    platform: str,
+    coding_agent: str,
+    workspace_root: Path,
+    result,
+) -> AppManifest:
+    manifest = _base_manifest(idea, platform, coding_agent)
+    manifest.metadata['codex_session_id'] = result.session_id
+    path_to_index = {entry.path: index for index, entry in enumerate(manifest.files)}
+    for change in result.file_changes:
+        path = Path(change.path)
+        try:
+            relative_path = path.resolve().relative_to(workspace_root)
+            manifest_path = relative_path.as_posix()
+        except ValueError:
+            manifest_path = path.name
+        file_entry = FileEntry(path=manifest_path, content=change.content, requirement_ids=['REQ-001'])
+        if manifest_path in path_to_index:
+            manifest.files[path_to_index[manifest_path]] = file_entry
+        else:
+            manifest.files.append(file_entry)
+    if result.commands_run:
+        manifest.commands = list(result.commands_run)
+    return manifest
 
 
 class CodeGeneratorAgent(BaseAgent):
@@ -153,27 +94,31 @@ class CodeGeneratorAgent(BaseAgent):
         if context.project_brief is not None:
             coding_agent = context.project_brief.coding_agent.value
 
-        content = self._generate_code(idea, platform, coding_agent, context)
-        return [self.create_artifact(context, 'generated_code', content, CodeArtifact)]
+        manifest = self._generate_code_manifest(idea, platform, coding_agent, context)
+        artifact = self.create_artifact(
+            context,
+            'generated_code',
+            _manifest_to_artifact_content(manifest),
+            CodeArtifact,
+            format='json',
+        )
+        artifact.extra['application_id'] = manifest.application_id
+        artifact.extra['schema_version'] = manifest.schema_version
+        artifact.extra['file_count'] = len(manifest.files)
+        return [artifact]
 
-    def _generate_code(self, idea: str, platform: str, coding_agent: str, context: ExecutionContext) -> str:
+    def _generate_code_manifest(self, idea: str, platform: str, coding_agent: str, context: ExecutionContext) -> AppManifest:
         client = getattr(context, 'codex_agent_client', None)
+        workspace_root = Path(context.metadata.get('workspace_root', Path.cwd())).resolve()
         if client is not None:
             from providers.codex_agent_client import CodexWorkspace
-            workspace_root = Path(context.metadata.get('workspace_root', Path.cwd())).resolve()
             workspace = CodexWorkspace(root=workspace_root)
             try:
                 task_brief = f"Generate a complete {platform} application for: {idea}"
                 result = client.start_task(task_brief, workspace)
                 if result.success and result.file_changes:
-                    # Assemble content from all file changes
-                    parts = [f"# Generated by Codex Agent\n\n**Session:** {result.session_id}\n"]
-                    for fc in result.file_changes:
-                        parts.append(f"\n## {fc.path}\n\n```python\n{fc.content}\n```\n")
-                    if result.commands_run:
-                        parts.append(f"\n## Commands run\n\n" + '\n'.join(f'- `{c}`' for c in result.commands_run))
-                    return '\n'.join(parts)
+                    return _manifest_from_codex_result(idea, platform, coding_agent, workspace_root, result)
             except Exception as exc:  # noqa: BLE001
-                _LOG.warning('Codex agent code generation failed, using scaffold: %s', exc)
+                _LOG.warning('Codex agent code generation failed, using manifest template: %s', exc)
 
-        return _python_scaffold(idea, platform, coding_agent)
+        return _base_manifest(idea, platform, coding_agent)

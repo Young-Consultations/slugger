@@ -137,8 +137,8 @@ ARTIFACT_SCHEMAS: dict[str, ArtifactSchema] = {
     ),
     'generated_code': ArtifactSchema(
         schema_id='generated_code_v1',
-        description='Generated Python application',
-        required_sections=['Generated Python Project'],
+        description='Generated AppManifest JSON',
+        required_sections=['"schema_version"', '"application_id"'],
     ),
     'code_review': ArtifactSchema(
         schema_id='code_review_v1',

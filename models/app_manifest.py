@@ -61,6 +61,15 @@ class FileEntry:
     requirement_ids: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        if not self.path:
+            raise ValueError('FileEntry path is required.')
+        if _UNSAFE_PATH_PATTERNS.search(self.path):
+            raise ValueError(f'Unsafe file path: {self.path!r}')
+        norm = str(PurePosixPath(self.path))
+        if norm.startswith('/') or norm.startswith('..'):
+            raise ValueError(f'File path escapes workspace root: {self.path!r}')
+        if not self.content.strip():
+            raise ValueError(f'FileEntry content must be non-empty for {self.path!r}.')
         encoded = self.content.encode('utf-8')
         self.size_bytes = len(encoded)
         if not self.checksum:
@@ -110,10 +119,26 @@ class AppManifest:
     artifact_parents: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if not self.schema_version.strip():
+            raise ValueError('schema_version is required.')
+        if not self.app_id.strip():
+            raise ValueError('application_id is required.')
+        if not self.files:
+            raise ValueError('files must contain at least one file entry.')
+        paths = [entry.path for entry in self.files]
+        if len(paths) != len(set(paths)):
+            raise ValueError('Duplicate file paths are not allowed in AppManifest.')
+
+    @property
+    def application_id(self) -> str:
+        return self.app_id
+
     def to_dict(self) -> dict[str, Any]:
         return {
             'schema_version': self.schema_version,
             'app_id': self.app_id,
+            'application_id': self.app_id,
             'name': self.name,
             'template': self.template.value,
             'description': self.description,
@@ -135,7 +160,7 @@ class AppManifest:
         except ValueError:
             template = AppTemplate.CLI
         return cls(
-            app_id=data['app_id'],
+            app_id=data.get('app_id') or data['application_id'],
             name=data['name'],
             template=template,
             schema_version=data.get('schema_version', SCHEMA_VERSION),
@@ -312,7 +337,7 @@ def make_cli_manifest(app_id: str, name: str, idea: str = '') -> AppManifest:
             ),
             FileEntry(
                 path=f'src/{safe_name}/__init__.py',
-                content='',
+                content='"""Application package."""\n',
                 requirement_ids=[],
             ),
             FileEntry(
@@ -322,7 +347,7 @@ def make_cli_manifest(app_id: str, name: str, idea: str = '') -> AppManifest:
             ),
             FileEntry(
                 path='tests/__init__.py',
-                content='',
+                content='"""Test package."""\n',
                 requirement_ids=[],
             ),
             FileEntry(
@@ -354,7 +379,7 @@ def make_fastapi_manifest(app_id: str, name: str, idea: str = '') -> AppManifest
             ),
             FileEntry(
                 path='src/__init__.py',
-                content='',
+                content='"""Source package."""\n',
             ),
             FileEntry(
                 path='src/main.py',
@@ -363,7 +388,7 @@ def make_fastapi_manifest(app_id: str, name: str, idea: str = '') -> AppManifest
             ),
             FileEntry(
                 path='tests/__init__.py',
-                content='',
+                content='"""Test package."""\n',
             ),
             FileEntry(
                 path='tests/test_api.py',

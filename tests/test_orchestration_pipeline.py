@@ -17,6 +17,7 @@ from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
 from validators import ArtifactValidator, QualityGateEvaluator, WorkflowValidator
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser
+from models.app_manifest import AppManifest
 
 
 # ---------------------------------------------------------------------------
@@ -102,24 +103,25 @@ class TestPythonProjectPipeline:
     def test_code_generator_uses_idea_metadata(self) -> None:
         result = self._run_pipeline('An e-commerce shop', platform='web', coding_agent='anthropic')
         code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
-        assert 'An e-commerce shop' in code_artifact.content
-        assert 'web' in code_artifact.content.lower() or 'FastAPI' in code_artifact.content
-        assert 'anthropic' in code_artifact.content.lower() or 'Anthropic' in code_artifact.content
+        manifest = AppManifest.from_json(code_artifact.content)
+        assert manifest.metadata['idea'] == 'An e-commerce shop'
+        assert manifest.metadata['platform'] == 'web'
+        assert manifest.metadata['coding_agent'] == 'anthropic'
 
-    def test_code_artifact_is_python_format(self) -> None:
+    def test_code_artifact_is_app_manifest_json(self) -> None:
         result = self._run_pipeline('A chat app', platform='ios')
         code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
         assert isinstance(code_artifact, CodeArtifact)
-        assert code_artifact.format == 'python'
+        assert code_artifact.format == 'json'
+        manifest = AppManifest.from_json(code_artifact.content)
+        assert manifest.application_id
 
     def test_pipeline_embeds_platform_in_code_artifact(self) -> None:
         for platform in ('web', 'ios', 'android'):
             result = self._run_pipeline('My app', platform=platform)
             code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
-            assert platform in code_artifact.content.lower() or any(
-                note in code_artifact.content
-                for note in ('FastAPI', 'iOS', 'Android', 'web', 'ios', 'android')
-            ), f'Platform {platform} not reflected in code artifact'
+            manifest = AppManifest.from_json(code_artifact.content)
+            assert manifest.metadata['platform'] == platform
 
 
 class TestOrchestrationPipelineCLI:
