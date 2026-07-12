@@ -5,6 +5,7 @@ from __future__ import annotations
 from agents.messaging import MessageBus
 from models.artifact_lineage import ArtifactLineageNode, LineageGraph, SdlcStage
 from models.execution import ExecutionContext
+from models.project import ProjectBrief
 from validators.quality_gate import QualityGateEvaluator
 from workflow.models import StepInstance
 
@@ -47,11 +48,13 @@ class StepExecutor:
         quality_gate_evaluator: QualityGateEvaluator,
         message_bus: MessageBus | None = None,
         lineage_graph: LineageGraph | None = None,
+        chatgpt_service: object | None = None,
     ) -> None:
         self.agent_registry = agent_registry
         self.quality_gate_evaluator = quality_gate_evaluator
         self.message_bus = message_bus
         self.lineage_graph = lineage_graph
+        self.chatgpt_service = chatgpt_service
 
     def execute(
         self,
@@ -60,11 +63,16 @@ class StepExecutor:
         step_instance: StepInstance,
         available_artifacts: dict[str, object],
         metadata: dict[str, str] | None = None,
+        project_brief: ProjectBrief | None = None,
     ):
         agent = self.agent_registry.resolve(step_instance.definition.agent)
         inputs = {name: available_artifacts[name] for name in step_instance.definition.inputs if name in available_artifacts}
         prior_artifacts = [a for a in available_artifacts.values() if hasattr(a, 'artifact_id')]
         parent_ids = [aid for a in prior_artifacts if (aid := getattr(a, 'artifact_id', None)) is not None]
+        # Resolve project brief from the explicit argument or from metadata (supports resume).
+        resolved_brief = project_brief
+        if resolved_brief is None and metadata:
+            resolved_brief = ProjectBrief.from_metadata(dict(metadata))
         context = ExecutionContext(
             project_id=project_id,
             workflow_name=workflow_name,
@@ -73,6 +81,8 @@ class StepExecutor:
             artifacts=prior_artifacts,
             metadata=dict(metadata or {}),
             message_bus=self.message_bus,
+            project_brief=resolved_brief,
+            chatgpt_service=self.chatgpt_service,
         )
         artifacts = agent.execute(context)
         results = []

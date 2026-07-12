@@ -110,6 +110,7 @@ class TestMainBuildCommand:
         result.status = status
         result.artifacts = []
         result.run_id = 'test-run-id'
+        result.outcome = None
         return result
 
     @patch('cli.main.Bootstrap')

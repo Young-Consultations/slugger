@@ -5,9 +5,34 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import uuid4
 from typing import Any
+from enum import Enum
 
 from models.artifact import Artifact
 from models.workflow import QualityGate, StepStatus
+
+
+class WorkflowOutcome(str, Enum):
+    """Evidence-backed outcome state for a completed workflow.
+
+    This is distinct from the execution ``status`` (running/succeeded/failed).
+    A workflow can ``succeed`` (all steps ran without errors) while still only
+    producing placeholder artifacts. The outcome reflects what was actually
+    delivered.
+
+    Values are ordered: each level implies all prior levels were reached.
+    """
+
+    ARTIFACTS_GENERATED = 'artifacts_generated'
+    """Steps ran to completion and produced artifacts (possibly placeholder)."""
+
+    VALIDATED = 'validated'
+    """All artifacts passed their quality gates."""
+
+    PRODUCTION_READY = 'production_ready'
+    """Generated application was built, tested, and security-checked."""
+
+    RELEASED = 'released'
+    """Application was published as a release candidate or production release."""
 
 
 @dataclass(slots=True)
@@ -85,3 +110,5 @@ class WorkflowInstance:
     artifacts: list[Artifact] = field(default_factory=list)
     status: str = 'pending'
     run_id: str = field(default_factory=lambda: str(uuid4()))
+    outcome: WorkflowOutcome | None = None
+    """Evidence-backed outcome; ``None`` until the workflow completes."""

@@ -27,6 +27,7 @@ class ReflectionAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Retrospective\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        input_summaries = {name: context.artifact_content(name) for name in context.inputs}
+        content = f"# Retrospective\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n" + "\n\n".join(f"**{name}:**\n{content}" for name, content in input_summaries.items() if content)
         return [self.create_artifact(context, 'retrospective', content, DocumentArtifact)]

@@ -133,6 +133,7 @@ class TestOrchestrationPipelineCLI:
         result.status = 'succeeded'
         result.artifacts = []
         result.run_id = 'test-run-id'
+        result.outcome = None
         fake_slugger.build.return_value = result
         mock_bootstrap.return_value.build.return_value = MagicMock()
         with patch('cli.main.Slugger', return_value=fake_slugger):
@@ -150,3 +151,140 @@ class TestOrchestrationPipelineCLI:
             MagicMock(),
         )
         assert 'python-project' in engine.list_workflows()
+
+
+# ---------------------------------------------------------------------------
+# CC-001 regression tests: idea propagation through the pipeline
+# ---------------------------------------------------------------------------
+
+class TestIdeaPropagation:
+    """Regression tests asserting that the user idea is the authoritative root
+    of every downstream artifact produced by the workflow.
+
+    The idea ``Create a simple task tracker CLI`` must appear verbatim in
+    requirements, architecture, and implementation context — never replaced by
+    a generic note or a Python object repr.
+    """
+
+    _IDEA = 'Create a simple task tracker CLI'
+
+    def _run_pipeline(self, idea: str = _IDEA, workflow: str = 'python-project') -> object:
+        from agents.planning.product_vision_agent import ProductVisionAgent
+        from agents.planning.requirements_agent import RequirementsAgent
+        from agents.planning.user_story_agent import UserStoryAgent
+        # Use real planning agents so idea propagation can be asserted.
+        # Other steps use stubs to avoid external dependencies.
+        real_registry = AgentRegistry()
+        for agent in [
+            ProductVisionAgent(),
+            RequirementsAgent(),
+            UserStoryAgent(),
+        ]:
+            real_registry.register(agent)
+        # Also register the remaining stubs for non-planning steps.
+        for agent in _build_registry().list():
+            from agents.registry import AgentRegistry as AR
+            pass
+        stub_registry = _build_registry()
+        # Build a merged registry: real planning agents override stubs.
+        merged_registry = AgentRegistry()
+        for name in stub_registry.list():
+            try:
+                merged_registry.register(stub_registry.resolve(name))
+            except Exception:
+                pass
+        # Override with real agents.
+        for agent in [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent()]:
+            merged_registry.register(agent)
+        executor = StepExecutor(merged_registry, QualityGateEvaluator({'artifact_validator': ArtifactValidator()}))
+        engine = WorkflowEngine(Path('workflow/recipes'), WorkflowParser(WorkflowValidator()), executor)
+        from models.project import ProjectBrief, Platform, CodingAgent
+        brief = ProjectBrief(idea=idea, platform=Platform.WEB)
+        metadata = brief.as_metadata()
+        return engine.run(workflow, project_id='test-idea-propagation', metadata=metadata, project_brief=brief)
+
+    def test_idea_not_absent_in_product_vision(self) -> None:
+        result = self._run_pipeline()
+        vision = next(a for a in result.artifacts if a.name == 'product_vision')
+        assert self._IDEA in vision.content
+
+    def test_idea_not_absent_in_requirements(self) -> None:
+        result = self._run_pipeline()
+        reqs = next(a for a in result.artifacts if a.name == 'requirements')
+        assert self._IDEA in reqs.content
+
+    def test_no_artifact_contains_explicit_inputs_note(self) -> None:
+        result = self._run_pipeline()
+        for artifact in result.artifacts:
+            assert 'No explicit inputs were supplied' not in artifact.content
+
+    def test_no_artifact_contains_python_object_repr(self) -> None:
+        """Artifact content must not embed raw Python dataclass reprs."""
+        result = self._run_pipeline()
+        for artifact in result.artifacts:
+            # dataclass reprs look like ClassName(field=...) — detect the most
+            # common forms emitted by Artifact and ExecutionContext subclasses
+            assert 'DocumentArtifact(' not in artifact.content
+            assert 'CodeArtifact(' not in artifact.content
+            assert 'ExecutionContext(' not in artifact.content
+
+    def test_outcome_is_artifacts_generated_not_production_ready(self) -> None:
+        """A placeholder-only run must not report a production-ready outcome."""
+        result = self._run_pipeline()
+        from workflow.models import WorkflowOutcome
+        assert result.outcome is not None
+        assert result.outcome == WorkflowOutcome.ARTIFACTS_GENERATED
+        assert result.outcome != WorkflowOutcome.PRODUCTION_READY
+        assert result.outcome != WorkflowOutcome.RELEASED
+
+    def test_project_brief_round_trips_through_metadata(self) -> None:
+        """ProjectBrief serialises to metadata and deserialises back correctly."""
+        from models.project import ProjectBrief, Platform, CodingAgent, AppType, DesignPreference
+        brief = ProjectBrief(
+            idea=self._IDEA,
+            platform=Platform.WEB,
+            app_type=AppType.CLI,
+            target_users='developers',
+            constraints=['no-db'],
+            nonfunctional_requirements=['fast-startup'],
+            coding_agent=CodingAgent.CODEX,
+            design_preference=DesignPreference.NONE,
+        )
+        meta = brief.as_metadata()
+        restored = ProjectBrief.from_metadata(meta)
+        assert restored.idea == brief.idea
+        assert restored.platform == brief.platform
+        assert restored.app_type == brief.app_type
+        assert restored.target_users == brief.target_users
+        assert restored.constraints == brief.constraints
+        assert restored.nonfunctional_requirements == brief.nonfunctional_requirements
+        assert restored.coding_agent == brief.coding_agent
+        assert restored.design_preference == brief.design_preference
+
+    def test_cli_output_includes_outcome_field(self) -> None:
+        """The build CLI output must include the ``outcome`` field."""
+        import json
+        from unittest.mock import MagicMock, patch
+        from cli.main import main
+        from workflow.models import WorkflowOutcome
+        fake_slugger = MagicMock()
+        result = MagicMock()
+        result.run_id = 'outcome-test-run'
+        result.definition.name = 'full-sdlc'
+        result.status = 'succeeded'
+        result.artifacts = []
+        result.outcome = WorkflowOutcome.ARTIFACTS_GENERATED
+        fake_slugger.build.return_value = result
+        import io
+        import sys
+        with patch('cli.main.Bootstrap'), patch('cli.main.Slugger', return_value=fake_slugger):
+            import io
+            from contextlib import redirect_stdout
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = main(['build', self._IDEA, '--platform', 'web'])
+        assert rc == 0
+        output = json.loads(buf.getvalue())
+        assert 'outcome' in output
+        assert output['outcome'] == WorkflowOutcome.ARTIFACTS_GENERATED.value
+        assert output['outcome'] != WorkflowOutcome.PRODUCTION_READY.value

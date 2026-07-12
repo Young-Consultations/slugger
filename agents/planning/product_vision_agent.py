@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import logging
+
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
 from models.artifact import DocumentArtifact
 from models.execution import ExecutionContext
+
+_LOG = logging.getLogger(__name__)
+
+_VISION_PROMPT = """You are a product strategist. Based on the following idea, write a concise product vision document.
+
+Project idea: {idea}
+Platform: {platform}
+
+Write a structured product vision with:
+- Vision statement (one sentence)
+- Problem being solved
+- Target users
+- Core value proposition
+- Key outcomes
+"""
 
 
 class ProductVisionAgent(BaseAgent):
@@ -27,6 +44,28 @@ class ProductVisionAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Product Vision\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        platform = ''
+        if context.project_brief is not None:
+            platform = context.project_brief.platform.value
+        elif context.metadata.get('platform'):
+            platform = context.metadata['platform']
+
+        content = self._generate_vision(idea, platform, context)
         return [self.create_artifact(context, 'product_vision', content, DocumentArtifact)]
+
+    def _generate_vision(self, idea: str, platform: str, context: ExecutionContext) -> str:
+        svc = context.chatgpt_service
+        if svc is not None:
+            prompt = _VISION_PROMPT.format(idea=idea, platform=platform or 'web')
+            try:
+                result = svc.execute(prompt, system='You are a product strategist writing clear product vision documents.')
+                return f"# Product Vision\n\n{result.response}"
+            except Exception as exc:  # noqa: BLE001
+                _LOG.warning('ChatGPT product vision generation failed, using template: %s', exc)
+        return (
+            f"# Product Vision\n\n"
+            f"**Idea:** {idea}\n\n"
+            f"**Platform:** {platform}\n\n"
+            f"Agent: {self.metadata.name}\n"
+        )

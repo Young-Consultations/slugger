@@ -27,6 +27,7 @@ class CodeReviewAgent(BaseAgent):
         )
 
     def _execute(self, context: ExecutionContext):
-        summary = context.inputs or {'note': 'No explicit inputs were supplied.'}
-        content = f"# Code Review\n\nAgent: {self.metadata.name}\n\nContext: {summary}"
+        idea = context.get_idea()
+        input_summaries = {name: context.artifact_content(name) for name in context.inputs}
+        content = f"# Code Review\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n" + "\n\n".join(f"**{name}:**\n{content}" for name, content in input_summaries.items() if content)
         return [self.create_artifact(context, 'code_review', content, DocumentArtifact)]

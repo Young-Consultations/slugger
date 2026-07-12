@@ -205,6 +205,7 @@ class TestResumeCLI:
         result.definition.name = 'full-sdlc'
         result.status = 'succeeded'
         result.artifacts = []
+        result.outcome = None
         fake_slugger.build.return_value = result
         with patch('cli.main.Bootstrap'), patch('cli.main.Slugger', return_value=fake_slugger):
             rc = main(['build', 'An idea', '--platform', 'web'])
