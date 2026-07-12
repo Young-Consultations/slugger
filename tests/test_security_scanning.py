@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from validators.security_scanner import SecurityScanner, Severity
+from validators.remediation import (
+    BoundedRemediationLoop,
+    Finding,
+    FindingCategory,
+    FindingSeverity,
+    FindingStatus,
+)
 
 
 def test_hardcoded_password_detected() -> None:
@@ -59,3 +66,22 @@ def test_finding_line_number() -> None:
     result = scanner.scan('code', content)
     pwd_findings = [f for f in result.findings if f.rule_id == 'SEC001']
     assert pwd_findings[0].line_number == 2
+
+
+def test_critical_security_cannot_be_auto_waived() -> None:
+    scanner = SecurityScanner()
+    result = scanner.scan('code', 'password = "abc123xyz"\n')
+    critical = next(f for f in result.findings if f.severity == Severity.CRITICAL)
+    loop = BoundedRemediationLoop()
+    finding = Finding(
+        finding_id='sec-1',
+        severity=FindingSeverity(critical.severity.value),
+        category=FindingCategory.SECURITY,
+        message=critical.message,
+        waiver_eligible=True,
+    )
+
+    waived = loop.waive(finding, approver='')
+
+    assert waived is False
+    assert finding.status == FindingStatus.OPEN

@@ -31,3 +31,7 @@ class PluginError(SluggerError):
 
 class ValidationError(SluggerError):
     """Raised when validation blocks progress."""
+
+
+class RemediationExhaustedError(SluggerError):
+    """Raised when bounded remediation cannot resolve a defect automatically."""

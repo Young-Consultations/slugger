@@ -15,6 +15,7 @@ from materializer import (
     PhaseStatus,
     ProjectMaterializer,
 )
+from core.exceptions import RemediationExhaustedError
 from models.app_manifest import make_cli_manifest
 from validators.remediation import (
     BoundedRemediationLoop,
@@ -230,3 +231,32 @@ class TestBoundedRemediationLoop:
         result = loop.process(findings, attempt_fn=lambda f: True)
         assert len(result.attempts) >= 1
         assert result.attempts[0].finding_id == 'f1'
+
+    def test_bounded_remediation_converges(self) -> None:
+        loop = BoundedRemediationLoop(max_attempts=3)
+        finding = _finding('f-converges', FindingSeverity.HIGH)
+        attempts = {'count': 0}
+
+        def resolves_on_second_attempt(finding: Finding) -> bool:
+            attempts['count'] += 1
+            return attempts['count'] == 2
+
+        result = loop.process([finding], attempt_fn=resolves_on_second_attempt)
+
+        assert result.all_resolved is True
+        assert finding.status == FindingStatus.REMEDIATED
+        assert attempts['count'] == 2
+        assert [attempt.result for attempt in result.attempts] == ['failed', 'resolved']
+
+    def test_bounded_remediation_exhausted(self) -> None:
+        loop = BoundedRemediationLoop(max_attempts=2)
+        finding = _finding('f-stuck', FindingSeverity.HIGH)
+
+        result = loop.process([finding], attempt_fn=lambda f: False)
+
+        assert result.all_resolved is False
+        assert result.requires_manual_intervention is True
+        assert result.status == FindingStatus.MANUAL_REQUIRED.value
+        assert finding.status == FindingStatus.MANUAL_REQUIRED
+        assert isinstance(result.exhausted_error, RemediationExhaustedError)
+        assert len(result.attempts) == 2

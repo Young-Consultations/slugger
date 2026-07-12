@@ -79,8 +79,10 @@ tasks:
   depends_on:
   - GA-005
   - GA-008
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime: validators.remediation.BoundedRemediationLoop now accepts bounded retry policies, records attempt outcomes, and marks exhausted blocking findings as manual_intervention_required'
+  - 'Tests: tests/test_cc009_cc010_build_remediation.py, tests/test_escalation.py, and tests/test_security_scanning.py'
 - id: GA-010
   title: Fix approvals and make one durable approval path
   depends_on:

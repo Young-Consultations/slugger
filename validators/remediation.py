@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from core.exceptions import RemediationExhaustedError
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -121,6 +123,8 @@ class RemediationLoopResult:
     escalated_findings: list[Finding] = field(default_factory=list)
     attempts: list[RemediationAttempt] = field(default_factory=list)
     requires_manual_intervention: bool = False
+    status: str = 'completed'
+    exhausted_error: RemediationExhaustedError | None = None
 
 
 class BoundedRemediationLoop:
@@ -133,9 +137,19 @@ class BoundedRemediationLoop:
 
     def __init__(
         self,
-        max_attempts: dict[FindingCategory, int] | None = None,
+        max_attempts: int | dict[FindingCategory, int] | None = None,
     ) -> None:
-        self._max_attempts = max_attempts or DEFAULT_MAX_ATTEMPTS
+        self._default_max_attempts = 3
+        self._max_attempts_by_category = dict(DEFAULT_MAX_ATTEMPTS)
+        if isinstance(max_attempts, int):
+            self._default_max_attempts = max_attempts
+            self._max_attempts_by_category = {
+                category: max_attempts for category in DEFAULT_MAX_ATTEMPTS
+            }
+        elif isinstance(max_attempts, dict):
+            self._max_attempts_by_category.update(max_attempts)
+        elif max_attempts is not None:
+            raise TypeError('max_attempts must be an int, a category map, or None')
 
     def process(
         self,
@@ -156,7 +170,7 @@ class BoundedRemediationLoop:
         attempt_number = 0
 
         for finding in findings:
-            max_att = self._max_attempts.get(finding.category, 3)
+            max_att = self._max_attempts_by_category.get(finding.category, self._default_max_attempts)
             resolved = False
 
             if attempt_fn is not None:
@@ -197,6 +211,7 @@ class BoundedRemediationLoop:
                     finding.status = FindingStatus.MANUAL_REQUIRED
                     result.escalated_findings.append(finding)
                     result.requires_manual_intervention = True
+                    result.status = FindingStatus.MANUAL_REQUIRED.value
                     result.all_resolved = False
                 else:
                     finding.status = FindingStatus.ESCALATED
@@ -205,6 +220,12 @@ class BoundedRemediationLoop:
             else:
                 result.open_findings.append(finding)
 
+        if result.requires_manual_intervention:
+            manual_ids = ', '.join(f.finding_id for f in result.escalated_findings if f.status == FindingStatus.MANUAL_REQUIRED)
+            result.status = FindingStatus.MANUAL_REQUIRED.value
+            result.exhausted_error = RemediationExhaustedError(
+                f'Automatic remediation exhausted for findings: {manual_ids}'
+            )
         return result
 
     def waive(self, finding: Finding, approver: str) -> bool:
