@@ -126,8 +126,11 @@ tasks:
   - GA-010
   - GA-011
   - GA-012
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Cleanup: .gitignore now excludes runtime databases, workspaces, artifacts, dist/build output, and egg-info/cache directories'
+  - 'Repository hygiene: tracked __pycache__ and .pyc files were removed from version control while archived workflow/recipes/full-sdlc.yaml remains out of the active recipe set'
+  - 'Validation: compileall passes for runtime packages and README now points to full-sdlc-v2 as the canonical workflow'
 - id: GA-014
   title: Prove the single path end to end and certify 100% completion
   depends_on:
