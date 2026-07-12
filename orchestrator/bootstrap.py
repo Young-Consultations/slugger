@@ -92,6 +92,14 @@ class Bootstrap:
             else:
                 github_service = MockGitHubService()
         chatgpt_service = self._build_chatgpt_service(settings)
+        strict_mode = getattr(getattr(settings, 'environment', None), 'strict_mode', False) if hasattr(settings, 'environment') else False
+        if isinstance(strict_mode, str):
+            strict_mode = strict_mode.lower() in ('true', '1', 'yes')
+        from providers.capabilities import CapabilityResolver
+        capability_resolver = CapabilityResolver(
+            provider_registry=providers,
+            strict_mode=bool(strict_mode),
+        )
         return ApplicationContext(
             settings=settings,
             providers=providers,
@@ -112,6 +120,7 @@ class Bootstrap:
             knowledge_indexer=knowledge_indexer,
             chatgpt=chatgpt_service,
             canva=canva_service,
+            capability_resolver=capability_resolver,
         )
 
     def _build_canva_service(self, settings: object) -> ICanvaService:

@@ -106,6 +106,7 @@ class Slugger:
                 'failures': len(self.context.failure_analytics.failures()),
             },
             'telemetry': self.context.reporter.summarize(),
+            'capabilities': self.context.capability_resolver.diagnostics() if self.context.capability_resolver else {},
         }
 
     def lineage(self) -> dict[str, object]:
