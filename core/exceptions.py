@@ -21,6 +21,10 @@ class ProviderError(SluggerError):
     """Raised when a provider cannot complete its work."""
 
 
+class CodexNotAvailableError(SluggerError):
+    """Raised when the production Codex adapter is required but unavailable."""
+
+
 class PluginError(SluggerError):
     """Raised when plugin loading or health checks fail."""
 

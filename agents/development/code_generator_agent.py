@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import textwrap
 from pathlib import Path
-from tempfile import mkdtemp
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
@@ -161,7 +160,8 @@ class CodeGeneratorAgent(BaseAgent):
         client = getattr(context, 'codex_agent_client', None)
         if client is not None:
             from providers.codex_agent_client import CodexWorkspace
-            workspace = CodexWorkspace(root=Path(mkdtemp(prefix='slugger_codex_')))
+            workspace_root = Path(context.metadata.get('workspace_root', Path.cwd())).resolve()
+            workspace = CodexWorkspace(root=workspace_root)
             try:
                 task_brief = f"Generate a complete {platform} application for: {idea}"
                 result = client.start_task(task_brief, workspace)

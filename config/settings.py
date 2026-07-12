@@ -82,6 +82,18 @@ class ChatGPTSettings:
 
 
 @dataclass(slots=True)
+class CodexSettings:
+    """Codex agent adapter configuration section."""
+
+    api_key: str = ''
+    api_key_env: str = 'CODEX_API_KEY'
+    fallback_api_key_env: str = 'OPENAI_API_KEY'
+    command: str = 'codex'
+    model: str = 'codex'
+    use_fake_in_development: bool = True
+
+
+@dataclass(slots=True)
 class Settings:
     """Root application settings."""
 
@@ -94,4 +106,5 @@ class Settings:
     github: GitHubSettings = field(default_factory=GitHubSettings)
     canva: CanvaSettings = field(default_factory=CanvaSettings)
     chatgpt: ChatGPTSettings = field(default_factory=ChatGPTSettings)
+    codex: CodexSettings = field(default_factory=CodexSettings)
     plugin_directories: list[str] = field(default_factory=lambda: ['plugins'])

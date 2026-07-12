@@ -21,7 +21,7 @@ from observability.telemetry import TelemetryCollector
 from observability.token_budget import TokenBudget
 from orchestrator.context import ApplicationContext
 from prompts.catalog import build_default_catalog
-from providers import AnthropicProvider, CodexProvider, MockProvider, OpenAIProvider, ProviderRegistry
+from providers import AnthropicProvider, CodexCliAdapter, CodexProvider, FakeCodexAgentClient, MockProvider, OpenAIProvider, ProviderRegistry
 from services.canva import ICanvaService, MockCanvaService
 from services.chatgpt import IChatGPTService, MockChatGPTService
 from services.github import IGitHubService, MockGitHubService
@@ -75,9 +75,10 @@ class Bootstrap:
         validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
         canva_service = self._build_canva_service(settings)
         chatgpt_service = self._build_chatgpt_service(settings)
+        codex_agent_client = self._build_codex_agent_client(settings, profile)
         agents = self._build_agents(canva_service)
         parser = WorkflowParser(validators['workflow_validator'])
-        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service, prompt_catalog=prompt_catalog)
+        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service, codex_agent_client=codex_agent_client, prompt_catalog=prompt_catalog)
         persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
         workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
         github_settings = settings.github
@@ -122,6 +123,7 @@ class Bootstrap:
             knowledge_indexer=knowledge_indexer,
             chatgpt=chatgpt_service,
             canva=canva_service,
+            codex_agent_client=codex_agent_client,
             prompt_catalog=prompt_catalog,
             capability_resolver=capability_resolver,
         )
@@ -154,6 +156,21 @@ class Bootstrap:
                 timeout=chatgpt_settings.timeout_seconds,
             )
         return MockChatGPTService()
+
+    def _build_codex_agent_client(self, settings: object, profile: str):
+        """Resolve the Codex agent client for the active environment profile."""
+        codex_settings = getattr(settings, 'codex', None)
+        normalized = profile.lower()
+        if normalized in ('test', 'testing', 'development', 'dev'):
+            if codex_settings is None or getattr(codex_settings, 'use_fake_in_development', True):
+                return FakeCodexAgentClient()
+        if codex_settings is None:
+            return CodexCliAdapter()
+        return CodexCliAdapter(
+            command=getattr(codex_settings, 'command', 'codex'),
+            model=getattr(codex_settings, 'model', 'codex'),
+            api_key=getattr(codex_settings, 'api_key', '') or None,
+        )
 
     def _build_agents(self, canva_service: ICanvaService | None = None) -> AgentRegistry:
         registry = AgentRegistry()

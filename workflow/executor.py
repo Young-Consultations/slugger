@@ -65,6 +65,7 @@ class StepExecutor:
         message_bus: MessageBus | None = None,
         lineage_graph: LineageGraph | None = None,
         chatgpt_service: object | None = None,
+        codex_agent_client: object | None = None,
         prompt_catalog: SdlcPromptCatalog | None = None,
     ) -> None:
         self.agent_registry = agent_registry
@@ -72,6 +73,7 @@ class StepExecutor:
         self.message_bus = message_bus
         self.lineage_graph = lineage_graph
         self.chatgpt_service = chatgpt_service
+        self.codex_agent_client = codex_agent_client
         self.prompt_catalog = prompt_catalog
 
     def execute(
@@ -112,6 +114,7 @@ class StepExecutor:
             message_bus=self.message_bus,
             project_brief=resolved_brief,
             chatgpt_service=self.chatgpt_service,
+            codex_agent_client=self.codex_agent_client,
             prompt_catalog=self.prompt_catalog,
         )
         artifacts = agent.execute(context)

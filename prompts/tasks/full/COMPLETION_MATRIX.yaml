@@ -43,8 +43,10 @@ tasks:
   depends_on:
   - GA-003
   - GA-004
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: Bootstrap now injects FakeCodexAgentClient only for development/test and requires CodexCliAdapter in production'
+  - 'Tests: tests/test_cc005_codex_agent.py and tests/test_codex_provider.py cover credential enforcement and adapter selection'
 - id: GA-006
   title: Make AppManifest the only generated application output
   depends_on:

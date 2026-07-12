@@ -20,6 +20,7 @@ from observability.telemetry import TelemetryCollector
 from observability.token_budget import TokenBudget
 from observability.tracer import ExecutionTracer
 from providers.capabilities import CapabilityResolver
+from providers.codex_agent_client import ICodexAgentClient
 from providers.registry import ProviderRegistry
 from services.canva.base import ICanvaService
 from services.chatgpt.base import IChatGPTService
@@ -51,6 +52,7 @@ class ApplicationContext:
     knowledge_indexer: KnowledgeIndexer | None = None
     chatgpt: IChatGPTService | None = None
     canva: ICanvaService | None = None
+    codex_agent_client: ICodexAgentClient | None = None
     prompt_catalog: SdlcPromptCatalog | None = None
     capability_resolver: CapabilityResolver | None = None
     """Runtime capability resolver; populated by :class:`Bootstrap` (CC-003)."""

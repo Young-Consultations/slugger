@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tempfile import mkdtemp
 
 import pytest
 
+from core.exceptions import CodexNotAvailableError
 from providers.codex_agent_client import (
+    CodexCliAdapter,
     CodexEvent,
     CodexEventType,
     CodexTaskResult,
@@ -200,3 +201,14 @@ class TestICodexAgentClientContract:
         assert hasattr(result, 'commands_run')
         assert hasattr(result, 'findings')
         assert hasattr(result, 'summary')
+
+
+class TestCodexCliAdapter:
+    def test_production_adapter_requires_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv('CODEX_API_KEY', raising=False)
+        monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+        with pytest.raises(CodexNotAvailableError, match='CODEX_API_KEY|OPENAI_API_KEY'):
+            CodexCliAdapter()
+
+    def test_fake_client_is_explicitly_non_production(self) -> None:
+        assert FakeCodexAgentClient.profile_scope == ('development', 'test')

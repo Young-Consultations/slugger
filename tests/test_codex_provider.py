@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from config.settings import Settings
+from core.exceptions import CodexNotAvailableError
 from models.provider import ProviderConfig
+from orchestrator.bootstrap import Bootstrap
 from providers.codex_provider import CodexProvider
 
 
@@ -78,3 +81,13 @@ def test_codex_embed_raises_without_key() -> None:
     provider = CodexProvider(cfg)
     with pytest.raises(ProviderError, match='API key'):
         provider.embed(['hello'])
+
+
+def test_bootstrap_production_codex_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('CODEX_API_KEY', raising=False)
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    bootstrap = Bootstrap.__new__(Bootstrap)
+    bootstrap.root_path = None
+    settings = Settings(environment='production')
+    with pytest.raises(CodexNotAvailableError):
+        bootstrap._build_codex_agent_client(settings, 'production')

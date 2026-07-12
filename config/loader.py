@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from config.settings import AgentSettings, CanvaSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
+from config.settings import AgentSettings, CanvaSettings, CodexSettings, GitHubSettings, MemorySettings, ObservabilitySettings, ProviderSettings, Settings, WorkflowSettings
 from core.exceptions import ConfigurationError
 from models.provider import ProviderConfig, ProviderType
 
@@ -60,6 +60,14 @@ class ConfigLoader:
         if env_canva_token:
             canva['access_token'] = env_canva_token
         config['canva'] = canva
+        codex = dict(config.get('codex', {}))
+        env_codex_key = os.getenv(codex.get('api_key_env', 'CODEX_API_KEY'), '')
+        env_openai_key = os.getenv(codex.get('fallback_api_key_env', 'OPENAI_API_KEY'), '')
+        if env_codex_key:
+            codex['api_key'] = env_codex_key
+        elif env_openai_key:
+            codex['api_key'] = env_openai_key
+        config['codex'] = codex
         return config
 
     def _to_settings(self, data: dict[str, Any]) -> Settings:
@@ -91,6 +99,7 @@ class ConfigLoader:
             access_token_env=canva_data.get('access_token_env', 'CANVA_API_TOKEN'),
             base_url=canva_data.get('base_url', 'https://api.canva.com/rest/v1'),
         )
+        codex_data = data.get('codex', {})
         return Settings(
             environment=data.get('environment', 'development'),
             providers=providers,
@@ -100,5 +109,6 @@ class ConfigLoader:
             memory=MemorySettings(**data.get('memory', {})),
             github=github,
             canva=canva,
+            codex=CodexSettings(**codex_data),
             plugin_directories=data.get('plugin_directories', ['plugins']),
         )
