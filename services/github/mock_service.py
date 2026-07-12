@@ -16,7 +16,7 @@ from services.github.models import (
 
 class MockGitHubService(IGitHubService):
     def __init__(self) -> None:
-        self.repo = GitHubRepo(owner='slugger', name='slugger')
+        self.repo = GitHubRepo(owner="slugger", name="slugger")
         self.issues: list[GitHubIssue] = []
         self.pull_requests: list[GitHubPR] = []
         self.comments: dict[int, list[GitHubComment]] = {}
@@ -37,7 +37,9 @@ class MockGitHubService(IGitHubService):
     def list_pull_requests(self) -> list[GitHubPR]:
         return list(self.pull_requests)
 
-    def create_comment(self, issue_number: int, comment: GitHubComment) -> GitHubComment:
+    def create_comment(
+        self, issue_number: int, comment: GitHubComment
+    ) -> GitHubComment:
         self.comments.setdefault(issue_number, []).append(comment)
         return comment
 
@@ -59,13 +61,16 @@ class MockGitHubService(IGitHubService):
         self.issues.append(issue)
         return issue
 
-    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main') -> GitHubPR:
+    def create_pull_request(
+        self, title: str, body: str, head: str, base: str = "main", draft: bool = False
+    ) -> GitHubPR:
         pr = GitHubPR(
             number=self._next_pr,
             title=title,
             body=body,
             head=head,
             base=base,
+            draft=draft,
         )
         self._next_pr += 1
         self.pull_requests.append(pr)
@@ -74,7 +79,9 @@ class MockGitHubService(IGitHubService):
     def list_milestones(self) -> list[GitHubMilestone]:
         return list(self.milestones)
 
-    def create_milestone(self, title: str, description: str = '', due_on: str | None = None) -> GitHubMilestone:
+    def create_milestone(
+        self, title: str, description: str = "", due_on: str | None = None
+    ) -> GitHubMilestone:
         milestone = GitHubMilestone(
             number=self._next_milestone,
             title=title,
@@ -92,7 +99,7 @@ class MockGitHubService(IGitHubService):
         self,
         tag_name: str,
         name: str,
-        body: str = '',
+        body: str = "",
         draft: bool = False,
         prerelease: bool = False,
     ) -> GitHubRelease:
@@ -106,12 +113,21 @@ class MockGitHubService(IGitHubService):
         self.releases.append(release)
         return release
 
-    def list_workflow_runs(self, workflow_id: str | int | None = None) -> list[GitHubWorkflowRun]:
+    def list_workflow_runs(
+        self, workflow_id: str | int | None = None
+    ) -> list[GitHubWorkflowRun]:
         if workflow_id is not None:
             workflow_id_str = str(workflow_id)
-            return [run for run in self.workflow_runs if str(run.workflow_id) == workflow_id_str]
+            return [
+                run
+                for run in self.workflow_runs
+                if str(run.workflow_id) == workflow_id_str
+            ]
         return list(self.workflow_runs)
 
-    def trigger_workflow(self, workflow_id: str, ref: str = 'main', inputs: dict[str, str] | None = None) -> None:
-        self.triggered_workflows.append({'workflow_id': workflow_id, 'ref': ref, 'inputs': inputs or {}})
-
+    def trigger_workflow(
+        self, workflow_id: str, ref: str = "main", inputs: dict[str, str] | None = None
+    ) -> None:
+        self.triggered_workflows.append(
+            {"workflow_id": workflow_id, "ref": ref, "inputs": inputs or {}}
+        )

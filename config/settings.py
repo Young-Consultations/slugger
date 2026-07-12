@@ -11,8 +11,14 @@ from models.provider import ProviderConfig, ProviderType
 class ProviderSettings:
     """Provider configuration section."""
 
-    default_provider: str = 'mock'
-    configs: dict[str, ProviderConfig] = field(default_factory=lambda: {'mock': ProviderConfig(name='mock', provider_type=ProviderType.MOCK, model='mock-model')})
+    default_provider: str = "mock"
+    configs: dict[str, ProviderConfig] = field(
+        default_factory=lambda: {
+            "mock": ProviderConfig(
+                name="mock", provider_type=ProviderType.MOCK, model="mock-model"
+            )
+        }
+    )
 
 
 @dataclass(slots=True)
@@ -20,16 +26,33 @@ class AgentSettings:
     """Agent configuration section."""
 
     default_timeout_seconds: int = 60
-    enabled_categories: list[str] = field(default_factory=lambda: ['planning', 'architecture', 'development', 'qa', 'operations', 'support'])
+    enabled_categories: list[str] = field(
+        default_factory=lambda: [
+            "planning",
+            "architecture",
+            "development",
+            "qa",
+            "operations",
+            "support",
+        ]
+    )
 
 
 @dataclass(slots=True)
 class WorkflowSettings:
     """Workflow configuration section."""
 
-    recipe_directory: str = 'workflow/recipes'
+    recipe_directory: str = "workflow/recipes"
+    default_workflow: str = "full-sdlc-v2"  # Fallback when defaults.yaml is not loaded.
     max_retries: int = 2
-    state_store: str = 'workflow/state.json'
+    state_store: str = "workflow/state.json"
+
+
+@dataclass(slots=True)
+class ArtifactStoreSettings:
+    """Artifact store configuration section."""
+
+    db_path: str = "artifacts.db"
 
 
 @dataclass(slots=True)
@@ -37,7 +60,7 @@ class ObservabilitySettings:
     """Observability configuration section."""
 
     enabled: bool = True
-    log_level: str = 'INFO'
+    log_level: str = "INFO"
     json_logs: bool = True
 
 
@@ -45,52 +68,66 @@ class ObservabilitySettings:
 class MemorySettings:
     """Memory configuration section."""
 
-    backend: str = 'in_memory'
-    storage_path: str = 'memory/store.json'
+    backend: str = "in_memory"
+    storage_path: str = "memory/store.json"
 
 
 @dataclass(slots=True)
 class GitHubSettings:
     """GitHub integration configuration section."""
 
-    owner: str = ''
-    repo: str = ''
-    token: str = ''
-    token_env: str = 'GITHUB_TOKEN'
+    owner: str = ""
+    repo: str = ""
+    token: str = ""
+    token_env: str = "GITHUB_TOKEN"
 
 
 @dataclass(slots=True)
 class CanvaSettings:
     """Canva Connect API configuration section."""
 
-    access_token: str = ''
-    access_token_env: str = 'CANVA_API_TOKEN'
-    base_url: str = 'https://api.canva.com/rest/v1'
+    access_token: str = ""
+    access_token_env: str = "CANVA_API_TOKEN"
+    base_url: str = "https://api.canva.com/rest/v1"
 
 
 @dataclass(slots=True)
 class ChatGPTSettings:
     """ChatGPT / OpenAI chat-completions configuration section."""
 
-    api_key: str = ''
-    api_key_env: str = 'OPENAI_API_KEY'
-    model: str = 'gpt-4o'
-    base_url: str = 'https://api.openai.com/v1'
+    api_key: str = ""
+    api_key_env: str = "OPENAI_API_KEY"
+    model: str = "gpt-4o"
+    base_url: str = "https://api.openai.com/v1"
     timeout_seconds: int = 30
     mock_mode: bool = False
+
+
+@dataclass(slots=True)
+class CodexSettings:
+    """Codex agent adapter configuration section."""
+
+    api_key: str = ""
+    api_key_env: str = "CODEX_API_KEY"
+    fallback_api_key_env: str = "OPENAI_API_KEY"
+    command: str = "codex"
+    model: str = "codex"
+    use_fake_in_development: bool = True
 
 
 @dataclass(slots=True)
 class Settings:
     """Root application settings."""
 
-    environment: str = 'development'
+    environment: str = "development"
     providers: ProviderSettings = field(default_factory=ProviderSettings)
     agents: AgentSettings = field(default_factory=AgentSettings)
     workflow: WorkflowSettings = field(default_factory=WorkflowSettings)
+    artifact_store: ArtifactStoreSettings = field(default_factory=ArtifactStoreSettings)
     observability: ObservabilitySettings = field(default_factory=ObservabilitySettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
     github: GitHubSettings = field(default_factory=GitHubSettings)
     canva: CanvaSettings = field(default_factory=CanvaSettings)
     chatgpt: ChatGPTSettings = field(default_factory=ChatGPTSettings)
-    plugin_directories: list[str] = field(default_factory=lambda: ['plugins'])
+    codex: CodexSettings = field(default_factory=CodexSettings)
+    plugin_directories: list[str] = field(default_factory=lambda: ["plugins"])

@@ -15,10 +15,10 @@ from typing import Any
 class EscalationLevel(str, Enum):
     """Escalation severity levels."""
 
-    RETRY = 'retry'
-    WARN = 'warn'
-    ESCALATE = 'escalate'
-    ABORT = 'abort'
+    RETRY = "retry"
+    WARN = "warn"
+    ESCALATE = "escalate"
+    ABORT = "abort"
 
 
 @dataclass
@@ -47,26 +47,26 @@ class EscalationPolicy:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> EscalationPolicy:
-        raw_level = data.get('escalation_level', EscalationLevel.ABORT.value)
+        raw_level = data.get("escalation_level", EscalationLevel.ABORT.value)
         try:
             level = EscalationLevel(raw_level)
         except ValueError:
             level = EscalationLevel.ABORT
         return cls(
-            max_retries=int(data.get('max_retries', 3)),
+            max_retries=int(data.get("max_retries", 3)),
             escalation_level=level,
-            notify_agents=list(data.get('notify_agents', [])),
-            fallback_agent=data.get('fallback_agent'),
-            metadata=dict(data.get('metadata', {})),
+            notify_agents=list(data.get("notify_agents", [])),
+            fallback_agent=data.get("fallback_agent"),
+            metadata=dict(data.get("metadata", {})),
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'max_retries': self.max_retries,
-            'escalation_level': self.escalation_level.value,
-            'notify_agents': list(self.notify_agents),
-            'fallback_agent': self.fallback_agent,
-            'metadata': dict(self.metadata),
+            "max_retries": self.max_retries,
+            "escalation_level": self.escalation_level.value,
+            "notify_agents": list(self.notify_agents),
+            "fallback_agent": self.fallback_agent,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -102,13 +102,13 @@ class EscalationEvent:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'step_name': self.step_name,
-            'agent_name': self.agent_name,
-            'attempt': self.attempt,
-            'level': self.level.value,
-            'reason': self.reason,
-            'timestamp': self.timestamp.isoformat(),
-            'resolved': self.resolved,
+            "step_name": self.step_name,
+            "agent_name": self.agent_name,
+            "attempt": self.attempt,
+            "level": self.level.value,
+            "reason": self.reason,
+            "timestamp": self.timestamp.isoformat(),
+            "resolved": self.resolved,
         }
 
 
@@ -189,7 +189,9 @@ class EscalationHandler:
                 count += 1
         return count
 
-    def events(self, *, step_name: str | None = None, resolved: bool | None = None) -> list[EscalationEvent]:
+    def events(
+        self, *, step_name: str | None = None, resolved: bool | None = None
+    ) -> list[EscalationEvent]:
         """Return escalation events, optionally filtered.
 
         Parameters
@@ -210,10 +212,10 @@ class EscalationHandler:
     def summary(self) -> dict[str, Any]:
         """Return a summary of escalation activity."""
         return {
-            'total': len(self._events),
-            'resolved': sum(1 for e in self._events if e.resolved),
-            'open': sum(1 for e in self._events if not e.resolved),
-            'by_level': {
+            "total": len(self._events),
+            "resolved": sum(1 for e in self._events if e.resolved),
+            "open": sum(1 for e in self._events if not e.resolved),
+            "by_level": {
                 level.value: sum(1 for e in self._events if e.level == level)
                 for level in EscalationLevel
             },

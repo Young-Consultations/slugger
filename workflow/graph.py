@@ -26,7 +26,9 @@ class ExecutionGraph:
     """
 
     definition: WorkflowDefinition
-    _adjacency: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
+    _adjacency: dict[str, list[str]] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _in_degree: dict[str, int] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -43,11 +45,7 @@ class ExecutionGraph:
 
     def predecessors(self, step_name: str) -> list[str]:
         """Return names of steps that must complete before *step_name*."""
-        return [
-            src
-            for src, targets in self._adjacency.items()
-            if step_name in targets
-        ]
+        return [src for src, targets in self._adjacency.items() if step_name in targets]
 
     def successors(self, step_name: str) -> list[str]:
         """Return names of steps that depend on *step_name*."""
@@ -74,7 +72,9 @@ class ExecutionGraph:
                     queue.append(successor)
 
         if len(result) != len(self.nodes):
-            raise ValueError('Execution graph contains a cycle — cannot topologically sort.')
+            raise ValueError(
+                "Execution graph contains a cycle — cannot topologically sort."
+            )
         return result
 
     def parallel_stages(self) -> list[list[str]]:
@@ -95,7 +95,9 @@ class ExecutionGraph:
         while remaining:
             ready = sorted(name for name in remaining if in_degree[name] == 0)
             if not ready:
-                raise ValueError('Execution graph contains a cycle — cannot compute parallel stages.')
+                raise ValueError(
+                    "Execution graph contains a cycle — cannot compute parallel stages."
+                )
             stages.append(ready)
             for node in ready:
                 remaining.discard(node)

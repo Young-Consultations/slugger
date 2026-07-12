@@ -14,12 +14,19 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+import os
 from pathlib import Path
+import shutil
+import subprocess
+from uuid import uuid4
+
+from core.exceptions import CodexNotAvailableError, ProviderError
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _is_within(resolved_path: Path, allowed: Path) -> bool:
     """Return True if *resolved_path* is within *allowed* (after resolving *allowed*)."""
@@ -34,44 +41,50 @@ def _is_within(resolved_path: Path, allowed: Path) -> bool:
 # Domain models
 # ---------------------------------------------------------------------------
 
+
 class CodexEventType(str, Enum):
     """Types of events emitted by the Codex agent."""
-    FILE_WRITE = 'file_write'
-    FILE_READ = 'file_read'
-    COMMAND_RUN = 'command_run'
-    TASK_COMPLETE = 'task_complete'
-    REVIEW_FINDING = 'review_finding'
-    ERROR = 'error'
+
+    FILE_WRITE = "file_write"
+    FILE_READ = "file_read"
+    COMMAND_RUN = "command_run"
+    TASK_COMPLETE = "task_complete"
+    REVIEW_FINDING = "review_finding"
+    ERROR = "error"
 
 
 @dataclass
 class CodexEvent:
     """A single event emitted during a Codex agent session."""
+
     event_type: CodexEventType
     payload: dict[str, object] = field(default_factory=dict)
-    session_id: str = ''
+    session_id: str = ""
 
 
 @dataclass
 class FileChange:
     """A file modification produced by the Codex agent."""
+
     path: str
     content: str
-    operation: str = 'write'  # write | delete
+    operation: str = "write"  # write | delete
 
 
 @dataclass
 class ReviewFinding:
     """A single finding from a Codex code review."""
+
     severity: str  # critical | high | medium | low | info
     message: str
-    file_path: str = ''
+    file_path: str = ""
     line: int | None = None
 
 
 @dataclass
 class CodexTaskResult:
     """Structured result returned when a Codex task completes."""
+
     session_id: str
     success: bool
     file_changes: list[FileChange] = field(default_factory=list)
@@ -80,14 +93,17 @@ class CodexTaskResult:
     unresolved_issues: list[str] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
-    summary: str = ''
+    summary: str = ""
 
 
 @dataclass
 class CodexWorkspace:
     """A disposable, permission-scoped workspace for Codex agent execution."""
+
     root: Path
-    allowed_commands: list[str] = field(default_factory=lambda: ['python', 'pip', 'pytest'])
+    allowed_commands: list[str] = field(
+        default_factory=lambda: ["python", "pip", "pytest"]
+    )
     write_allowed_paths: list[str] = field(default_factory=list)
     timeout_seconds: int = 120
 
@@ -102,19 +118,19 @@ class CodexWorkspace:
             except ValueError:
                 return False
         return any(
-            _is_within(resolved, Path(allowed))
-            for allowed in self.write_allowed_paths
+            _is_within(resolved, Path(allowed)) for allowed in self.write_allowed_paths
         )
 
     def is_command_allowed(self, command: str) -> bool:
         """Return True if the leading command token is allowed."""
-        cmd_token = command.split()[0] if command.strip() else ''
+        cmd_token = command.split()[0] if command.strip() else ""
         return cmd_token in self.allowed_commands
 
 
 # ---------------------------------------------------------------------------
 # Abstract contract
 # ---------------------------------------------------------------------------
+
 
 class ICodexAgentClient(ABC):
     """Contract for the Codex coding-agent adapter.
@@ -148,7 +164,7 @@ class ICodexAgentClient(ABC):
         self,
         code: str,
         *,
-        language: str = 'Python',
+        language: str = "Python",
         criteria: list[str] | None = None,
         session_id: str | None = None,
     ) -> CodexTaskResult:
@@ -167,11 +183,14 @@ class ICodexAgentClient(ABC):
 # Deterministic fake for tests
 # ---------------------------------------------------------------------------
 
+
 class FakeCodexAgentClient(ICodexAgentClient):
     """Deterministic fake Codex agent for testing — no network required.
 
     Callers can configure canned responses and inspect recorded calls.
     """
+
+    profile_scope = ("development", "test")
 
     def __init__(
         self,
@@ -180,7 +199,7 @@ class FakeCodexAgentClient(ICodexAgentClient):
     ) -> None:
         self.default_code = default_code
         self.default_findings: list[ReviewFinding] = default_findings or [
-            ReviewFinding(severity='info', message='No issues found.'),
+            ReviewFinding(severity="info", message="No issues found."),
         ]
         self._sessions: dict[str, list[CodexEvent]] = {}
         self.calls: list[dict[str, object]] = []
@@ -191,7 +210,7 @@ class FakeCodexAgentClient(ICodexAgentClient):
     # ------------------------------------------------------------------
 
     def _new_session(self, session_id: str | None) -> str:
-        sid = session_id or f'fake-session-{self._session_counter}'
+        sid = session_id or f"fake-session-{self._session_counter}"
         self._session_counter += 1
         self._sessions.setdefault(sid, [])
         return sid
@@ -209,17 +228,19 @@ class FakeCodexAgentClient(ICodexAgentClient):
         context_files: list[str] | None = None,
     ) -> CodexTaskResult:
         sid = self._new_session(session_id)
-        self.calls.append({'method': 'start_task', 'task_brief': task_brief, 'session_id': sid})
-        change_path = str(workspace.root / 'generated.py')
+        self.calls.append(
+            {"method": "start_task", "task_brief": task_brief, "session_id": sid}
+        )
+        change_path = str(workspace.root / "generated.py")
         file_change = FileChange(path=change_path, content=self.default_code)
         event = CodexEvent(
             event_type=CodexEventType.FILE_WRITE,
-            payload={'path': change_path},
+            payload={"path": change_path},
             session_id=sid,
         )
         complete_event = CodexEvent(
             event_type=CodexEventType.TASK_COMPLETE,
-            payload={'summary': 'Task complete'},
+            payload={"summary": "Task complete"},
             session_id=sid,
         )
         self._sessions[sid].extend([event, complete_event])
@@ -227,8 +248,8 @@ class FakeCodexAgentClient(ICodexAgentClient):
             session_id=sid,
             success=True,
             file_changes=[file_change],
-            commands_run=['python generated.py'],
-            summary=f'Generated code for: {task_brief[:80]}',
+            commands_run=["python generated.py"],
+            summary=f"Generated code for: {task_brief[:80]}",
             input_tokens=len(task_brief.split()),
             output_tokens=len(self.default_code.split()),
         )
@@ -240,27 +261,29 @@ class FakeCodexAgentClient(ICodexAgentClient):
         workspace: CodexWorkspace,
     ) -> CodexTaskResult:
         sid = self._new_session(session_id)
-        self.calls.append({'method': 'continue_task', 'session_id': sid, 'follow_up': follow_up})
+        self.calls.append(
+            {"method": "continue_task", "session_id": sid, "follow_up": follow_up}
+        )
         return CodexTaskResult(
             session_id=sid,
             success=True,
-            summary=f'Continued: {follow_up[:60]}',
+            summary=f"Continued: {follow_up[:60]}",
         )
 
     def review(
         self,
         code: str,
         *,
-        language: str = 'Python',
+        language: str = "Python",
         criteria: list[str] | None = None,
         session_id: str | None = None,
     ) -> CodexTaskResult:
         sid = self._new_session(session_id)
-        self.calls.append({'method': 'review', 'language': language, 'session_id': sid})
+        self.calls.append({"method": "review", "language": language, "session_id": sid})
         events = [
             CodexEvent(
                 event_type=CodexEventType.REVIEW_FINDING,
-                payload={'severity': f.severity, 'message': f.message},
+                payload={"severity": f.severity, "message": f.message},
                 session_id=sid,
             )
             for f in self.default_findings
@@ -270,13 +293,155 @@ class FakeCodexAgentClient(ICodexAgentClient):
             session_id=sid,
             success=True,
             findings=list(self.default_findings),
-            summary=f'Review complete. {len(self.default_findings)} finding(s).',
+            summary=f"Review complete. {len(self.default_findings)} finding(s).",
         )
 
     def retrieve_events(self, session_id: str) -> list[CodexEvent]:
-        self.calls.append({'method': 'retrieve_events', 'session_id': session_id})
+        self.calls.append({"method": "retrieve_events", "session_id": session_id})
         return list(self._sessions.get(session_id, []))
 
     def terminate(self, session_id: str) -> None:
-        self.calls.append({'method': 'terminate', 'session_id': session_id})
+        self.calls.append({"method": "terminate", "session_id": session_id})
+        self._sessions.pop(session_id, None)
+
+
+class CodexCliAdapter(ICodexAgentClient):
+    """Production Codex adapter that wraps ``codex exec`` subprocess calls."""
+
+    def __init__(
+        self,
+        *,
+        command: str = "codex",
+        model: str = "codex",
+        api_key: str | None = None,
+    ) -> None:
+        self.command = command
+        self.model = model
+        self.api_key = (
+            api_key or os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY")
+        )
+        if not self.api_key:
+            raise CodexNotAvailableError(
+                "Codex CLI adapter requires CODEX_API_KEY or OPENAI_API_KEY in production mode."
+            )
+        if shutil.which(self.command) is None:
+            raise CodexNotAvailableError(f"Codex CLI command not found: {self.command}")
+        self._sessions: dict[str, list[CodexEvent]] = {}
+
+    def _ensure_workspace(self, workspace: CodexWorkspace) -> Path:
+        root = workspace.root.resolve()
+        if not root.exists() or not root.is_dir():
+            raise ProviderError(f"Codex workspace does not exist: {root}")
+        return root
+
+    def _session(self, session_id: str | None) -> str:
+        sid = session_id or f"codex-session-{uuid4()}"
+        self._sessions.setdefault(sid, [])
+        return sid
+
+    def _run_exec(
+        self, prompt: str, workspace: CodexWorkspace, *, session_id: str
+    ) -> CodexTaskResult:
+        root = self._ensure_workspace(workspace)
+        command = [self.command, "exec", "--model", self.model, prompt]
+        env: dict[str, str] = {
+            **os.environ,
+            "CODEX_API_KEY": self.api_key or "",
+            "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", self.api_key or ""),
+        }
+        completed = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=workspace.timeout_seconds,
+            check=False,
+            env=env,
+        )
+        self._sessions[session_id].append(
+            CodexEvent(
+                event_type=CodexEventType.COMMAND_RUN,
+                payload={
+                    "command": " ".join(command),
+                    "returncode": completed.returncode,
+                },
+                session_id=session_id,
+            )
+        )
+        summary = (
+            completed.stdout or completed.stderr or "Codex CLI completed"
+        ).strip()
+        if completed.returncode != 0:
+            self._sessions[session_id].append(
+                CodexEvent(
+                    event_type=CodexEventType.ERROR,
+                    payload={
+                        "stderr": completed.stderr.strip(),
+                        "returncode": completed.returncode,
+                    },
+                    session_id=session_id,
+                )
+            )
+            raise ProviderError(summary)
+        self._sessions[session_id].append(
+            CodexEvent(
+                event_type=CodexEventType.TASK_COMPLETE,
+                payload={"summary": summary},
+                session_id=session_id,
+            )
+        )
+        return CodexTaskResult(
+            session_id=session_id,
+            success=True,
+            commands_run=[" ".join(command)],
+            input_tokens=len(prompt.split()),
+            output_tokens=len(completed.stdout.split()),
+            summary=summary,
+        )
+
+    def start_task(
+        self,
+        task_brief: str,
+        workspace: CodexWorkspace,
+        *,
+        session_id: str | None = None,
+        context_files: list[str] | None = None,
+    ) -> CodexTaskResult:
+        sid = self._session(session_id)
+        prompt = task_brief
+        if context_files:
+            prompt = f"{task_brief}\n\nContext files:\n" + "\n".join(
+                f"- {path}" for path in context_files
+            )
+        return self._run_exec(prompt, workspace, session_id=sid)
+
+    def continue_task(
+        self,
+        session_id: str,
+        follow_up: str,
+        workspace: CodexWorkspace,
+    ) -> CodexTaskResult:
+        sid = self._session(session_id)
+        return self._run_exec(follow_up, workspace, session_id=sid)
+
+    def review(
+        self,
+        code: str,
+        *,
+        language: str = "Python",
+        criteria: list[str] | None = None,
+        session_id: str | None = None,
+    ) -> CodexTaskResult:
+        sid = self._session(session_id)
+        criteria_lines = "\n".join(f"- {criterion}" for criterion in (criteria or []))
+        prompt = (
+            f"Review the following {language} code. "
+            f"Return actionable findings only.\n\nCriteria:\n{criteria_lines or '- correctness'}\n\nCode:\n{code}"
+        )
+        return self._run_exec(prompt, CodexWorkspace(root=Path.cwd()), session_id=sid)
+
+    def retrieve_events(self, session_id: str) -> list[CodexEvent]:
+        return list(self._sessions.get(session_id, []))
+
+    def terminate(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)

@@ -26,10 +26,10 @@ class TelemetryExport:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'exported_at': self.exported_at.isoformat(),
-            'events': self.events,
-            'metrics': self.metrics,
-            'spans': self.spans,
+            "exported_at": self.exported_at.isoformat(),
+            "events": self.events,
+            "metrics": self.metrics,
+            "spans": self.spans,
         }
 
     def to_json(self) -> str:
@@ -115,22 +115,26 @@ class TelemetryCollector:
         """Snapshot current telemetry data into a :class:`TelemetryExport`."""
 
         def _event_dict(e: Event) -> dict[str, Any]:
-            return {'name': e.name, 'timestamp': e.timestamp.isoformat(), 'payload': e.payload}
+            return {
+                "name": e.name,
+                "timestamp": e.timestamp.isoformat(),
+                "payload": e.payload,
+            }
 
         def _metric_dict(m: Metric) -> dict[str, Any]:
-            return {'name': m.name, 'value': m.value, 'tags': m.tags}
+            return {"name": m.name, "value": m.value, "tags": m.tags}
 
         def _span_dict(s: Span) -> dict[str, Any]:
             return {
-                'name': s.name,
-                'started_at': s.started_at.isoformat(),
-                'ended_at': s.ended_at.isoformat() if s.ended_at else None,
-                'duration_ms': (
+                "name": s.name,
+                "started_at": s.started_at.isoformat(),
+                "ended_at": s.ended_at.isoformat() if s.ended_at else None,
+                "duration_ms": (
                     (s.ended_at - s.started_at).total_seconds() * 1000
                     if s.ended_at
                     else None
                 ),
-                'attributes': s.attributes,
+                "attributes": s.attributes,
             }
 
         return TelemetryExport(

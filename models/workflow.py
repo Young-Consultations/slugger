@@ -9,12 +9,12 @@ from enum import Enum
 class StepStatus(str, Enum):
     """Execution status for a workflow step."""
 
-    PENDING = 'pending'
-    RUNNING = 'running'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
-    SKIPPED = 'skipped'
-    AWAITING_APPROVAL = 'awaiting_approval'
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    AWAITING_APPROVAL = "awaiting_approval"
 
 
 @dataclass(slots=True)
@@ -34,12 +34,12 @@ class WorkflowStep:
 
     name: str
     agent: str
-    description: str = ''
+    description: str = ""
     inputs: list[str] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list)
     quality_gates: list[QualityGate] = field(default_factory=list)
     retry_policy: dict[str, object] = field(default_factory=dict)
-    on_failure: str = 'stop'
+    on_failure: str = "stop"
     metadata: dict[str, object] = field(default_factory=dict)
     status: StepStatus = StepStatus.PENDING
 
@@ -50,7 +50,7 @@ class Workflow:
 
     name: str
     version: str
-    description: str = ''
+    description: str = ""
     steps: list[WorkflowStep] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata: dict[str, object] = field(default_factory=dict)

@@ -14,15 +14,14 @@ from services.github.models import (
 )
 
 __all__ = [
-    'GitHubClient',
-    'GitHubComment',
-    'GitHubIssue',
-    'GitHubMilestone',
-    'GitHubPR',
-    'GitHubRelease',
-    'GitHubRepo',
-    'GitHubWorkflowRun',
-    'IGitHubService',
-    'MockGitHubService',
+    "GitHubClient",
+    "GitHubComment",
+    "GitHubIssue",
+    "GitHubMilestone",
+    "GitHubPR",
+    "GitHubRelease",
+    "GitHubRepo",
+    "GitHubWorkflowRun",
+    "IGitHubService",
+    "MockGitHubService",
 ]
-

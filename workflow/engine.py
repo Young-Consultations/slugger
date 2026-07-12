@@ -10,7 +10,13 @@ from models.project import ProjectBrief
 from models.workflow import StepStatus
 from workflow.approvals import ApprovalCheckpoint, ApprovalGateHandler
 from workflow.executor import StepExecutor
-from workflow.models import ApprovalPolicy, StepInstance, WorkflowDefinition, WorkflowInstance, WorkflowOutcome
+from workflow.models import (
+    ApprovalPolicy,
+    StepInstance,
+    WorkflowDefinition,
+    WorkflowInstance,
+    WorkflowOutcome,
+)
 from workflow.parser import WorkflowParser
 from workflow.persistence import WorkflowPersistence
 
@@ -33,18 +39,18 @@ class WorkflowEngine:
         self.approval_handler = approval_handler or ApprovalGateHandler()
 
     def list_workflows(self) -> list[str]:
-        return sorted(path.stem for path in self.recipe_directory.glob('*.yaml'))
+        return sorted(path.stem for path in self.recipe_directory.glob("*.yaml"))
 
     def load_definition(self, workflow_name: str) -> WorkflowDefinition:
         path = Path(workflow_name)
         if not path.exists():
-            path = self.recipe_directory / f'{workflow_name}.yaml'
+            path = self.recipe_directory / f"{workflow_name}.yaml"
         return self.parser.parse_file(path)
 
     def run(
         self,
         workflow_name: str,
-        project_id: str = 'default-project',
+        project_id: str = "default-project",
         metadata: dict[str, str] | None = None,
         project_brief: ProjectBrief | None = None,
     ) -> WorkflowInstance:
@@ -52,16 +58,18 @@ class WorkflowEngine:
         instance = WorkflowInstance(
             definition=definition,
             step_instances=[StepInstance(definition=step) for step in definition.steps],
-            status='running',
+            status="running",
         )
         if self.persistence is not None:
             self.persistence.save(instance)
-        return self._execute_instance(instance, project_id, metadata, project_brief=project_brief)
+        return self._execute_instance(
+            instance, project_id, metadata, project_brief=project_brief
+        )
 
     def resume(
         self,
         run_id: str,
-        project_id: str = 'default-project',
+        project_id: str = "default-project",
         metadata: dict[str, str] | None = None,
         project_brief: ProjectBrief | None = None,
     ) -> WorkflowInstance:
@@ -78,18 +86,22 @@ class WorkflowEngine:
             If no persistence backend is configured.
         """
         if self.persistence is None:
-            raise RuntimeError('WorkflowEngine has no persistence backend configured.')
+            raise RuntimeError("WorkflowEngine has no persistence backend configured.")
         instance = self.persistence.load(run_id)
         if instance is None:
-            raise KeyError(f'Unknown workflow run: {run_id!r}')
-        instance.status = 'running'
-        return self._execute_instance(instance, project_id, metadata, project_brief=project_brief)
+            raise KeyError(f"Unknown workflow run: {run_id!r}")
+        instance.status = "running"
+        return self._execute_instance(
+            instance, project_id, metadata, project_brief=project_brief
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _check_approval(self, step_instance: StepInstance, run_id: str = 'default-run') -> bool:
+    def _check_approval(
+        self, step_instance: StepInstance, run_id: str = "default-run"
+    ) -> bool:
         """Evaluate any approval policy for *step_instance*.
 
         Returns ``True`` if execution may proceed, ``False`` if the workflow
@@ -102,8 +114,8 @@ class WorkflowEngine:
         if policy is None:
             return True
         checkpoint = ApprovalCheckpoint(
-            name=f'{step_instance.definition.name}.pre',
-            description=f'Approval required before executing step: {step_instance.definition.name}',
+            name=f"{step_instance.definition.name}.pre",
+            description=f"Approval required before executing step: {step_instance.definition.name}",
             required_approvers=policy.required_approvers,
             auto_approve=policy.auto_approve,
             timeout_seconds=policy.timeout_seconds,
@@ -113,7 +125,11 @@ class WorkflowEngine:
         record = self.approval_handler.evaluate(run_id, checkpoint)
         step_instance.approval_record_id = record.record_id
         from workflow.approvals import ApprovalDecision
-        return record.decision in (ApprovalDecision.APPROVED, ApprovalDecision.AUTO_APPROVED)
+
+        return record.decision in (
+            ApprovalDecision.APPROVED,
+            ApprovalDecision.AUTO_APPROVED,
+        )
 
     def _execute_instance(
         self,
@@ -133,12 +149,14 @@ class WorkflowEngine:
             # Evaluate approval gate before executing the step (WP-022/WP-023)
             if not self._check_approval(step_instance, run_id=instance.run_id):
                 step_instance.status = StepStatus.AWAITING_APPROVAL
-                instance.status = 'awaiting_approval'
+                instance.status = "awaiting_approval"
                 if self.persistence is not None:
                     self.persistence.save(instance)
                 return instance
 
-            max_attempts = int(step_instance.definition.retry_policy.get('max_attempts', 1))
+            max_attempts = int(
+                step_instance.definition.retry_policy.get("max_attempts", 1)
+            )
             while step_instance.attempts < max_attempts:
                 step_instance.attempts += 1
                 step_instance.status = StepStatus.RUNNING
@@ -152,15 +170,23 @@ class WorkflowEngine:
                         project_brief=project_brief,
                     )
                     if any(not result.valid for result in results):
-                        raise WorkflowError(f'Quality gate failure in step {step_instance.definition.name}')
+                        raise WorkflowError(
+                            f"Quality gate failure in step {step_instance.definition.name}"
+                        )
                     for artifact in artifacts:
                         self.artifact_store.create(artifact)
                         artifacts_by_name[artifact.name] = artifact
                         instance.artifacts.append(artifact)
                     if step_instance.definition.outputs:
-                        missing = [name for name in step_instance.definition.outputs if name not in artifacts_by_name]
+                        missing = [
+                            name
+                            for name in step_instance.definition.outputs
+                            if name not in artifacts_by_name
+                        ]
                         if missing:
-                            raise WorkflowError(f'Step {step_instance.definition.name} missing outputs: {missing}')
+                            raise WorkflowError(
+                                f"Step {step_instance.definition.name} missing outputs: {missing}"
+                            )
                     step_instance.status = StepStatus.SUCCEEDED
                     if self.persistence is not None:
                         self.persistence.save(instance)
@@ -168,14 +194,14 @@ class WorkflowEngine:
                 except Exception as error:
                     if step_instance.attempts >= max_attempts:
                         step_instance.status = StepStatus.FAILED
-                        instance.status = 'failed'
+                        instance.status = "failed"
                         if self.persistence is not None:
                             self.persistence.save(instance)
                         raise WorkflowError(str(error)) from error
             if step_instance.status != StepStatus.SUCCEEDED:
                 break
         else:
-            instance.status = 'succeeded'
+            instance.status = "succeeded"
             # Assign evidence-backed outcome: artifacts were generated by mock/placeholder
             # agents. This will be upgraded to VALIDATED, PRODUCTION_READY, or RELEASED
             # by downstream tasks that run real builds and checks.

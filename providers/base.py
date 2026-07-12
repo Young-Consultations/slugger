@@ -57,7 +57,7 @@ class BaseProvider(ABC):
         """
         content = self.complete(request.prompt, language=request.language)
         meta = self.get_metadata()
-        return GenerationResult(content=content, model=meta.get('model', ''))
+        return GenerationResult(content=content, model=meta.get("model", ""))
 
     def review(self, request: ReviewRequest) -> ReviewResult:
         """Return a structured review.  Override for typed review support."""
@@ -75,7 +75,7 @@ class BaseProvider(ABC):
         """Return typed embeddings.  Override for typed embedding support."""
         embeddings = self.embed(request.texts)
         meta = self.get_metadata()
-        return EmbeddingResult(embeddings=embeddings, model=meta.get('model', ''))
+        return EmbeddingResult(embeddings=embeddings, model=meta.get("model", ""))
 
     def health_check(self) -> HealthResult:
         """Perform a side-effect-free health check.
@@ -88,10 +88,10 @@ class BaseProvider(ABC):
         return HealthResult(
             provider=self.config.name,
             available=available,
-            model=meta.get('model', ''),
+            model=meta.get("model", ""),
             has_credentials=available,
             reachable=False,  # subclasses may override for live checks
-            diagnostics={k: v for k, v in meta.items() if k not in ('api_key',)},
+            diagnostics={k: v for k, v in meta.items() if k not in ("api_key",)},
         )
 
     def supports_capability(self, capability: str) -> bool:
@@ -100,12 +100,12 @@ class BaseProvider(ABC):
         Built-in capabilities: ``'complete'``, ``'embed'``, ``'generate'``,
         ``'review'``, ``'refactor'``, ``'embed_typed'``.
         """
-        always_supported = {'complete', 'embed', 'generate', 'embed_typed'}
+        always_supported = {"complete", "embed", "generate", "embed_typed"}
         if capability in always_supported:
             return True
         # 'review' and 'refactor' raise UnsupportedCapabilityError in BaseProvider.
         # Return True only if a subclass has overridden the method.
-        unsupported_unless_overridden = {'review', 'refactor'}
+        unsupported_unless_overridden = {"review", "refactor"}
         if capability in unsupported_unless_overridden:
             base_method = getattr(BaseProvider, capability, None)
             instance_method = getattr(type(self), capability, None)

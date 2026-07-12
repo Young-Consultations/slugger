@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from agents.base import BaseAgent
 from agents.registry import AgentRegistry
@@ -13,60 +12,128 @@ from cli.main import main
 from models import AgentCapability, AgentMetadata, DocumentArtifact
 from models.artifact import CodeArtifact, ConfigArtifact, TestArtifact
 from models.execution import ExecutionContext
-from models.project import CodingAgent, Platform, ProjectInput
-from orchestrator import Bootstrap, Slugger
+from models.project import CodingAgent, Platform
 from validators import ArtifactValidator, QualityGateEvaluator, WorkflowValidator
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser
+from models.app_manifest import AppManifest
 
 
 # ---------------------------------------------------------------------------
 # Minimal stub agents for the python-project workflow steps
 # ---------------------------------------------------------------------------
 
+
 class _VisionAgent(BaseAgent):
     def __init__(self) -> None:
-        super().__init__(metadata=AgentMetadata(name='product_vision_agent', version='1.0.0', description='stub', category='planning', outputs=['product_vision']), capabilities=[AgentCapability(name='pv', description='stub')])
+        super().__init__(
+            metadata=AgentMetadata(
+                name="product_vision_agent",
+                version="1.0.0",
+                description="stub",
+                category="planning",
+                outputs=["product_vision"],
+            ),
+            capabilities=[AgentCapability(name="pv", description="stub")],
+        )
 
     def _execute(self, context: ExecutionContext):
-        return [self.create_artifact(context, 'product_vision', '# Vision', DocumentArtifact)]
+        return [
+            self.create_artifact(
+                context, "product_vision", "# Vision", DocumentArtifact
+            )
+        ]
 
 
 class _RequirementsAgent(BaseAgent):
     def __init__(self) -> None:
-        super().__init__(metadata=AgentMetadata(name='requirements_agent', version='1.0.0', description='stub', category='planning', outputs=['requirements']), capabilities=[AgentCapability(name='req', description='stub')])
+        super().__init__(
+            metadata=AgentMetadata(
+                name="requirements_agent",
+                version="1.0.0",
+                description="stub",
+                category="planning",
+                outputs=["requirements"],
+            ),
+            capabilities=[AgentCapability(name="req", description="stub")],
+        )
 
     def _execute(self, context: ExecutionContext):
-        return [self.create_artifact(context, 'requirements', '# Requirements', DocumentArtifact)]
+        return [
+            self.create_artifact(
+                context, "requirements", "# Requirements", DocumentArtifact
+            )
+        ]
 
 
 class _SystemDesignAgent(BaseAgent):
     def __init__(self) -> None:
-        super().__init__(metadata=AgentMetadata(name='system_design_agent', version='1.0.0', description='stub', category='architecture', outputs=['system_design']), capabilities=[AgentCapability(name='sd', description='stub')])
+        super().__init__(
+            metadata=AgentMetadata(
+                name="system_design_agent",
+                version="1.0.0",
+                description="stub",
+                category="architecture",
+                outputs=["system_design"],
+            ),
+            capabilities=[AgentCapability(name="sd", description="stub")],
+        )
 
     def _execute(self, context: ExecutionContext):
-        return [self.create_artifact(context, 'system_design', '# System Design', DocumentArtifact)]
+        return [
+            self.create_artifact(
+                context, "system_design", "# System Design", DocumentArtifact
+            )
+        ]
 
 
 class _TestGeneratorAgent(BaseAgent):
     def __init__(self) -> None:
-        super().__init__(metadata=AgentMetadata(name='test_generator_agent', version='1.0.0', description='stub', category='qa', outputs=['test_suite']), capabilities=[AgentCapability(name='tg', description='stub')])
+        super().__init__(
+            metadata=AgentMetadata(
+                name="test_generator_agent",
+                version="1.0.0",
+                description="stub",
+                category="qa",
+                outputs=["test_suite"],
+            ),
+            capabilities=[AgentCapability(name="tg", description="stub")],
+        )
 
     def _execute(self, context: ExecutionContext):
-        return [self.create_artifact(context, 'test_suite', '# Tests', TestArtifact)]
+        return [self.create_artifact(context, "test_suite", "# Tests", TestArtifact)]
 
 
 class _CICDAgent(BaseAgent):
     def __init__(self) -> None:
-        super().__init__(metadata=AgentMetadata(name='ci_cd_agent', version='1.0.0', description='stub', category='operations', outputs=['ci_cd_pipeline']), capabilities=[AgentCapability(name='ci', description='stub')])
+        super().__init__(
+            metadata=AgentMetadata(
+                name="ci_cd_agent",
+                version="1.0.0",
+                description="stub",
+                category="operations",
+                outputs=["ci_cd_pipeline"],
+            ),
+            capabilities=[AgentCapability(name="ci", description="stub")],
+        )
 
     def _execute(self, context: ExecutionContext):
-        return [self.create_artifact(context, 'ci_cd_pipeline', '# CI/CD', ConfigArtifact)]
+        return [
+            self.create_artifact(context, "ci_cd_pipeline", "# CI/CD", ConfigArtifact)
+        ]
 
 
 def _build_registry() -> AgentRegistry:
     from agents.development.code_generator_agent import CodeGeneratorAgent
+
     registry = AgentRegistry()
-    for agent in [_VisionAgent(), _RequirementsAgent(), _SystemDesignAgent(), CodeGeneratorAgent(), _TestGeneratorAgent(), _CICDAgent()]:
+    for agent in [
+        _VisionAgent(),
+        _RequirementsAgent(),
+        _SystemDesignAgent(),
+        CodeGeneratorAgent(),
+        _TestGeneratorAgent(),
+        _CICDAgent(),
+    ]:
         registry.register(agent)
     return registry
 
@@ -75,87 +142,114 @@ def _build_registry() -> AgentRegistry:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPythonProjectPipeline:
     """End-to-end tests for the python-project workflow."""
 
-    def _run_pipeline(self, idea: str, platform: str = 'web', coding_agent: str = 'codex'):
+    def _run_pipeline(
+        self, idea: str, platform: str = "web", coding_agent: str = "codex"
+    ):
         registry = _build_registry()
-        executor = StepExecutor(registry, QualityGateEvaluator({'artifact_validator': ArtifactValidator()}))
-        engine = WorkflowEngine(Path('workflow/recipes'), WorkflowParser(WorkflowValidator()), executor)
-        metadata = {'idea': idea, 'platform': platform, 'coding_agent': coding_agent}
-        return engine.run('python-project', project_id='test-project', metadata=metadata)
+        executor = StepExecutor(
+            registry, QualityGateEvaluator({"artifact_validator": ArtifactValidator()})
+        )
+        engine = WorkflowEngine(
+            Path("workflow/recipes"), WorkflowParser(WorkflowValidator()), executor
+        )
+        metadata = {"idea": idea, "platform": platform, "coding_agent": coding_agent}
+        return engine.run(
+            "python-project", project_id="test-project", metadata=metadata
+        )
 
     def test_pipeline_succeeds(self) -> None:
-        result = self._run_pipeline('A todo list app')
-        assert result.status == 'succeeded'
+        result = self._run_pipeline("A todo list app")
+        assert result.status == "succeeded"
 
     def test_pipeline_produces_required_artifacts(self) -> None:
-        result = self._run_pipeline('A todo list app')
+        result = self._run_pipeline("A todo list app")
         names = [a.name for a in result.artifacts]
-        assert 'product_vision' in names
-        assert 'requirements' in names
-        assert 'system_design' in names
-        assert 'generated_code' in names
-        assert 'test_suite' in names
-        assert 'ci_cd_pipeline' in names
+        assert "product_vision" in names
+        assert "requirements" in names
+        assert "system_design" in names
+        assert "generated_code" in names
+        assert "test_suite" in names
+        assert "ci_cd_pipeline" in names
 
     def test_code_generator_uses_idea_metadata(self) -> None:
-        result = self._run_pipeline('An e-commerce shop', platform='web', coding_agent='anthropic')
-        code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
-        assert 'An e-commerce shop' in code_artifact.content
-        assert 'web' in code_artifact.content.lower() or 'FastAPI' in code_artifact.content
-        assert 'anthropic' in code_artifact.content.lower() or 'Anthropic' in code_artifact.content
+        result = self._run_pipeline(
+            "An e-commerce shop", platform="web", coding_agent="anthropic"
+        )
+        code_artifact = next(a for a in result.artifacts if a.name == "generated_code")
+        manifest = AppManifest.from_json(code_artifact.content)
+        assert manifest.metadata["idea"] == "An e-commerce shop"
+        assert manifest.metadata["platform"] == "web"
+        assert manifest.metadata["coding_agent"] == "anthropic"
 
-    def test_code_artifact_is_python_format(self) -> None:
-        result = self._run_pipeline('A chat app', platform='ios')
-        code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
+    def test_code_artifact_is_app_manifest_json(self) -> None:
+        result = self._run_pipeline("A chat app", platform="ios")
+        code_artifact = next(a for a in result.artifacts if a.name == "generated_code")
         assert isinstance(code_artifact, CodeArtifact)
-        assert code_artifact.format == 'python'
+        assert code_artifact.format == "json"
+        manifest = AppManifest.from_json(code_artifact.content)
+        assert manifest.application_id
 
     def test_pipeline_embeds_platform_in_code_artifact(self) -> None:
-        for platform in ('web', 'ios', 'android'):
-            result = self._run_pipeline('My app', platform=platform)
-            code_artifact = next(a for a in result.artifacts if a.name == 'generated_code')
-            assert platform in code_artifact.content.lower() or any(
-                note in code_artifact.content
-                for note in ('FastAPI', 'iOS', 'Android', 'web', 'ios', 'android')
-            ), f'Platform {platform} not reflected in code artifact'
+        for platform in ("web", "ios", "android"):
+            result = self._run_pipeline("My app", platform=platform)
+            code_artifact = next(
+                a for a in result.artifacts if a.name == "generated_code"
+            )
+            manifest = AppManifest.from_json(code_artifact.content)
+            assert manifest.metadata["platform"] == platform
 
 
 class TestOrchestrationPipelineCLI:
     """CLI integration tests for Task 037."""
 
-    @patch('cli.main.Bootstrap')
-    def test_build_with_python_project_workflow(self, mock_bootstrap: MagicMock, capsys) -> None:
+    @patch("cli.main.Bootstrap")
+    def test_build_with_python_project_workflow(
+        self, mock_bootstrap: MagicMock, capsys
+    ) -> None:
         fake_slugger = MagicMock()
         result = MagicMock()
-        result.definition.name = 'python-project'
-        result.status = 'succeeded'
+        result.definition.name = "python-project"
+        result.status = "succeeded"
         result.artifacts = []
-        result.run_id = 'test-run-id'
+        result.run_id = "test-run-id"
         result.outcome = None
         fake_slugger.build.return_value = result
         mock_bootstrap.return_value.build.return_value = MagicMock()
-        with patch('cli.main.Slugger', return_value=fake_slugger):
-            rc = main(['build', 'A todo app', '--platform', 'web', '--workflow', 'python-project'])
+        with patch("cli.main.Slugger", return_value=fake_slugger):
+            rc = main(
+                [
+                    "build",
+                    "A todo app",
+                    "--platform",
+                    "web",
+                    "--workflow",
+                    "python-project",
+                ]
+            )
         assert rc == 0
         captured = capsys.readouterr()
         import json
+
         output = json.loads(captured.out)
-        assert output['workflow'] == 'python-project'
+        assert output["workflow"] == "python-project"
 
     def test_python_project_listed_as_workflow(self) -> None:
         engine = WorkflowEngine(
-            Path('workflow/recipes'),
+            Path("workflow/recipes"),
             WorkflowParser(WorkflowValidator()),
             MagicMock(),
         )
-        assert 'python-project' in engine.list_workflows()
+        assert "python-project" in engine.list_workflows()
 
 
 # ---------------------------------------------------------------------------
 # CC-001 regression tests: idea propagation through the pipeline
 # ---------------------------------------------------------------------------
+
 
 class TestIdeaPropagation:
     """Regression tests asserting that the user idea is the authoritative root
@@ -166,12 +260,15 @@ class TestIdeaPropagation:
     a generic note or a Python object repr.
     """
 
-    _IDEA = 'Create a simple task tracker CLI'
+    _IDEA = "Create a simple task tracker CLI"
 
-    def _run_pipeline(self, idea: str = _IDEA, workflow: str = 'python-project') -> object:
+    def _run_pipeline(
+        self, idea: str = _IDEA, workflow: str = "python-project"
+    ) -> object:
         from agents.planning.product_vision_agent import ProductVisionAgent
         from agents.planning.requirements_agent import RequirementsAgent
         from agents.planning.user_story_agent import UserStoryAgent
+
         # Use real planning agents so idea propagation can be asserted.
         # Other steps use stubs to avoid external dependencies.
         real_registry = AgentRegistry()
@@ -183,7 +280,6 @@ class TestIdeaPropagation:
             real_registry.register(agent)
         # Also register the remaining stubs for non-planning steps.
         for agent in _build_registry().list():
-            from agents.registry import AgentRegistry as AR
             pass
         stub_registry = _build_registry()
         # Build a merged registry: real planning agents override stubs.
@@ -196,27 +292,38 @@ class TestIdeaPropagation:
         # Override with real agents.
         for agent in [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent()]:
             merged_registry.register(agent)
-        executor = StepExecutor(merged_registry, QualityGateEvaluator({'artifact_validator': ArtifactValidator()}))
-        engine = WorkflowEngine(Path('workflow/recipes'), WorkflowParser(WorkflowValidator()), executor)
-        from models.project import ProjectBrief, Platform, CodingAgent
+        executor = StepExecutor(
+            merged_registry,
+            QualityGateEvaluator({"artifact_validator": ArtifactValidator()}),
+        )
+        engine = WorkflowEngine(
+            Path("workflow/recipes"), WorkflowParser(WorkflowValidator()), executor
+        )
+        from models.project import ProjectBrief
+
         brief = ProjectBrief(idea=idea, platform=Platform.WEB)
         metadata = brief.as_metadata()
-        return engine.run(workflow, project_id='test-idea-propagation', metadata=metadata, project_brief=brief)
+        return engine.run(
+            workflow,
+            project_id="test-idea-propagation",
+            metadata=metadata,
+            project_brief=brief,
+        )
 
     def test_idea_not_absent_in_product_vision(self) -> None:
         result = self._run_pipeline()
-        vision = next(a for a in result.artifacts if a.name == 'product_vision')
+        vision = next(a for a in result.artifacts if a.name == "product_vision")
         assert self._IDEA in vision.content
 
     def test_idea_not_absent_in_requirements(self) -> None:
         result = self._run_pipeline()
-        reqs = next(a for a in result.artifacts if a.name == 'requirements')
+        reqs = next(a for a in result.artifacts if a.name == "requirements")
         assert self._IDEA in reqs.content
 
     def test_no_artifact_contains_explicit_inputs_note(self) -> None:
         result = self._run_pipeline()
         for artifact in result.artifacts:
-            assert 'No explicit inputs were supplied' not in artifact.content
+            assert "No explicit inputs were supplied" not in artifact.content
 
     def test_no_artifact_contains_python_object_repr(self) -> None:
         """Artifact content must not embed raw Python dataclass reprs."""
@@ -224,14 +331,15 @@ class TestIdeaPropagation:
         for artifact in result.artifacts:
             # dataclass reprs look like ClassName(field=...) — detect the most
             # common forms emitted by Artifact and ExecutionContext subclasses
-            assert 'DocumentArtifact(' not in artifact.content
-            assert 'CodeArtifact(' not in artifact.content
-            assert 'ExecutionContext(' not in artifact.content
+            assert "DocumentArtifact(" not in artifact.content
+            assert "CodeArtifact(" not in artifact.content
+            assert "ExecutionContext(" not in artifact.content
 
     def test_outcome_is_artifacts_generated_not_production_ready(self) -> None:
         """A placeholder-only run must not report a production-ready outcome."""
         result = self._run_pipeline()
         from workflow.models import WorkflowOutcome
+
         assert result.outcome is not None
         assert result.outcome == WorkflowOutcome.ARTIFACTS_GENERATED
         assert result.outcome != WorkflowOutcome.PRODUCTION_READY
@@ -239,14 +347,15 @@ class TestIdeaPropagation:
 
     def test_project_brief_round_trips_through_metadata(self) -> None:
         """ProjectBrief serialises to metadata and deserialises back correctly."""
-        from models.project import ProjectBrief, Platform, CodingAgent, AppType, DesignPreference
+        from models.project import ProjectBrief, AppType, DesignPreference
+
         brief = ProjectBrief(
             idea=self._IDEA,
             platform=Platform.WEB,
             app_type=AppType.CLI,
-            target_users='developers',
-            constraints=['no-db'],
-            nonfunctional_requirements=['fast-startup'],
+            target_users="developers",
+            constraints=["no-db"],
+            nonfunctional_requirements=["fast-startup"],
             coding_agent=CodingAgent.CODEX,
             design_preference=DesignPreference.NONE,
         )
@@ -267,24 +376,29 @@ class TestIdeaPropagation:
         from unittest.mock import MagicMock, patch
         from cli.main import main
         from workflow.models import WorkflowOutcome
+
         fake_slugger = MagicMock()
         result = MagicMock()
-        result.run_id = 'outcome-test-run'
-        result.definition.name = 'full-sdlc'
-        result.status = 'succeeded'
+        result.run_id = "outcome-test-run"
+        result.definition.name = "full-sdlc-v2"
+        result.status = "succeeded"
         result.artifacts = []
         result.outcome = WorkflowOutcome.ARTIFACTS_GENERATED
         fake_slugger.build.return_value = result
         import io
-        import sys
-        with patch('cli.main.Bootstrap'), patch('cli.main.Slugger', return_value=fake_slugger):
+
+        with (
+            patch("cli.main.Bootstrap"),
+            patch("cli.main.Slugger", return_value=fake_slugger),
+        ):
             import io
             from contextlib import redirect_stdout
+
             buf = io.StringIO()
             with redirect_stdout(buf):
-                rc = main(['build', self._IDEA, '--platform', 'web'])
+                rc = main(["build", self._IDEA, "--platform", "web"])
         assert rc == 0
         output = json.loads(buf.getvalue())
-        assert 'outcome' in output
-        assert output['outcome'] == WorkflowOutcome.ARTIFACTS_GENERATED.value
-        assert output['outcome'] != WorkflowOutcome.PRODUCTION_READY.value
+        assert "outcome" in output
+        assert output["outcome"] == WorkflowOutcome.ARTIFACTS_GENERATED.value
+        assert output["outcome"] != WorkflowOutcome.PRODUCTION_READY.value

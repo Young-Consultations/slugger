@@ -20,31 +20,31 @@ class Capability(str, Enum):
     provider class name.
     """
 
-    PLANNING_GENERATION = 'planning_generation'
+    PLANNING_GENERATION = "planning_generation"
     """Generate requirements, user stories, and project plans (ChatGPT)."""
 
-    PROMPT_REVIEW = 'prompt_review'
+    PROMPT_REVIEW = "prompt_review"
     """Review prompt quality and approve prompt changes (ChatGPT)."""
 
-    CODE_AGENT = 'code_agent'
+    CODE_AGENT = "code_agent"
     """Agentic repository coding sessions (Codex)."""
 
-    CODE_REVIEW = 'code_review'
+    CODE_REVIEW = "code_review"
     """Structured code review and finding triage (Codex or ChatGPT)."""
 
-    REFACTOR = 'refactor'
+    REFACTOR = "refactor"
     """File-scoped code refactoring within approved workspace (Codex)."""
 
-    EMBEDDINGS = 'embeddings'
+    EMBEDDINGS = "embeddings"
     """Text embedding for knowledge indexing (OpenAI or Anthropic)."""
 
-    DESIGN = 'design'
+    DESIGN = "design"
     """UI/UX design generation and export (Canva)."""
 
-    REPOSITORY_MANAGEMENT = 'repository_management'
+    REPOSITORY_MANAGEMENT = "repository_management"
     """Issue, PR, branch, and release management (GitHub)."""
 
-    WORKFLOW_MANAGEMENT = 'workflow_management'
+    WORKFLOW_MANAGEMENT = "workflow_management"
     """CI/CD trigger and status polling (GitHub Actions)."""
 
 
@@ -59,32 +59,32 @@ class CapabilityResolution:
     capability: Capability
     provider_name: str
     provider_type: str
-    model: str = ''
+    model: str = ""
     used_fallback: bool = False
-    fallback_reason: str = ''
+    fallback_reason: str = ""
     available: bool = True
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'capability': self.capability.value,
-            'provider_name': self.provider_name,
-            'provider_type': self.provider_type,
-            'model': self.model,
-            'used_fallback': self.used_fallback,
-            'fallback_reason': self.fallback_reason,
-            'available': self.available,
+            "capability": self.capability.value,
+            "provider_name": self.provider_name,
+            "provider_type": self.provider_type,
+            "model": self.model,
+            "used_fallback": self.used_fallback,
+            "fallback_reason": self.fallback_reason,
+            "available": self.available,
         }
 
 
 class CapabilityNotAvailableError(Exception):
     """Raised in strict mode when a mandatory capability cannot be resolved."""
 
-    def __init__(self, capability: Capability, reason: str = '') -> None:
+    def __init__(self, capability: Capability, reason: str = "") -> None:
         self.capability = capability
-        msg = f'Capability {capability.value!r} is not available'
+        msg = f"Capability {capability.value!r} is not available"
         if reason:
-            msg += f': {reason}'
+            msg += f": {reason}"
         super().__init__(msg)
 
 
@@ -95,16 +95,18 @@ class CapabilityNotAvailableError(Exception):
 #: Maps each capability to an ordered list of preferred provider names.
 #: The first available provider that passes a health check is selected.
 DEFAULT_CAPABILITY_PROVIDERS: dict[Capability, list[str]] = {
-    Capability.PLANNING_GENERATION: ['chatgpt', 'openai', 'mock'],
-    Capability.PROMPT_REVIEW: ['chatgpt', 'openai', 'mock'],
-    Capability.CODE_AGENT: ['codex', 'mock'],
-    Capability.CODE_REVIEW: ['codex', 'chatgpt', 'mock'],
-    Capability.REFACTOR: ['codex', 'mock'],
-    Capability.EMBEDDINGS: ['openai', 'anthropic', 'mock'],
-    Capability.DESIGN: ['canva', 'mock'],
-    Capability.REPOSITORY_MANAGEMENT: ['github', 'mock'],
-    Capability.WORKFLOW_MANAGEMENT: ['github', 'mock'],
+    Capability.PLANNING_GENERATION: ["chatgpt", "openai", "mock"],
+    Capability.PROMPT_REVIEW: ["chatgpt", "openai", "mock"],
+    Capability.CODE_AGENT: ["codex", "mock"],
+    Capability.CODE_REVIEW: ["codex", "chatgpt", "mock"],
+    Capability.REFACTOR: ["codex", "mock"],
+    Capability.EMBEDDINGS: ["openai", "anthropic", "mock"],
+    Capability.DESIGN: ["canva", "mock"],
+    Capability.REPOSITORY_MANAGEMENT: ["github", "mock"],
+    Capability.WORKFLOW_MANAGEMENT: ["github", "mock"],
 }
+
+NON_PRODUCTION_PROFILES = frozenset({"development", "dev", "test", "testing", "ci"})
 
 
 class CapabilityResolver:
@@ -127,7 +129,8 @@ class CapabilityResolver:
     strict_mode:
         When ``True``, mock providers are not accepted as fallbacks.
     allow_mock:
-        When ``True`` (default), mock providers are accepted in non-strict mode.
+        When ``True`` (default), mock providers are accepted in non-strict mode
+        for non-production profiles.
     """
 
     def __init__(
@@ -136,16 +139,19 @@ class CapabilityResolver:
         capability_map: dict[Capability, list[str]] | None = None,
         strict_mode: bool = False,
         allow_mock: bool = True,
+        profile: str = "development",
     ) -> None:
         self._registry = provider_registry
         self._capability_map = capability_map or dict(DEFAULT_CAPABILITY_PROVIDERS)
         self.strict_mode = strict_mode
         self.allow_mock = allow_mock
+        self.profile = profile
 
     def resolve(
         self,
         capability: Capability,
         preferred_provider: str | None = None,
+        profile: str | None = None,
     ) -> CapabilityResolution:
         """Resolve *capability* to a concrete provider implementation.
 
@@ -166,43 +172,77 @@ class CapabilityResolver:
         CapabilityNotAvailableError
             In strict mode when no non-mock provider is available.
         """
-        candidates = list(self._capability_map.get(capability, ['mock']))
-        # Insert the preferred provider at the front if specified.
+        return self._resolve(
+            capability, preferred_provider=preferred_provider, profile=profile
+        )
+
+    def resolve_strict(
+        self,
+        capability: Capability,
+        preferred_provider: str | None = None,
+        profile: str = "production",
+    ) -> CapabilityResolution:
+        """Resolve *capability* without permitting mock fallback."""
+        try:
+            return self._resolve(
+                capability,
+                preferred_provider=preferred_provider,
+                profile=profile,
+                require_real_provider=True,
+            )
+        except CapabilityNotAvailableError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    def _resolve(
+        self,
+        capability: Capability,
+        preferred_provider: str | None = None,
+        profile: str | None = None,
+        require_real_provider: bool = False,
+    ) -> CapabilityResolution:
+        active_profile = (profile or self.profile).strip().lower()
+        candidates = list(self._capability_map.get(capability, ["mock"]))
         if preferred_provider and preferred_provider not in candidates:
             candidates.insert(0, preferred_provider)
         elif preferred_provider and preferred_provider in candidates:
             candidates.remove(preferred_provider)
             candidates.insert(0, preferred_provider)
 
-        last_reason = 'no candidates configured'
+        last_reason = "no candidates configured"
         for name in candidates:
-            is_mock = name == 'mock'
-            if is_mock and self.strict_mode:
-                last_reason = 'mock fallback forbidden in strict mode'
+            is_mock = name == "mock"
+            if is_mock and (self.strict_mode or require_real_provider):
+                last_reason = "mock fallback forbidden in strict mode"
+                continue
+            if is_mock and active_profile not in NON_PRODUCTION_PROFILES:
+                last_reason = (
+                    f"mock providers are not allowed in profile {active_profile!r}"
+                )
                 continue
             if is_mock and not self.allow_mock:
-                last_reason = 'mock providers not allowed'
+                last_reason = "mock providers not allowed"
                 continue
             try:
                 provider = self._registry.resolve(name)
             except (KeyError, Exception) as exc:
                 last_reason = str(exc)
                 continue
-            # Perform a bounded health check.
             try:
                 health = provider.health_check()
                 available = health.available
-                model = health.model or ''
-                provider_type = getattr(provider.config, 'provider_type', type(provider).__name__)
-                if hasattr(provider_type, 'value'):
+                model = health.model or ""
+                provider_type = getattr(
+                    provider.config, "provider_type", type(provider).__name__
+                )
+                if hasattr(provider_type, "value"):
                     provider_type = provider_type.value
                 else:
                     provider_type = str(provider_type)
             except Exception as exc:
-                last_reason = f'health check failed: {exc}'
+                last_reason = f"health check failed: {exc}"
                 continue
             if not available:
-                last_reason = 'provider unavailable'
+                last_reason = "provider unavailable"
                 continue
             used_fallback = name != candidates[0] if candidates else False
             return CapabilityResolution(
@@ -214,17 +254,25 @@ class CapabilityResolver:
                 available=True,
             )
 
-        # All candidates exhausted.
-        if self.strict_mode:
+        if self._should_raise_on_failure(active_profile, require_real_provider):
             raise CapabilityNotAvailableError(capability, last_reason)
-        # Fall back to a bare mock resolution without health check.
         return CapabilityResolution(
             capability=capability,
-            provider_name='mock',
-            provider_type='mock',
+            provider_name="mock",
+            provider_type="mock",
             available=True,
             used_fallback=True,
-            fallback_reason=f'all providers exhausted: {last_reason}',
+            fallback_reason=f"all providers exhausted: {last_reason}",
+        )
+
+    def _should_raise_on_failure(
+        self, profile: str, require_real_provider: bool
+    ) -> bool:
+        return (
+            self.strict_mode
+            or require_real_provider
+            or not self.allow_mock
+            or profile not in NON_PRODUCTION_PROFILES
         )
 
     def diagnostics(self) -> dict[str, Any]:
@@ -238,7 +286,7 @@ class CapabilityResolver:
                 resolution = self.resolve(cap)
                 result[cap.value] = resolution.to_dict()
             except CapabilityNotAvailableError as exc:
-                result[cap.value] = {'available': False, 'error': str(exc)}
+                result[cap.value] = {"available": False, "error": str(exc)}
         return result
 
     def validate_mandatory(self, capabilities: list[Capability]) -> list[str]:
@@ -251,10 +299,12 @@ class CapabilityResolver:
             try:
                 resolution = self.resolve(cap)
                 if not resolution.available:
-                    errors.append(f'Capability {cap.value!r} resolved to unavailable provider')
-                if self.strict_mode and resolution.provider_name == 'mock':
                     errors.append(
-                        f'Capability {cap.value!r} resolved to mock in strict mode'
+                        f"Capability {cap.value!r} resolved to unavailable provider"
+                    )
+                if self.strict_mode and resolution.provider_name == "mock":
+                    errors.append(
+                        f"Capability {cap.value!r} resolved to mock in strict mode"
                     )
             except CapabilityNotAvailableError as exc:
                 errors.append(str(exc))

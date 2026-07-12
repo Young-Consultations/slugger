@@ -15,5 +15,7 @@ class QualityGateEvaluator:
     def evaluate(self, gates: list[QualityGate], target: Any) -> list[ValidationResult]:
         results: list[ValidationResult] = []
         for gate in gates:
-            results.append(self.validators[gate.validator].validate(target, **gate.config))
+            results.append(
+                self.validators[gate.validator].validate(target, **gate.config)
+            )
         return results

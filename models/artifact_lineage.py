@@ -22,15 +22,15 @@ from typing import Any
 class SdlcStage(str, Enum):
     """Standard SDLC stages used for lineage linking."""
 
-    IDEA = 'idea'
-    REQUIREMENTS = 'requirements'
-    STORIES = 'stories'
-    ARCHITECTURE = 'architecture'
-    ADR = 'adr'
-    TASKS = 'tasks'
-    CODE = 'code'
-    TESTS = 'tests'
-    RELEASE = 'release'
+    IDEA = "idea"
+    REQUIREMENTS = "requirements"
+    STORIES = "stories"
+    ARCHITECTURE = "architecture"
+    ADR = "adr"
+    TASKS = "tasks"
+    CODE = "code"
+    TESTS = "tests"
+    RELEASE = "release"
 
 
 @dataclass
@@ -61,21 +61,21 @@ class ArtifactLineageNode:
     name: str
     stage: SdlcStage
     parent_ids: list[str] = field(default_factory=list)
-    agent_name: str = 'unknown'
+    agent_name: str = "unknown"
     project_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'artifact_id': self.artifact_id,
-            'name': self.name,
-            'stage': self.stage.value,
-            'parent_ids': list(self.parent_ids),
-            'agent_name': self.agent_name,
-            'project_id': self.project_id,
-            'created_at': self.created_at.isoformat(),
-            'metadata': dict(self.metadata),
+            "artifact_id": self.artifact_id,
+            "name": self.name,
+            "stage": self.stage.value,
+            "parent_ids": list(self.parent_ids),
+            "agent_name": self.agent_name,
+            "project_id": self.project_id,
+            "created_at": self.created_at.isoformat(),
+            "metadata": dict(self.metadata),
         }
 
 
@@ -157,9 +157,9 @@ class LineageGraph:
             if child_id in visited:
                 continue
             visited.add(child_id)
-            node = self._nodes.get(child_id)
-            if node is not None:
-                result.append(node)
+            child_node = self._nodes.get(child_id)
+            if child_node is not None:
+                result.append(child_node)
                 queue.extend(c for c in children.get(child_id, []) if c not in visited)
         return result
 
@@ -173,7 +173,14 @@ class LineageGraph:
         ancestors = self.ancestors(artifact_id)
         # Sort ancestors by SdlcStage order
         stage_order = list(SdlcStage)
-        ancestors_sorted = sorted(ancestors, key=lambda n: stage_order.index(n.stage) if n.stage in stage_order else 99)
+        ancestors_sorted = sorted(
+            ancestors,
+            key=lambda n: (
+                stage_order.index(n.stage) if n.stage in stage_order else 99,
+                len(n.parent_ids),
+                n.name,
+            ),
+        )
         node = self._nodes.get(artifact_id)
         return ancestors_sorted + ([node] if node is not None else [])
 
@@ -187,4 +194,4 @@ class LineageGraph:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise the graph to a JSON-compatible dictionary."""
-        return {'nodes': [node.to_dict() for node in self._nodes.values()]}
+        return {"nodes": [node.to_dict() for node in self._nodes.values()]}

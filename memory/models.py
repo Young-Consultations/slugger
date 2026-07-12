@@ -11,7 +11,7 @@ from typing import Any
 class MemoryEntry:
     key: str
     value: Any
-    namespace: str = 'default'
+    namespace: str = "default"
     tags: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -19,7 +19,7 @@ class MemoryEntry:
 
 @dataclass(slots=True)
 class MemoryQuery:
-    text: str = ''
+    text: str = ""
     namespace: str | None = None
     tags: list[str] = field(default_factory=list)
     limit: int = 10

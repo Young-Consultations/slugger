@@ -24,7 +24,7 @@ from typing import Any
 # Version helpers                                                              #
 # --------------------------------------------------------------------------- #
 
-_SEMVER_RE = re.compile(r'^v?(\d+)\.(\d+)\.(\d+)(?:-.+)?$')
+_SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-.+)?$")
 
 
 def parse_version(version: str) -> tuple[int, int, int]:
@@ -57,18 +57,21 @@ def bump_version(version: str, bump: str) -> str:
         New version string (without leading ``v``).
     """
     major, minor, patch = parse_version(version)
-    if bump == 'major':
-        return f'{major + 1}.0.0'
-    if bump == 'minor':
-        return f'{major}.{minor + 1}.0'
-    if bump == 'patch':
-        return f'{major}.{minor}.{patch + 1}'
-    raise ValueError(f"Unknown bump type: {bump!r}  — expected 'major', 'minor', or 'patch'.")
+    if bump == "major":
+        return f"{major + 1}.0.0"
+    if bump == "minor":
+        return f"{major}.{minor + 1}.0"
+    if bump == "patch":
+        return f"{major}.{minor}.{patch + 1}"
+    raise ValueError(
+        f"Unknown bump type: {bump!r}  — expected 'major', 'minor', or 'patch'."
+    )
 
 
 # --------------------------------------------------------------------------- #
 # Models                                                                       #
 # --------------------------------------------------------------------------- #
+
 
 @dataclass
 class CommitSummary:
@@ -76,7 +79,7 @@ class CommitSummary:
 
     sha: str
     message: str
-    author: str = ''
+    author: str = ""
 
 
 @dataclass
@@ -98,20 +101,21 @@ class ReleaseNotes:
     version: str
     previous_version: str
     commits: list[CommitSummary] = field(default_factory=list)
-    notes: str = ''
+    notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'version': self.version,
-            'previous_version': self.previous_version,
-            'commit_count': len(self.commits),
-            'notes': self.notes,
+            "version": self.version,
+            "previous_version": self.previous_version,
+            "commit_count": len(self.commits),
+            "notes": self.notes,
         }
 
 
 # --------------------------------------------------------------------------- #
 # Automation class                                                             #
 # --------------------------------------------------------------------------- #
+
 
 class ReleaseAutomation:
     """Orchestrate the release process for the Slugger project.
@@ -126,7 +130,7 @@ class ReleaseAutomation:
 
     def __init__(self, repo_root: Path, pyproject_path: Path | None = None) -> None:
         self.repo_root = repo_root
-        self.pyproject_path = pyproject_path or (repo_root / 'pyproject.toml')
+        self.pyproject_path = pyproject_path or (repo_root / "pyproject.toml")
 
     # ------------------------------------------------------------------
     # Version management
@@ -134,7 +138,7 @@ class ReleaseAutomation:
 
     def current_version(self) -> str:
         """Return the version string currently in ``pyproject.toml``."""
-        text = self.pyproject_path.read_text(encoding='utf-8')
+        text = self.pyproject_path.read_text(encoding="utf-8")
         match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
         if not match:
             raise ValueError(f"Cannot find 'version' in {self.pyproject_path}")
@@ -145,22 +149,24 @@ class ReleaseAutomation:
 
         Returns the previous version.
         """
-        text = self.pyproject_path.read_text(encoding='utf-8')
+        text = self.pyproject_path.read_text(encoding="utf-8")
         previous = self.current_version()
         updated = re.sub(
             r'^(version\s*=\s*["\'])[^"\']+(["\'])',
-            rf'\g<1>{new_version}\g<2>',
+            rf"\g<1>{new_version}\g<2>",
             text,
             flags=re.MULTILINE,
         )
-        self.pyproject_path.write_text(updated, encoding='utf-8')
+        self.pyproject_path.write_text(updated, encoding="utf-8")
         return previous
 
     # ------------------------------------------------------------------
     # Changelog helpers
     # ------------------------------------------------------------------
 
-    def recent_commits(self, since_tag: str | None = None, max_count: int = 50) -> list[CommitSummary]:
+    def recent_commits(
+        self, since_tag: str | None = None, max_count: int = 50
+    ) -> list[CommitSummary]:
         """Return recent Git commits as :class:`CommitSummary` objects.
 
         Parameters
@@ -174,19 +180,30 @@ class ReleaseAutomation:
         # contain alphanumerics, dots, hyphens, underscores, and forward slashes.
         if since_tag is not None:
             import re
-            if not re.match(r'^[A-Za-z0-9._/\-]+$', since_tag):
+
+            if not re.match(r"^[A-Za-z0-9._/\-]+$", since_tag):
                 raise ValueError(f"Invalid since_tag value: {since_tag!r}")
-        cmd = ['git', '-C', str(self.repo_root), 'log',
-               '--pretty=format:%H|%s|%an', f'-{max_count}']
+        cmd = [
+            "git",
+            "-C",
+            str(self.repo_root),
+            "log",
+            "--pretty=format:%H|%s|%an",
+            f"-{max_count}",
+        ]
         if since_tag:
-            cmd.append(f'{since_tag}..HEAD')
+            cmd.append(f"{since_tag}..HEAD")
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             summaries: list[CommitSummary] = []
             for line in result.stdout.splitlines():
-                parts = line.split('|', 2)
+                parts = line.split("|", 2)
                 if len(parts) == 3:
-                    summaries.append(CommitSummary(sha=parts[0][:8], message=parts[1], author=parts[2]))
+                    summaries.append(
+                        CommitSummary(
+                            sha=parts[0][:8], message=parts[1], author=parts[2]
+                        )
+                    )
             return summaries
         except subprocess.CalledProcessError:
             return []
@@ -220,18 +237,18 @@ class ReleaseAutomation:
         commits = self.recent_commits(since_tag=since_tag)
 
         lines = [
-            f'## {new_version}',
-            '',
-            '### Changes',
-            '',
+            f"## {new_version}",
+            "",
+            "### Changes",
+            "",
         ]
         if commits:
             for c in commits:
-                lines.append(f'- {c.message} ({c.sha})')
+                lines.append(f"- {c.message} ({c.sha})")
         else:
-            lines.append('_No commits found since the previous release._')
+            lines.append("_No commits found since the previous release._")
 
-        notes = '\n'.join(lines) + '\n'
+        notes = "\n".join(lines) + "\n"
         return ReleaseNotes(
             version=new_version,
             previous_version=previous,
@@ -243,7 +260,7 @@ class ReleaseAutomation:
     # Full release workflow
     # ------------------------------------------------------------------
 
-    def prepare_release(self, bump: str = 'patch') -> ReleaseNotes:
+    def prepare_release(self, bump: str = "patch") -> ReleaseNotes:
         """Compute the next version, update pyproject.toml, and generate notes.
 
         Parameters

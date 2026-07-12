@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -51,10 +51,10 @@ class BudgetUsage:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'scope': self.scope,
-            'input_tokens': self.input_tokens,
-            'output_tokens': self.output_tokens,
-            'total_tokens': self.total_tokens,
+            "scope": self.scope,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens,
         }
 
 
@@ -120,17 +120,26 @@ class TokenBudget:
         allocation = self._allocations.get(scope)
         if allocation:
             violations: list[str] = []
-            if allocation.max_input_tokens is not None and usage.input_tokens > allocation.max_input_tokens:
+            if (
+                allocation.max_input_tokens is not None
+                and usage.input_tokens > allocation.max_input_tokens
+            ):
                 violations.append(
                     f"Input token budget exceeded for '{scope}': "
                     f"{usage.input_tokens} > {allocation.max_input_tokens}"
                 )
-            if allocation.max_output_tokens is not None and usage.output_tokens > allocation.max_output_tokens:
+            if (
+                allocation.max_output_tokens is not None
+                and usage.output_tokens > allocation.max_output_tokens
+            ):
                 violations.append(
                     f"Output token budget exceeded for '{scope}': "
                     f"{usage.output_tokens} > {allocation.max_output_tokens}"
                 )
-            if allocation.max_total_tokens is not None and usage.total_tokens > allocation.max_total_tokens:
+            if (
+                allocation.max_total_tokens is not None
+                and usage.total_tokens > allocation.max_total_tokens
+            ):
                 violations.append(
                     f"Total token budget exceeded for '{scope}': "
                     f"{usage.total_tokens} > {allocation.max_total_tokens}"
@@ -138,7 +147,7 @@ class TokenBudget:
             if violations:
                 self._overflows.extend(violations)
                 if self.strict:
-                    raise BudgetExceededError('\n'.join(violations))
+                    raise BudgetExceededError("\n".join(violations))
 
         return usage
 
@@ -158,9 +167,16 @@ class TokenBudget:
             return max(0, limit - used) if limit is not None else None
 
         return {
-            'input': _rem(allocation.max_input_tokens if allocation else None, usage.input_tokens),
-            'output': _rem(allocation.max_output_tokens if allocation else None, usage.output_tokens),
-            'total': _rem(allocation.max_total_tokens if allocation else None, usage.total_tokens),
+            "input": _rem(
+                allocation.max_input_tokens if allocation else None, usage.input_tokens
+            ),
+            "output": _rem(
+                allocation.max_output_tokens if allocation else None,
+                usage.output_tokens,
+            ),
+            "total": _rem(
+                allocation.max_total_tokens if allocation else None, usage.total_tokens
+            ),
         }
 
     def usage(self, scope: str) -> BudgetUsage:
@@ -178,8 +194,8 @@ class TokenBudget:
     def summary(self) -> dict[str, Any]:
         """Return a full budget summary."""
         return {
-            'scopes': [u.to_dict() for u in self._usage.values()],
-            'overflows': self._overflows,
-            'total_input_tokens': sum(u.input_tokens for u in self._usage.values()),
-            'total_output_tokens': sum(u.output_tokens for u in self._usage.values()),
+            "scopes": [u.to_dict() for u in self._usage.values()],
+            "overflows": self._overflows,
+            "total_input_tokens": sum(u.input_tokens for u in self._usage.values()),
+            "total_output_tokens": sum(u.output_tokens for u in self._usage.values()),
         }

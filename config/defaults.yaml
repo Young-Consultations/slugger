@@ -24,6 +24,7 @@ agents:
     - support
 workflow:
   recipe_directory: workflow/recipes
+  default_workflow: full-sdlc-v2
   max_retries: 2
 observability:
   enabled: true

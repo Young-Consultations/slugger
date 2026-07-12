@@ -19,7 +19,7 @@ import logging
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
-from models.artifact import DiagramArtifact, DocumentArtifact
+from models.artifact import ArtifactStatus, DiagramArtifact, DocumentArtifact
 from models.execution import ExecutionContext
 from services.canva.base import ICanvaService
 from services.canva.models import CanvaExportFormat
@@ -27,15 +27,15 @@ from services.canva.models import CanvaExportFormat
 _LOG = logging.getLogger(__name__)
 
 # Placeholder design content that must not count as approved design completion.
-_PLACEHOLDER_MARKER = '<!-- DESIGN:PLACEHOLDER -->'
+_PLACEHOLDER_MARKER = "<!-- DESIGN:PLACEHOLDER -->"
 
 
 def _build_design_brief(context: ExecutionContext) -> str:
     """Build a structured design brief from available planning artifacts."""
     idea = context.get_idea()
-    requirements = context.artifact_content('requirements')
-    user_stories = context.artifact_content('user_stories')
-    platform = ''
+    requirements = context.artifact_content("requirements")
+    user_stories = context.artifact_content("user_stories")
+    platform = ""
     if context.project_brief is not None:
         platform = context.project_brief.platform.value
     sections = [
@@ -55,31 +55,33 @@ def _build_design_brief(context: ExecutionContext) -> str:
         "- WCAG 2.1 AA contrast ratios\n"
         "- Screen-reader accessible labels\n"
     )
-    return '\n'.join(sections)
+    return "\n".join(sections)
 
 
-def _build_design_manifest(design_title: str, design_id: str, export_url: str, brief_hash: str) -> dict:
+def _build_design_manifest(
+    design_title: str, design_id: str, export_url: str, brief_hash: str
+) -> dict:
     """Build a design manifest dict with inventory and requirement mappings."""
     return {
-        'design_id': design_id,
-        'design_title': design_title,
-        'export_url': export_url,
-        'brief_hash': brief_hash,
-        'screens': [
-            {'screen': 'home', 'requirement_ids': ['REQ-001']},
-            {'screen': 'main_feature', 'requirement_ids': ['REQ-002', 'REQ-003']},
-            {'screen': 'settings', 'requirement_ids': ['REQ-004']},
+        "design_id": design_id,
+        "design_title": design_title,
+        "export_url": export_url,
+        "brief_hash": brief_hash,
+        "screens": [
+            {"screen": "home", "requirement_ids": ["REQ-001"]},
+            {"screen": "main_feature", "requirement_ids": ["REQ-002", "REQ-003"]},
+            {"screen": "settings", "requirement_ids": ["REQ-004"]},
         ],
-        'design_tokens': {
-            'primary_color': '#0066CC',
-            'font_family': 'Inter',
-            'spacing_unit': '8px',
+        "design_tokens": {
+            "primary_color": "#0066CC",
+            "font_family": "Inter",
+            "spacing_unit": "8px",
         },
-        'accessibility': {
-            'wcag_level': 'AA',
-            'contrast_ratio': 4.5,
+        "accessibility": {
+            "wcag_level": "AA",
+            "contrast_ratio": 4.5,
         },
-        'approved': False,
+        "approved": False,
     }
 
 
@@ -95,9 +97,9 @@ def _format_manifest_artifact(brief: str, manifest: dict) -> str:
         f"## Export\n\n"
         f"Export URL: {manifest['export_url']}\n\n"
         f"## Screen Inventory\n\n"
-        + '\n'.join(
+        + "\n".join(
             f"- **{s['screen']}** → requirements: {', '.join(s['requirement_ids'])}"
-            for s in manifest['screens']
+            for s in manifest["screens"]
         )
         + f"\n\n## Design Tokens\n\n```json\n{manifest_json}\n```\n"
     )
@@ -123,29 +125,31 @@ class CanvaDesignAgent(BaseAgent):
     def __init__(self, canva_service: ICanvaService) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='canva_design_agent',
-                version='1.0.0',
-                description='Export Canva designs as workflow artifacts.',
-                category='architecture',
+                name="canva_design_agent",
+                version="1.0.0",
+                description="Export Canva designs as workflow artifacts.",
+                category="architecture",
                 inputs=[],
-                outputs=['design_artifact'],
-                tags=['design', 'canva', 'diagram'],
-                provider='mock',
-                external_interface='canva',
+                outputs=["design_artifact"],
+                tags=["design", "canva", "diagram"],
+                provider="mock",
+                external_interface="canva",
             ),
             capabilities=[
                 AgentCapability(
-                    name='design_export',
-                    description='Export a Canva design and ingest as a diagram artifact.',
-                    outputs=('design_artifact',),
+                    name="design_export",
+                    description="Export a Canva design and ingest as a diagram artifact.",
+                    outputs=("design_artifact",),
                 )
             ],
         )
         self._canva = canva_service
 
     def _execute(self, context: ExecutionContext):
-        design_id = context.metadata.get('design_id')
-        export_format_str = context.metadata.get('export_format', CanvaExportFormat.PDF.value)
+        design_id = context.metadata.get("design_id")
+        export_format_str = context.metadata.get(
+            "export_format", CanvaExportFormat.PDF.value
+        )
         try:
             export_format = CanvaExportFormat(export_format_str)
         except ValueError:
@@ -156,37 +160,47 @@ class CanvaDesignAgent(BaseAgent):
         brief_hash = hashlib.sha256(brief.encode()).hexdigest()[:16]
 
         # Emit the design brief as a versioned artifact.
-        brief_artifact = self.create_artifact(context, 'design_brief', brief, DocumentArtifact)
-        brief_artifact.extra['brief_hash'] = brief_hash
+        brief_artifact = self.create_artifact(
+            context, "design_brief", brief, DocumentArtifact
+        )
+        brief_artifact.extra["brief_hash"] = brief_hash
 
         try:
             design, export_url, job_id = self._resolve_design(design_id, export_format)
         except Exception as exc:
-            _LOG.warning('Canva design unavailable, entering manual handoff state: %s', exc)
+            _LOG.warning(
+                "Canva design unavailable, entering manual handoff state: %s", exc
+            )
             return self._manual_handoff(context, brief, brief_hash, brief_artifact)
 
-        manifest = _build_design_manifest(design.title, design.design_id, export_url, brief_hash)
+        manifest = _build_design_manifest(
+            design.title, design.design_id, export_url, brief_hash
+        )
         manifest_content = _format_manifest_artifact(brief, manifest)
-        manifest_artifact = self.create_artifact(context, 'design_manifest', manifest_content, DocumentArtifact)
-        manifest_artifact.extra['design_id'] = design.design_id
-        manifest_artifact.extra['brief_hash'] = brief_hash
-        manifest_artifact.extra['approved'] = False
+        manifest_artifact = self.create_artifact(
+            context, "design_manifest", manifest_content, DocumentArtifact
+        )
+        manifest_artifact.extra["design_id"] = design.design_id
+        manifest_artifact.extra["brief_hash"] = brief_hash
+        manifest_artifact.extra["approved"] = False
 
         content = (
-            f'# Canva Design Export\n\n'
-            f'**Design:** {design.title}\n'
-            f'**Design ID:** {design.design_id}\n'
-            f'**Export Format:** {export_format.value.upper()}\n'
-            f'**Export URL:** {export_url}\n'
-            f'**Job ID:** {job_id}\n'
-            f'**Brief hash:** {brief_hash}\n'
-            f'**Approved:** False (pending review)\n'
+            f"# Canva Design Export\n\n"
+            f"**Design:** {design.title}\n"
+            f"**Design ID:** {design.design_id}\n"
+            f"**Export Format:** {export_format.value.upper()}\n"
+            f"**Export URL:** {export_url}\n"
+            f"**Job ID:** {job_id}\n"
+            f"**Brief hash:** {brief_hash}\n"
+            f"**Approved:** False (pending review)\n"
         )
-        design_artifact = self.create_artifact(context, 'design_artifact', content, DiagramArtifact)
+        design_artifact = self.create_artifact(
+            context, "design_artifact", content, DiagramArtifact
+        )
         design_artifact.format = export_format.value
-        design_artifact.extra['brief_hash'] = brief_hash
-        design_artifact.extra['design_id'] = design.design_id
-        design_artifact.extra['approved'] = False
+        design_artifact.extra["brief_hash"] = brief_hash
+        design_artifact.extra["design_id"] = design.design_id
+        design_artifact.extra["approved"] = False
 
         return [brief_artifact, manifest_artifact, design_artifact]
 
@@ -197,11 +211,11 @@ class CanvaDesignAgent(BaseAgent):
         else:
             designs = self._canva.list_designs()
             if not designs:
-                raise RuntimeError('No Canva designs available')
+                raise RuntimeError("No Canva designs available")
             design = designs[0]
 
         job = self._canva.export_design(design.design_id, export_format)
-        export_url = job.urls[0] if job.urls else ''
+        export_url = job.urls[0] if job.urls else ""
         return design, export_url, job.job_id
 
     def _manual_handoff(self, context, brief, brief_hash, brief_artifact):
@@ -217,9 +231,12 @@ class CanvaDesignAgent(BaseAgent):
             f"## Design Brief\n\n{brief}\n"
         )
         handoff_artifact = self.create_artifact(
-            context, 'design_artifact', handoff_content, DocumentArtifact
+            context, "design_artifact", handoff_content, DocumentArtifact
         )
-        handoff_artifact.extra['requires_manual_handoff'] = True
-        handoff_artifact.extra['brief_hash'] = brief_hash
-        handoff_artifact.extra['approved'] = False
+        handoff_artifact.status = ArtifactStatus.AWAITING_DESIGN
+        handoff_artifact.extra["requires_manual_handoff"] = True
+        handoff_artifact.extra["status"] = ArtifactStatus.AWAITING_DESIGN.value
+        handoff_artifact.extra["workflow_state"] = ArtifactStatus.AWAITING_DESIGN.value
+        handoff_artifact.extra["brief_hash"] = brief_hash
+        handoff_artifact.extra["approved"] = False
         return [brief_artifact, handoff_artifact]

@@ -16,23 +16,44 @@ class WorkflowParser:
         self.validator = validator or WorkflowValidator()
 
     def parse_file(self, path: Path) -> WorkflowDefinition:
-        payload = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         result = self.validator.validate(payload)
         if not result.valid:
-            raise ValueError('Invalid workflow definition: ' + ', '.join(error.message for error in result.errors))
+            raise ValueError(
+                "Invalid workflow definition: "
+                + ", ".join(error.message for error in result.errors)
+            )
         steps = [
             WorkflowStepDefinition(
-                name=step['name'],
-                agent=step['agent'],
-                description=step.get('description', ''),
-                inputs=step.get('inputs', []),
-                outputs=step.get('outputs', []),
-                quality_gates=[QualityGate(validator=gate['validator'], name=gate.get('name'), condition=gate.get('condition'), required=gate.get('required', True), config=gate.get('config', {})) for gate in step.get('quality_gates', [])],
-                retry_policy=step.get('retry_policy', {}),
-                on_failure=step.get('on_failure', 'stop'),
-                approval_policy=ApprovalPolicy.from_dict(step['approval_policy']) if isinstance(step.get('approval_policy'), dict) else None,
-                metadata=step.get('metadata', {}),
+                name=step["name"],
+                agent=step["agent"],
+                description=step.get("description", ""),
+                inputs=step.get("inputs", []),
+                outputs=step.get("outputs", []),
+                quality_gates=[
+                    QualityGate(
+                        validator=gate["validator"],
+                        name=gate.get("name"),
+                        condition=gate.get("condition"),
+                        required=gate.get("required", True),
+                        config=gate.get("config", {}),
+                    )
+                    for gate in step.get("quality_gates", [])
+                ],
+                retry_policy=step.get("retry_policy", {}),
+                on_failure=step.get("on_failure", "stop"),
+                approval_policy=ApprovalPolicy.from_dict(step["approval_policy"])
+                if isinstance(step.get("approval_policy"), dict)
+                else None,
+                metadata=step.get("metadata", {}),
             )
-            for step in payload['steps']
+            for step in payload["steps"]
         ]
-        return WorkflowDefinition(name=payload['name'], version=payload['version'], description=payload.get('description', ''), steps=steps, tags=payload.get('tags', []), metadata=payload.get('metadata', {}))
+        return WorkflowDefinition(
+            name=payload["name"],
+            version=payload["version"],
+            description=payload.get("description", ""),
+            steps=steps,
+            tags=payload.get("tags", []),
+            metadata=payload.get("metadata", {}),
+        )

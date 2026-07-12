@@ -42,21 +42,21 @@ class RegressionBaseline:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'template_name': self.template_name,
-            'variables': self.variables,
-            'rendered_hash': self.rendered_hash,
-            'rendered_length': self.rendered_length,
-            'metadata': self.metadata,
+            "template_name": self.template_name,
+            "variables": self.variables,
+            "rendered_hash": self.rendered_hash,
+            "rendered_length": self.rendered_length,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'RegressionBaseline':
+    def from_dict(cls, data: dict[str, Any]) -> "RegressionBaseline":
         return cls(
-            template_name=data['template_name'],
-            variables=data.get('variables', {}),
-            rendered_hash=data['rendered_hash'],
-            rendered_length=data.get('rendered_length', 0),
-            metadata=data.get('metadata', {}),
+            template_name=data["template_name"],
+            variables=data.get("variables", {}),
+            rendered_hash=data["rendered_hash"],
+            rendered_length=data.get("rendered_length", 0),
+            metadata=data.get("metadata", {}),
         )
 
 
@@ -70,17 +70,17 @@ class RegressionResult:
     baseline_hash: str
     current_length: int
     baseline_length: int
-    message: str = ''
+    message: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'template_name': self.template_name,
-            'passed': self.passed,
-            'current_hash': self.current_hash,
-            'baseline_hash': self.baseline_hash,
-            'current_length': self.current_length,
-            'baseline_length': self.baseline_length,
-            'message': self.message,
+            "template_name": self.template_name,
+            "passed": self.passed,
+            "current_hash": self.current_hash,
+            "baseline_hash": self.baseline_hash,
+            "current_length": self.current_length,
+            "baseline_length": self.baseline_length,
+            "message": self.message,
         }
 
 
@@ -89,8 +89,8 @@ def _hash_rendered(text: str) -> str:
 
 
 def _baseline_key(template_name: str, variables: dict[str, str]) -> str:
-    serialized_variables = json.dumps(variables, sort_keys=True, separators=(',', ':'))
-    return f'{template_name}:{serialized_variables}'
+    serialized_variables = json.dumps(variables, sort_keys=True, separators=(",", ":"))
+    return f"{template_name}:{serialized_variables}"
 
 
 class PromptRegressionSuite:
@@ -194,9 +194,13 @@ class PromptRegressionSuite:
         current_len = len(result.rendered)
 
         passed = current_hash == baseline.rendered_hash
-        message = '' if passed else (
-            f"Hash mismatch: expected {baseline.rendered_hash[:8]}…, "
-            f"got {current_hash[:8]}…"
+        message = (
+            ""
+            if passed
+            else (
+                f"Hash mismatch: expected {baseline.rendered_hash[:8]}…, "
+                f"got {current_hash[:8]}…"
+            )
         )
         return RegressionResult(
             template_name=template_name,
@@ -208,7 +212,9 @@ class PromptRegressionSuite:
             message=message,
         )
 
-    def run_all(self, variables: dict[str, dict[str, str]] | None = None) -> list[RegressionResult]:
+    def run_all(
+        self, variables: dict[str, dict[str, str]] | None = None
+    ) -> list[RegressionResult]:
         """Run regression checks for all recorded baselines.
 
         Parameters
@@ -224,7 +230,9 @@ class PromptRegressionSuite:
         results: list[RegressionResult] = []
         variables = variables or {}
         for baseline in self._baselines.values():
-            vars_for_template = variables.get(baseline.template_name, baseline.variables)
+            vars_for_template = variables.get(
+                baseline.template_name, baseline.variables
+            )
             results.append(self.check(baseline.template_name, vars_for_template))
         return results
 
@@ -235,10 +243,12 @@ class PromptRegressionSuite:
     def _save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         data = [b.to_dict() for b in self._baselines.values()]
-        path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def _load(self, path: Path) -> None:
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = json.loads(path.read_text(encoding="utf-8"))
         for raw in data:
             baseline = RegressionBaseline.from_dict(raw)
-            self._baselines[_baseline_key(baseline.template_name, baseline.variables)] = baseline
+            self._baselines[
+                _baseline_key(baseline.template_name, baseline.variables)
+            ] = baseline

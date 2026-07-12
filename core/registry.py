@@ -12,7 +12,9 @@ class ComponentRegistry:
     def __init__(self) -> None:
         self._components: dict[type[Any], dict[str, Any]] = defaultdict(dict)
 
-    def register(self, interface: type[Any], component: Any, name: str | None = None) -> None:
+    def register(
+        self, interface: type[Any], component: Any, name: str | None = None
+    ) -> None:
         self._components[interface][name or component.__class__.__name__] = component
 
     def resolve(self, interface: type[Any], name: str | None = None) -> Any:

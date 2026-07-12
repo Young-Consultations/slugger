@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from agents.messaging import MessageBus
 from agents.registry import AgentRegistry
@@ -11,6 +12,7 @@ from knowledge.indexer import KnowledgeIndexer
 from memory.memory_manager import MemoryManager
 from models.artifact_lineage import LineageGraph
 from models.artifact_store import InMemoryArtifactStore
+from models.artifact_store_sqlite import SQLiteArtifactStore
 from observability.collector import MetricsCollector
 from observability.cost_tracker import CostTracker
 from observability.dashboard import FailureAnalytics, MetricsDashboard
@@ -19,11 +21,15 @@ from observability.telemetry import TelemetryCollector
 from observability.token_budget import TokenBudget
 from observability.tracer import ExecutionTracer
 from providers.capabilities import CapabilityResolver
+from providers.codex_agent_client import ICodexAgentClient
 from providers.registry import ProviderRegistry
 from services.canva.base import ICanvaService
 from services.chatgpt.base import IChatGPTService
 from services.github.base import IGitHubService
 from workflow.engine import WorkflowEngine
+
+if TYPE_CHECKING:
+    from prompts.catalog import SdlcPromptCatalog
 
 
 @dataclass(slots=True)
@@ -32,7 +38,7 @@ class ApplicationContext:
     providers: ProviderRegistry
     agents: AgentRegistry
     workflow_engine: WorkflowEngine
-    artifact_store: InMemoryArtifactStore
+    artifact_store: InMemoryArtifactStore | SQLiteArtifactStore
     memory: MemoryManager
     github: IGitHubService
     metrics: MetricsCollector
@@ -47,6 +53,8 @@ class ApplicationContext:
     knowledge_indexer: KnowledgeIndexer | None = None
     chatgpt: IChatGPTService | None = None
     canva: ICanvaService | None = None
+    codex_agent_client: ICodexAgentClient | None = None
+    prompt_catalog: SdlcPromptCatalog | None = None
     capability_resolver: CapabilityResolver | None = None
     """Runtime capability resolver; populated by :class:`Bootstrap` (CC-003)."""
 

@@ -5,84 +5,112 @@ tasks:
 - id: GA-001
   title: Freeze the canonical architecture and delete alternate runtime paths
   depends_on: []
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Commit: GA-001: Freeze the canonical architecture and delete alternate runtime
+    paths'
+  - 'Test: tests/test_architecture_invariants.py'
 - id: GA-002
   title: Make managed prompts the only runtime prompt source
   depends_on:
   - GA-001
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: prompt_catalog injected through ApplicationContext, Bootstrap,
+    StepExecutor, and ExecutionContext'
+  - 'Tests: tests/test_prompt_lifecycle.py and prompt catalog regression suite'
 - id: GA-003
   title: Create one provider and service resolution path
   depends_on:
   - GA-001
   - GA-002
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: Bootstrap now creates one CapabilityResolver with the active environment profile and stores it on ApplicationContext'
+  - 'Production enforcement: providers/capabilities.py adds resolve_strict() plus production mock restrictions for provider resolution'
+  - 'Tests: tests/test_cc003_capabilities.py and tests/test_provider_contracts.py'
 - id: GA-004
   title: Complete planning, architecture, ADR, and design stages
   depends_on:
   - GA-002
   - GA-003
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Artifacts: planning and architecture agents now emit stable traceability IDs and manual Canva handoff persists as awaiting_design'
+  - 'Tests: tests/test_canva_design_agent.py, tests/test_cc006_canva_design.py, tests/test_artifact_lineage.py, and tests/test_cc004_chatgpt_planning.py'
 - id: GA-005
   title: Implement one real Codex coding and review adapter
   depends_on:
   - GA-003
   - GA-004
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: Bootstrap now injects FakeCodexAgentClient only for development/test and requires CodexCliAdapter in production'
+  - 'Tests: tests/test_cc005_codex_agent.py and tests/test_codex_provider.py cover credential enforcement and adapter selection'
 - id: GA-006
   title: Make AppManifest the only generated application output
   depends_on:
   - GA-004
   - GA-005
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Generation path: code_generator_agent now emits AppManifest JSON artifacts with schema_version, application_id, and file inventory metadata'
+  - 'Validation: AppManifest creation now rejects unsafe paths, duplicate files, empty content, and missing minimum fields'
 - id: GA-007
   title: Use one durable artifact, lineage, and workflow persistence system
   depends_on:
   - GA-001
   - GA-006
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Bootstrap now selects SQLiteArtifactStore by default outside test mode, with schema versioning and deduplicated append-only writes'
+  - 'Tests: tests/test_artifact_versioning.py and tests/test_workflow_persistence.py cover restart durability, schema versioning, idempotency, and bootstrap selection'
 - id: GA-008
   title: Secure and connect the single materialization and build path
   depends_on:
   - GA-006
   - GA-007
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Security: ProjectMaterializer validates staged, resumed, and checksum-verified writes against traversal, absolute-path, and symlink escapes'
+  - 'Tests: tests/test_cc007_cc008_manifest_materializer.py and tests/test_cc009_cc010_build_remediation.py'
 - id: GA-009
   title: Create one bounded remediation engine
   depends_on:
   - GA-005
   - GA-008
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime: validators.remediation.BoundedRemediationLoop now accepts bounded retry policies, records attempt outcomes, and marks exhausted blocking findings as manual_intervention_required'
+  - 'Tests: tests/test_cc009_cc010_build_remediation.py, tests/test_escalation.py, and tests/test_security_scanning.py'
 - id: GA-010
   title: Fix approvals and make one durable approval path
   depends_on:
   - GA-007
   - GA-009
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Persistence: workflow.durable_approvals.DurableApprovalStore now persists artifact-bound approval requests, decisions, quorum, and checksum validation across restarts'
+  - 'CLI: slugger approvals list/show/approve/reject use the durable approval store'
 - id: GA-011
   title: Create one readiness and release-gate engine
   depends_on:
   - GA-008
   - GA-009
   - GA-010
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime: validators.readiness.ReleaseGateCollector now separates mandatory gate failures from score and invalidates frozen candidates when checksums change'
+  - 'Tests: tests/test_readiness_engine.py and tests/test_release_automation.py'
 - id: GA-012
   title: Connect one GitHub delivery path and complete CI/package distribution
   depends_on:
   - GA-011
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'CI: .github/workflows/ci.yml now enforces ruff, mypy, pytest, package builds, and installed-wheel smoke testing'
+  - 'Packaging: pyproject.toml now includes materializer/prompts packages, package data, and pytest warning filtering'
+  - 'Tests: tests/test_github_expanded.py and tests/test_release_automation.py validate draft delivery behavior and release automation'
 - id: GA-013
   title: Delete dead code, duplicate tests, cache artifacts, and unsupported templates
   depends_on:
@@ -98,14 +126,20 @@ tasks:
   - GA-010
   - GA-011
   - GA-012
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Cleanup: .gitignore now excludes runtime databases, workspaces, artifacts, dist/build output, and egg-info/cache directories'
+  - 'Repository hygiene: tracked __pycache__ and .pyc files were removed from version control while archived workflow/recipes/full-sdlc.yaml remains out of the active recipe set'
+  - 'Validation: compileall passes for runtime packages and README now points to full-sdlc-v2 as the canonical workflow'
 - id: GA-014
   title: Prove the single path end to end and certify 100% completion
   depends_on:
   - GA-013
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Acceptance: tests/acceptance/test_task_tracker_scenario.py and tests/acceptance/test_fastapi_scenario.py exercise the canonical workflow, manifest, materializer, approvals, readiness, and SQLite persistence paths'
+  - 'Documentation: docs/production-readiness.md certifies the single execution path and GA-001 through GA-014 completion'
+  - 'Validation: acceptance tests, full pytest, and compileall all pass against the canonical full-sdlc-v2 path'
 certification_rules:
 - all tasks complete
 - all in-scope requirements evidenced

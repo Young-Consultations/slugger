@@ -7,7 +7,7 @@ data-driven *definition of done* checks beyond binary pass/fail quality gates.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -15,9 +15,9 @@ from typing import Any
 class ThresholdKind(str, Enum):
     """Direction of a threshold comparison."""
 
-    MIN = 'min'   # metric value must be >= threshold
-    MAX = 'max'   # metric value must be <= threshold
-    EXACT = 'exact'  # metric value must equal threshold
+    MIN = "min"  # metric value must be >= threshold
+    MAX = "max"  # metric value must be <= threshold
+    EXACT = "exact"  # metric value must equal threshold
 
 
 @dataclass
@@ -39,7 +39,7 @@ class MetricThreshold:
     metric_name: str
     threshold: float
     kind: ThresholdKind = ThresholdKind.MIN
-    description: str = ''
+    description: str = ""
 
 
 @dataclass
@@ -51,16 +51,16 @@ class MetricEvaluation:
     threshold: float
     kind: ThresholdKind
     passed: bool
-    description: str = ''
+    description: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'metric_name': self.metric_name,
-            'observed': self.observed,
-            'threshold': self.threshold,
-            'kind': self.kind.value,
-            'passed': self.passed,
-            'description': self.description,
+            "metric_name": self.metric_name,
+            "observed": self.observed,
+            "threshold": self.threshold,
+            "kind": self.kind.value,
+            "passed": self.passed,
+            "description": self.description,
         }
 
 
@@ -154,7 +154,7 @@ class AcceptanceMetricsCollector:
 
         all_passed = not missing and all(e.passed for e in evaluations)
         return {
-            'passed': all_passed,
-            'evaluations': [e.to_dict() for e in evaluations],
-            'missing': missing,
+            "passed": all_passed,
+            "evaluations": [e.to_dict() for e in evaluations],
+            "missing": missing,
         }

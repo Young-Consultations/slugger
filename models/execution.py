@@ -12,16 +12,17 @@ from models.artifact import Artifact
 if TYPE_CHECKING:
     from agents.messaging import MessageBus
     from models.project import ProjectBrief
+    from prompts.catalog import SdlcPromptCatalog
     from services.chatgpt.base import IChatGPTService
 
 
 class ExecutionState(str, Enum):
     """State of a runtime execution."""
 
-    PENDING = 'pending'
-    RUNNING = 'running'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 @dataclass(slots=True)
@@ -60,6 +61,8 @@ class ExecutionContext:
     """Approved prompt version used by the agent for this execution step."""
     prompt_content_hash: str | None = field(default=None)
     """SHA-256 hash of the prompt content for tamper detection."""
+    prompt_catalog: SdlcPromptCatalog | None = field(default=None)
+    """SdlcPromptCatalog instance for resolving managed prompts."""
 
     def add_event(self, event: ExecutionEvent) -> None:
         """Attach an execution event to the context."""
@@ -71,15 +74,15 @@ class ExecutionContext:
 
         if self.project_brief is not None and self.project_brief.idea:
             return self.project_brief.idea
-        return self.metadata.get('idea', '')
+        return self.metadata.get("idea", "")
 
     def artifact_content(self, name: str) -> str:
         """Return the content of a named input artifact without producing a Python repr."""
 
         artifact = self.inputs.get(name)
         if artifact is None:
-            return ''
-        content = getattr(artifact, 'content', None)
+            return ""
+        content = getattr(artifact, "content", None)
         if content is None:
             return str(artifact)
         return content
