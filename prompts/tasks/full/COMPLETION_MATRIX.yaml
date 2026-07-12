@@ -135,8 +135,11 @@ tasks:
   title: Prove the single path end to end and certify 100% completion
   depends_on:
   - GA-013
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Acceptance: tests/acceptance/test_task_tracker_scenario.py and tests/acceptance/test_fastapi_scenario.py exercise the canonical workflow, manifest, materializer, approvals, readiness, and SQLite persistence paths'
+  - 'Documentation: docs/production-readiness.md certifies the single execution path and GA-001 through GA-014 completion'
+  - 'Validation: acceptance tests, full pytest, and compileall all pass against the canonical full-sdlc-v2 path'
 certification_rules:
 - all tasks complete
 - all in-scope requirements evidenced
