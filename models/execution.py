@@ -12,6 +12,7 @@ from models.artifact import Artifact
 if TYPE_CHECKING:
     from agents.messaging import MessageBus
     from models.project import ProjectBrief
+    from services.chatgpt.base import IChatGPTService
 
 
 class ExecutionState(str, Enum):
@@ -47,6 +48,10 @@ class ExecutionContext:
     events: list[ExecutionEvent] = field(default_factory=list)
     message_bus: MessageBus | None = field(default=None)
     project_brief: ProjectBrief | None = field(default=None)
+    chatgpt_service: IChatGPTService | None = field(default=None)
+    """ChatGPT service for planning-agent prompt execution and prompt review."""
+    codex_agent_client: object | None = field(default=None)
+    """Codex coding-agent client for workspace-level code generation (CC-005)."""
     prompt_id: str | None = field(default=None)
     """Approved prompt ID used by the agent for this execution step."""
     prompt_version: str | None = field(default=None)

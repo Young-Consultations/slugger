@@ -48,11 +48,13 @@ class StepExecutor:
         quality_gate_evaluator: QualityGateEvaluator,
         message_bus: MessageBus | None = None,
         lineage_graph: LineageGraph | None = None,
+        chatgpt_service: object | None = None,
     ) -> None:
         self.agent_registry = agent_registry
         self.quality_gate_evaluator = quality_gate_evaluator
         self.message_bus = message_bus
         self.lineage_graph = lineage_graph
+        self.chatgpt_service = chatgpt_service
 
     def execute(
         self,
@@ -80,6 +82,7 @@ class StepExecutor:
             metadata=dict(metadata or {}),
             message_bus=self.message_bus,
             project_brief=resolved_brief,
+            chatgpt_service=self.chatgpt_service,
         )
         artifacts = agent.execute(context)
         results = []
