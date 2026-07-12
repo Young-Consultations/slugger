@@ -59,13 +59,14 @@ class MockGitHubService(IGitHubService):
         self.issues.append(issue)
         return issue
 
-    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main') -> GitHubPR:
+    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main', draft: bool = False) -> GitHubPR:
         pr = GitHubPR(
             number=self._next_pr,
             title=title,
             body=body,
             head=head,
             base=base,
+            draft=draft,
         )
         self._next_pr += 1
         self.pull_requests.append(pr)

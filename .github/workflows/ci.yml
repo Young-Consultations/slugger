@@ -11,9 +11,9 @@ permissions:
 
 jobs:
   test:
-    name: Test Suite
+    name: Lint, type-check, test, and package
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -29,7 +29,27 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[test]
+          pip install -e ".[test]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Type check
+        run: python -m mypy agents cli core materializer models orchestrator providers services validators workflow
 
       - name: Run tests
         run: python -m pytest tests/
+
+      - name: Build package
+        run: python -m build
+
+      - name: Smoke test installed wheel
+        run: |
+          python -m venv ci-wheel-smoke
+          . ci-wheel-smoke/bin/activate
+          python -m pip install --upgrade pip
+          pip install dist/*.whl
+          slugger status

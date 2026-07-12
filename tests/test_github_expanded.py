@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from services.github import (
     GitHubComment,
@@ -67,6 +70,24 @@ def test_list_pull_requests_after_create(svc: MockGitHubService) -> None:
     svc.create_pull_request('PR 1', '', head='branch-1')
     assert len(svc.list_pull_requests()) == 1
 
+
+
+
+def test_github_service_creates_draft_pr_not_merged(svc: MockGitHubService) -> None:
+    pr = svc.create_pull_request('Draft feature', 'description', head='feature-draft', draft=True)
+    assert pr.draft is True
+    assert pr.merged is False
+    assert pr.state == 'open'
+
+
+def test_ci_yml_exists_and_valid() -> None:
+    workflow_path = Path('.github/workflows/ci.yml')
+    assert workflow_path.exists()
+    with workflow_path.open(encoding='utf-8') as handle:
+        data = yaml.safe_load(handle)
+    assert data['name'] == 'CI'
+    assert 'jobs' in data
+    assert 'test' in data['jobs']
 
 # ---------------------------------------------------------------------------
 # Milestones

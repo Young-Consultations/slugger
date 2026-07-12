@@ -37,7 +37,7 @@ class IGitHubService(ABC):
         """Create a new issue."""
 
     @abstractmethod
-    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main') -> GitHubPR:
+    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main', draft: bool = False) -> GitHubPR:
         """Open a new pull request from *head* into *base*."""
 
     @abstractmethod

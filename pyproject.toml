@@ -16,6 +16,9 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "pytest>=9.1.1",
+  "ruff>=0.4.0",
+  "build>=1.0.0",
+  "mypy>=1.11.0",
 ]
 
 [project.scripts]
@@ -24,6 +27,19 @@ slugger = "cli.main:main"
 [tool.setuptools.packages.find]
 include = [
   "agents*", "benchmarks*", "cli*", "config*", "core*", "docs*", "knowledge*",
-  "memory*", "models*", "observability*", "orchestrator*",
-  "plugins*", "providers*", "scripts*", "services*", "state_machine*", "validators*", "workflow*"
+  "materializer*", "memory*", "models*", "observability*", "orchestrator*",
+  "plugins*", "prompts*", "providers*", "scripts*", "services*", "state_machine*",
+  "validators*", "workflow*"
 ]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.md", "*.json", "*.txt"]
+
+[tool.pytest.ini_options]
+filterwarnings = ["ignore::pytest.PytestCollectionWarning"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+exclude = ["tests/"]
+

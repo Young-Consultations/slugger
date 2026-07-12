@@ -30,6 +30,8 @@ class GitHubPR:
     state: str = 'open'
     head: str = ''
     base: str = 'main'
+    draft: bool = False
+    merged: bool = False
     milestone_number: int | None = None
 
 

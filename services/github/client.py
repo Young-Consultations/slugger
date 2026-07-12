@@ -133,10 +133,10 @@ class GitHubClient(IGitHubService):
             milestone_number=(data.get('milestone') or {}).get('number'),
         )
 
-    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main') -> GitHubPR:
+    def create_pull_request(self, title: str, body: str, head: str, base: str = 'main', draft: bool = False) -> GitHubPR:
         response = requests.post(
             self._url('/pulls'),
-            json={'title': title, 'body': body, 'head': head, 'base': base},
+            json={'title': title, 'body': body, 'head': head, 'base': base, 'draft': draft},
             headers=self._headers(),
             timeout=30,
         )
@@ -149,6 +149,8 @@ class GitHubClient(IGitHubService):
             state=data['state'],
             head=data.get('head', {}).get('ref', head),
             base=data.get('base', {}).get('ref', base),
+            draft=data.get('draft', draft),
+            merged=data.get('merged', False),
         )
 
     def list_milestones(self) -> list[GitHubMilestone]:
