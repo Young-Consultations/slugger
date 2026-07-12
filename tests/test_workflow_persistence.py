@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -18,6 +19,7 @@ from models.execution import ExecutionContext
 from models.workflow import StepStatus
 from orchestrator.bootstrap import Bootstrap
 from validators import ArtifactValidator, QualityGateEvaluator, WorkflowValidator
+from workflow.durable_approvals import DurableApprovalStore
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser, WorkflowPersistence
 from workflow.models import WorkflowInstance
 
@@ -122,6 +124,47 @@ class TestWorkflowPersistence:
         bootstrap = Bootstrap(tmp_path)
         store = bootstrap._build_artifact_store(Settings(environment='test'), 'test')
         assert isinstance(store, InMemoryArtifactStore)
+
+    def test_approval_survives_restart(self, tmp_path: Path) -> None:
+        db_path = tmp_path / 'approvals.db'
+        store = DurableApprovalStore(db_path)
+        artifact = tmp_path / 'artifact.txt'
+        artifact.write_text('approved payload\n', encoding='utf-8')
+        checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+
+        store.request_approval(
+            request_id='req-1',
+            policy={'name': 'release'},
+            artifact_ids=[str(artifact)],
+            checksums={str(artifact): checksum},
+            required_roles=['approver'],
+            quorum=1,
+        )
+
+        reopened = DurableApprovalStore(db_path)
+        pending = reopened.get_pending()
+
+        assert len(pending) == 1
+        assert pending[0]['request_id'] == 'req-1'
+
+    def test_changed_artifact_invalidates_approval(self, tmp_path: Path) -> None:
+        store = DurableApprovalStore(tmp_path / 'approvals.db')
+        artifact = tmp_path / 'artifact.txt'
+        artifact.write_text('version one\n', encoding='utf-8')
+        checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+
+        store.request_approval(
+            request_id='req-2',
+            policy={'name': 'release'},
+            artifact_ids=[str(artifact)],
+            checksums={str(artifact): checksum},
+            required_roles=['approver'],
+            quorum=1,
+        )
+        store.record_decision('req-2', 'approver', 'approve', 'looks good')
+        artifact.write_text('version two\n', encoding='utf-8')
+
+        assert store.is_valid('req-2') is False
 
 
 # ---------------------------------------------------------------------------

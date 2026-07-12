@@ -36,10 +36,55 @@ CREATE TABLE IF NOT EXISTS approvals (
 );
 """
 _CREATE_APPROVALS_INDEX = "CREATE INDEX IF NOT EXISTS idx_approvals_run_id ON approvals(run_id);"
+_CREATE_REQUESTS_TABLE = """
+CREATE TABLE IF NOT EXISTS approval_requests (
+    request_id       TEXT PRIMARY KEY,
+    policy_json      TEXT NOT NULL,
+    artifact_ids_json TEXT NOT NULL,
+    checksums_json   TEXT NOT NULL,
+    required_roles_json TEXT NOT NULL,
+    quorum           INTEGER NOT NULL,
+    status           TEXT NOT NULL,
+    created_at       TEXT NOT NULL
+);
+"""
+_CREATE_DECISIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS approval_request_decisions (
+    rowid            INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id      TEXT NOT NULL UNIQUE,
+    request_id       TEXT NOT NULL,
+    actor            TEXT NOT NULL,
+    decision         TEXT NOT NULL,
+    rationale        TEXT NOT NULL DEFAULT '',
+    timestamp        TEXT NOT NULL,
+    FOREIGN KEY(request_id) REFERENCES approval_requests(request_id)
+);
+"""
+_CREATE_REQUESTS_STATUS_INDEX = "CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status);"
+_CREATE_DECISIONS_REQUEST_INDEX = "CREATE INDEX IF NOT EXISTS idx_approval_decisions_request_id ON approval_request_decisions(request_id);"
 
 
 def _record_checksum(data: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def _json_dumps(value: Any) -> str:
+    return json.dumps(value, sort_keys=True)
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+class ApprovalRequestStatus:
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+
+
+class ApprovalRequestDecision:
+    APPROVE = 'approve'
+    REJECT = 'reject'
 
 
 class DurableApprovalStore:
@@ -63,6 +108,10 @@ class DurableApprovalStore:
         with self._connect() as conn:
             conn.execute(_CREATE_APPROVALS_TABLE)
             conn.execute(_CREATE_APPROVALS_INDEX)
+            conn.execute(_CREATE_REQUESTS_TABLE)
+            conn.execute(_CREATE_DECISIONS_TABLE)
+            conn.execute(_CREATE_REQUESTS_STATUS_INDEX)
+            conn.execute(_CREATE_DECISIONS_REQUEST_INDEX)
 
     def save(self, record: ApprovalRecord) -> None:
         """Persist an approval record (append-only; raises on duplicate record_id)."""
@@ -125,14 +174,108 @@ class DurableApprovalStore:
             return True
         return False
 
-    def get_pending(self, run_id: str) -> list[ApprovalRecord]:
-        """Return all PENDING approval records for a run (for resume security)."""
+    def get_pending(self, run_id: str | None = None) -> list[ApprovalRecord] | list[dict[str, Any]]:
+        """Return pending approval records or durable approval requests."""
+        if run_id is None:
+            return self.list_requests(status=ApprovalRequestStatus.PENDING)
         with self._connect() as conn:
             rows = conn.execute(
                 'SELECT * FROM approvals WHERE run_id = ? AND decision = ? ORDER BY rowid ASC',
                 (run_id, ApprovalDecision.PENDING.value),
             ).fetchall()
         return [self._from_row(dict(r)) for r in rows]
+
+    def request_approval(
+        self,
+        request_id: str,
+        policy: dict[str, Any] | str,
+        artifact_ids: list[str],
+        checksums: dict[str, str],
+        required_roles: list[str],
+        quorum: int,
+    ) -> dict[str, Any]:
+        """Create a durable approval request bound to immutable evidence."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                'INSERT INTO approval_requests (request_id, policy_json, artifact_ids_json, checksums_json, required_roles_json, quorum, status, created_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    request_id,
+                    _json_dumps(policy),
+                    _json_dumps(artifact_ids),
+                    _json_dumps(checksums),
+                    _json_dumps(required_roles),
+                    max(0, int(quorum)),
+                    ApprovalRequestStatus.PENDING,
+                    created_at,
+                ),
+            )
+        return self.get_request(request_id)
+
+    def record_decision(self, request_id: str, actor: str, decision: str, rationale: str) -> dict[str, Any]:
+        """Append an approval decision and update the request status."""
+        request = self.get_request(request_id)
+        normalized = decision.strip().lower()
+        if normalized not in {ApprovalRequestDecision.APPROVE, ApprovalRequestDecision.REJECT}:
+            raise ValueError(f'Unsupported approval decision: {decision!r}')
+        if request['status'] != ApprovalRequestStatus.PENDING:
+            raise ValueError(f'Approval request {request_id!r} is not pending')
+        if request['required_roles'] and actor not in request['required_roles']:
+            raise ValueError(f'Actor {actor!r} is not allowed for approval request {request_id!r}')
+        if any(existing['actor'] == actor for existing in request['decisions']):
+            raise ValueError(f'Actor {actor!r} has already decided approval request {request_id!r}')
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                'INSERT INTO approval_request_decisions (decision_id, request_id, actor, decision, rationale, timestamp) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                (str(uuid4()), request_id, actor, normalized, rationale, timestamp),
+            )
+        return self._update_request_status(request_id)
+
+    def is_valid(self, request_id: str) -> bool:
+        """Return False when any bound artifact checksum no longer matches."""
+        request = self.get_request(request_id)
+        if request['status'] == ApprovalRequestStatus.REJECTED:
+            return False
+        checksums = request['checksums']
+        if not isinstance(checksums, dict):
+            return False
+        for artifact_id in request['artifact_ids']:
+            expected = checksums.get(artifact_id)
+            if not expected:
+                return False
+            artifact_path = Path(artifact_id)
+            if artifact_path.exists():
+                if _sha256_file(artifact_path) != expected:
+                    return False
+        return True
+
+    def get_request(self, request_id: str) -> dict[str, Any]:
+        """Return a request with all recorded decisions."""
+        with self._connect() as conn:
+            row = conn.execute(
+                'SELECT * FROM approval_requests WHERE request_id = ?',
+                (request_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(f'Approval request not found: {request_id!r}')
+        return self._request_from_row(dict(row))
+
+    def list_requests(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent durable approval requests."""
+        query = 'SELECT * FROM approval_requests'
+        params: tuple[Any, ...] = ()
+        if status is not None:
+            query += ' WHERE status = ?'
+            params = (status,)
+        query += ' ORDER BY created_at DESC LIMIT ?'
+        params += (limit,)
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._request_from_row(dict(row)) for row in rows]
 
     def _from_row(self, row: dict[str, Any]) -> ApprovalRecord:
         ts_str = row.get('timestamp', '')
@@ -150,3 +293,37 @@ class DurableApprovalStore:
             comment=row.get('comment', ''),
             timestamp=ts,
         )
+
+    def _request_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        with self._connect() as conn:
+            decision_rows = conn.execute(
+                'SELECT actor, decision, rationale, timestamp FROM approval_request_decisions WHERE request_id = ? ORDER BY rowid ASC',
+                (row['request_id'],),
+            ).fetchall()
+        return {
+            'request_id': row['request_id'],
+            'policy': json.loads(row['policy_json']),
+            'artifact_ids': json.loads(row['artifact_ids_json']),
+            'checksums': json.loads(row['checksums_json']),
+            'required_roles': json.loads(row['required_roles_json']),
+            'quorum': row['quorum'],
+            'status': row['status'],
+            'created_at': row['created_at'],
+            'decisions': [dict(decision_row) for decision_row in decision_rows],
+        }
+
+    def _update_request_status(self, request_id: str) -> dict[str, Any]:
+        request = self.get_request(request_id)
+        decisions = request['decisions']
+        if any(decision['decision'] == ApprovalRequestDecision.REJECT for decision in decisions):
+            status = ApprovalRequestStatus.REJECTED
+        else:
+            approvals = {decision['actor'] for decision in decisions if decision['decision'] == ApprovalRequestDecision.APPROVE}
+            quorum = request['quorum'] or max(1, len(request['required_roles']) or 1)
+            status = ApprovalRequestStatus.APPROVED if len(approvals) >= quorum else ApprovalRequestStatus.PENDING
+        with self._connect() as conn:
+            conn.execute(
+                'UPDATE approval_requests SET status = ? WHERE request_id = ?',
+                (status, request_id),
+            )
+        return self.get_request(request_id)

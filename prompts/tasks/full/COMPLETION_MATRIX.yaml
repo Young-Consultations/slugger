@@ -88,8 +88,10 @@ tasks:
   depends_on:
   - GA-007
   - GA-009
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Persistence: workflow.durable_approvals.DurableApprovalStore now persists artifact-bound approval requests, decisions, quorum, and checksum validation across restarts'
+  - 'CLI: slugger approvals list/show/approve/reject use the durable approval store'
 - id: GA-011
   title: Create one readiness and release-gate engine
   depends_on:

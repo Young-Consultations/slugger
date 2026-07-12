@@ -158,3 +158,16 @@ class TestMainBuildCommand:
             main(['build', 'Blog engine', '--platform', 'web', '--workflow', 'requirements-gathering'])
         call_kwargs = fake_slugger.build.call_args[1]
         assert call_kwargs.get('workflow') == 'requirements-gathering'
+
+
+class TestApprovalCLI:
+    def test_cli_approvals_list(self, capsys) -> None:
+        fake_store = MagicMock()
+        fake_store.list_requests.return_value = [{'request_id': 'req-1', 'status': 'pending'}]
+
+        with patch('cli.main._approval_store', return_value=fake_store):
+            rc = main(['approvals', 'list'])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert json.loads(captured.out)[0]['request_id'] == 'req-1'

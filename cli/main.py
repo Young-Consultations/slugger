@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
+from workflow.durable_approvals import DurableApprovalStore
 
 _PLATFORMS = [p.value for p in Platform]
 _CODING_AGENTS = [a.value for a in CodingAgent]
+
+
+def _approval_store(root_path: Path) -> DurableApprovalStore:
+    return DurableApprovalStore(root_path / 'workflow' / 'approvals.db')
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,6 +85,14 @@ def build_parser() -> argparse.ArgumentParser:
     approvals_parser = subparsers.add_parser('approvals', help='Manage workflow approval gates')
     approvals_subparsers = approvals_parser.add_subparsers(dest='approvals_command', required=True)
     approvals_subparsers.add_parser('list', help='List pending approval records')
+    approvals_show = approvals_subparsers.add_parser('show', help='Show approval request details')
+    approvals_show.add_argument('request_id', help='Approval request ID')
+    approvals_approve = approvals_subparsers.add_parser('approve', help='Approve a pending request')
+    approvals_approve.add_argument('request_id', help='Approval request ID')
+    approvals_approve.add_argument('--rationale', required=True, help='Approval rationale')
+    approvals_reject = approvals_subparsers.add_parser('reject', help='Reject a pending request')
+    approvals_reject.add_argument('request_id', help='Approval request ID')
+    approvals_reject.add_argument('--rationale', required=True, help='Rejection rationale')
 
     return parser
 
@@ -86,8 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    slugger = Slugger(Bootstrap(Path(__file__).resolve().parent.parent).build())
+    root_path = Path(__file__).resolve().parent.parent
+    slugger: Slugger | None = None
+
+    def get_slugger() -> Slugger:
+        nonlocal slugger
+        if slugger is None:
+            slugger = Slugger(Bootstrap(root_path).build())
+        return slugger
+
     if args.command == 'build':
+        slugger = get_slugger()
         project_input = ProjectInput(
             idea=args.idea,
             platform=Platform(args.platform),
@@ -107,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         }))
         return 0
     if args.command == 'resume':
+        slugger = get_slugger()
         project_input = None
         if args.idea and args.platform:
             project_input = ProjectInput(
@@ -125,20 +149,25 @@ def main(argv: list[str] | None = None) -> int:
         }))
         return 0
     if args.command == 'run':
+        slugger = get_slugger()
         result = slugger.run_workflow(args.workflow)
         outcome = result.outcome.value if result.outcome is not None else 'unknown'
         print(json.dumps({'workflow': result.definition.name, 'status': result.status, 'outcome': outcome, 'artifacts': len(result.artifacts)}))
         return 0
     if args.command == 'list' and args.list_command == 'agents':
+        slugger = get_slugger()
         print('\n'.join(slugger.list_agents()))
         return 0
     if args.command == 'list' and args.list_command == 'workflows':
+        slugger = get_slugger()
         print('\n'.join(slugger.list_workflows()))
         return 0
     if args.command == 'status':
+        slugger = get_slugger()
         print(json.dumps(slugger.status(), indent=2))
         return 0
     if args.command == 'lineage':
+        slugger = get_slugger()
         lineage_data = slugger.lineage()
         if args.lineage_format == 'json':
             print(json.dumps(lineage_data, indent=2))
@@ -153,11 +182,21 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  [{node.get('stage', '?')}] {node.get('name', '?')} "
                           f"(id={node.get('artifact_id', '?')}, parents={parents})")
         return 0
-    if args.command == 'approvals' and args.approvals_command == 'list':
-        approval_handler = slugger.context.workflow_engine.approval_handler
-        summary = approval_handler.summary()
-        print(json.dumps(summary, indent=2))
-        return 0
+    if args.command == 'approvals':
+        store = _approval_store(root_path)
+        actor = os.environ.get('USER', 'cli')
+        if args.approvals_command == 'list':
+            print(json.dumps(store.list_requests(), indent=2))
+            return 0
+        if args.approvals_command == 'show':
+            print(json.dumps(store.get_request(args.request_id), indent=2))
+            return 0
+        if args.approvals_command == 'approve':
+            print(json.dumps(store.record_decision(args.request_id, actor, 'approve', args.rationale), indent=2))
+            return 0
+        if args.approvals_command == 'reject':
+            print(json.dumps(store.record_decision(args.request_id, actor, 'reject', args.rationale), indent=2))
+            return 0
     parser.print_help()
     return 1
 
