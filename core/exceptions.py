@@ -35,3 +35,7 @@ class ValidationError(SluggerError):
 
 class RemediationExhaustedError(SluggerError):
     """Raised when bounded remediation cannot resolve a defect automatically."""
+
+    def __init__(self, message: str, *, result: object | None = None) -> None:
+        super().__init__(message)
+        self.result = result

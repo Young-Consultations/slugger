@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from core.exceptions import RemediationExhaustedError
 
@@ -24,44 +23,46 @@ _LOG = logging.getLogger(__name__)
 # Finding domain models
 # ---------------------------------------------------------------------------
 
+
 class FindingSeverity(str, Enum):
-    CRITICAL = 'critical'
-    HIGH = 'high'
-    MEDIUM = 'medium'
-    LOW = 'low'
-    INFO = 'info'
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
 
 
 class FindingCategory(str, Enum):
-    CODE_REVIEW = 'code_review'
-    TEST_FAILURE = 'test_failure'
-    LINT = 'lint'
-    TYPE_CHECK = 'type_check'
-    SECURITY = 'security'
-    DEPENDENCY = 'dependency'
-    COVERAGE = 'coverage'
+    CODE_REVIEW = "code_review"
+    TEST_FAILURE = "test_failure"
+    LINT = "lint"
+    TYPE_CHECK = "type_check"
+    SECURITY = "security"
+    DEPENDENCY = "dependency"
+    COVERAGE = "coverage"
 
 
 class FindingStatus(str, Enum):
-    OPEN = 'open'
-    REMEDIATED = 'remediated'
-    WAIVED = 'waived'
-    ESCALATED = 'escalated'
-    MANUAL_REQUIRED = 'manual_intervention_required'
+    OPEN = "open"
+    REMEDIATED = "remediated"
+    WAIVED = "waived"
+    ESCALATED = "escalated"
+    MANUAL_REQUIRED = "manual_intervention_required"
 
 
 @dataclass
 class Finding:
     """A normalized finding from any review or quality gate."""
+
     finding_id: str
     severity: FindingSeverity
     category: FindingCategory
     message: str
-    file_path: str = ''
+    file_path: str = ""
     line: int | None = None
     requirement_ids: list[str] = field(default_factory=list)
-    evidence_id: str = ''
-    remediation_guidance: str = ''
+    evidence_id: str = ""
+    remediation_guidance: str = ""
     waiver_eligible: bool = True
     status: FindingStatus = FindingStatus.OPEN
     attempt_count: int = 0
@@ -79,7 +80,8 @@ class Finding:
     def requires_human_waiver(self) -> bool:
         """Security findings at critical/high cannot be auto-waived."""
         return self.is_security_finding and self.severity in (
-            FindingSeverity.CRITICAL, FindingSeverity.HIGH
+            FindingSeverity.CRITICAL,
+            FindingSeverity.HIGH,
         )
 
 
@@ -102,9 +104,11 @@ DEFAULT_MAX_ATTEMPTS: dict[FindingCategory, int] = {
 # Remediation loop
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RemediationAttempt:
     """Records a single remediation attempt for a finding."""
+
     attempt_number: int
     finding_id: str
     action_taken: str
@@ -116,6 +120,7 @@ class RemediationAttempt:
 @dataclass
 class RemediationLoopResult:
     """Final result of a bounded remediation loop."""
+
     all_resolved: bool
     open_findings: list[Finding] = field(default_factory=list)
     resolved_findings: list[Finding] = field(default_factory=list)
@@ -123,7 +128,7 @@ class RemediationLoopResult:
     escalated_findings: list[Finding] = field(default_factory=list)
     attempts: list[RemediationAttempt] = field(default_factory=list)
     requires_manual_intervention: bool = False
-    status: str = 'completed'
+    status: str = "completed"
     exhausted_error: RemediationExhaustedError | None = None
 
 
@@ -149,7 +154,7 @@ class BoundedRemediationLoop:
         elif isinstance(max_attempts, dict):
             self._max_attempts_by_category.update(max_attempts)
         elif max_attempts is not None:
-            raise TypeError('max_attempts must be an int, a category map, or None')
+            raise TypeError("max_attempts must be an int, a category map, or None")
 
     def process(
         self,
@@ -170,7 +175,9 @@ class BoundedRemediationLoop:
         attempt_number = 0
 
         for finding in findings:
-            max_att = self._max_attempts_by_category.get(finding.category, self._default_max_attempts)
+            max_att = self._max_attempts_by_category.get(
+                finding.category, self._default_max_attempts
+            )
             resolved = False
 
             if attempt_fn is not None:
@@ -180,14 +187,19 @@ class BoundedRemediationLoop:
                     try:
                         success = bool(attempt_fn(finding))
                     except Exception as exc:  # noqa: BLE001
-                        _LOG.warning('Remediation attempt %d for finding %r raised: %s: %s',
-                                     att_idx + 1, finding.finding_id, type(exc).__name__, exc)
+                        _LOG.warning(
+                            "Remediation attempt %d for finding %r raised: %s: %s",
+                            att_idx + 1,
+                            finding.finding_id,
+                            type(exc).__name__,
+                            exc,
+                        )
                         success = False
                     attempt = RemediationAttempt(
                         attempt_number=attempt_number,
                         finding_id=finding.finding_id,
-                        action_taken=f'attempt_{att_idx + 1}',
-                        result='resolved' if success else 'failed',
+                        action_taken=f"attempt_{att_idx + 1}",
+                        result="resolved" if success else "failed",
                         success=success,
                     )
                     result.attempts.append(attempt)
@@ -221,11 +233,17 @@ class BoundedRemediationLoop:
                 result.open_findings.append(finding)
 
         if result.requires_manual_intervention:
-            manual_ids = ', '.join(f.finding_id for f in result.escalated_findings if f.status == FindingStatus.MANUAL_REQUIRED)
+            manual_ids = ", ".join(
+                f.finding_id
+                for f in result.escalated_findings
+                if f.status == FindingStatus.MANUAL_REQUIRED
+            )
             result.status = FindingStatus.MANUAL_REQUIRED.value
             result.exhausted_error = RemediationExhaustedError(
-                f'Automatic remediation exhausted for findings: {manual_ids}'
+                f"Automatic remediation exhausted for findings: {manual_ids}",
+                result=result,
             )
+            raise result.exhausted_error
         return result
 
     def waive(self, finding: Finding, approver: str) -> bool:
@@ -234,7 +252,7 @@ class BoundedRemediationLoop:
             return False
         if finding.requires_human_waiver:
             finding.status = FindingStatus.WAIVED
-            finding.remediation_guidance += f'\n[WAIVED by {approver}]'
+            finding.remediation_guidance += f"\n[WAIVED by {approver}]"
             return True
         if not finding.waiver_eligible:
             return False

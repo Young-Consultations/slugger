@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from core.exceptions import RemediationExhaustedError, WorkflowError
 from materializer.workspace import ProjectMaterializer
 from models.project import AppType, CodingAgent, Platform, ProjectBrief
 from orchestrator import Bootstrap, Slugger
 from orchestrator.orchestrator import _DEFAULT_WORKFLOW
-from core.exceptions import WorkflowError
 from validators.readiness import ReleaseGateCollector
 from validators.remediation import (
     BoundedRemediationLoop,
@@ -54,12 +54,24 @@ class TestTaskTrackerScenario:
         assert _DEFAULT_WORKFLOW == "full-sdlc-v2"
 
     def test_canonical_workflow_recipe_exists(self) -> None:
-        recipe = Path(__file__).resolve().parents[2] / "workflow" / "recipes" / "full-sdlc-v2.yaml"
+        recipe = (
+            Path(__file__).resolve().parents[2]
+            / "workflow"
+            / "recipes"
+            / "full-sdlc-v2.yaml"
+        )
         assert recipe.exists(), f"Canonical recipe missing: {recipe}"
 
     def test_old_workflow_recipe_archived(self) -> None:
-        active = Path(__file__).resolve().parents[2] / "workflow" / "recipes" / "full-sdlc.yaml"
-        assert not active.exists(), "full-sdlc.yaml must be archived, not in active recipes"
+        active = (
+            Path(__file__).resolve().parents[2]
+            / "workflow"
+            / "recipes"
+            / "full-sdlc.yaml"
+        )
+        assert not active.exists(), (
+            "full-sdlc.yaml must be archived, not in active recipes"
+        )
 
     def test_materialization_rejects_traversal(self, tmp_path: Path) -> None:
         materializer = ProjectMaterializer(workspace_root=tmp_path)
@@ -75,10 +87,13 @@ class TestTaskTrackerScenario:
             message="Tests keep failing",
         )
 
-        result = loop.process([finding], attempt_fn=lambda _: False)
+        with pytest.raises(RemediationExhaustedError) as exc_info:
+            loop.process([finding], attempt_fn=lambda _: False)
 
+        result = exc_info.value.result
+        assert result is not None
         assert result.requires_manual_intervention is True
-        assert result.exhausted_error is not None
+        assert result.exhausted_error is exc_info.value
         assert finding.status == FindingStatus.MANUAL_REQUIRED
         assert len(result.attempts) == 2
 
@@ -104,7 +119,7 @@ class TestTaskTrackerScenario:
             policy={"checkpoint": "release"},
             artifact_ids=[str(artifact)],
             checksums={str(artifact): checksum},
-            required_roles=[],
+            allowed_actors=[],
             quorum=1,
         )
 
