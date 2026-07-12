@@ -47,6 +47,12 @@ class ExecutionContext:
     events: list[ExecutionEvent] = field(default_factory=list)
     message_bus: MessageBus | None = field(default=None)
     project_brief: ProjectBrief | None = field(default=None)
+    prompt_id: str | None = field(default=None)
+    """Approved prompt ID used by the agent for this execution step."""
+    prompt_version: str | None = field(default=None)
+    """Approved prompt version used by the agent for this execution step."""
+    prompt_content_hash: str | None = field(default=None)
+    """SHA-256 hash of the prompt content for tamper detection."""
 
     def add_event(self, event: ExecutionEvent) -> None:
         """Attach an execution event to the context."""
@@ -70,3 +76,10 @@ class ExecutionContext:
         if content is None:
             return str(artifact)
         return content
+
+    def record_prompt(self, prompt_id: str, version: str, content_hash: str) -> None:
+        """Record the prompt used for this execution step."""
+
+        self.prompt_id = prompt_id
+        self.prompt_version = version
+        self.prompt_content_hash = content_hash
