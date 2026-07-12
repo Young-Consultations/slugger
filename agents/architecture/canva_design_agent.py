@@ -206,6 +206,19 @@ class CanvaDesignAgent(BaseAgent):
 
     def _manual_handoff(self, context, brief, brief_hash, brief_artifact):
         """Emit a manual-handoff artifact when Canva automation is unsupported."""
+        manifest = _build_design_manifest(
+            design_title='manual-handoff-pending',
+            design_id='manual-handoff',
+            export_url='',
+            brief_hash=brief_hash,
+        )
+        manifest_content = _format_manifest_artifact(brief, manifest)
+        manifest_artifact = self.create_artifact(context, 'design_manifest', manifest_content, DocumentArtifact)
+        manifest_artifact.extra['design_id'] = manifest['design_id']
+        manifest_artifact.extra['brief_hash'] = brief_hash
+        manifest_artifact.extra['approved'] = False
+        manifest_artifact.extra['requires_manual_handoff'] = True
+
         handoff_content = (
             f"# Design Manual Handoff\n\n"
             f"{_PLACEHOLDER_MARKER}\n\n"
@@ -222,4 +235,4 @@ class CanvaDesignAgent(BaseAgent):
         handoff_artifact.extra['requires_manual_handoff'] = True
         handoff_artifact.extra['brief_hash'] = brief_hash
         handoff_artifact.extra['approved'] = False
-        return [brief_artifact, handoff_artifact]
+        return [brief_artifact, manifest_artifact, handoff_artifact]

@@ -86,8 +86,9 @@ def test_execute_no_designs_returns_placeholder() -> None:
     agent = CanvaDesignAgent(empty_svc)
     context = _context()
     artifacts = agent.execute(context)
-    # CC-006: manual handoff — returns design_brief + handoff artifact
-    assert len(artifacts) == 2
+    # Manual handoff still emits a manifest so downstream outputs are satisfied.
+    assert len(artifacts) == 3
+    assert any(a.name == 'design_manifest' for a in artifacts)
     handoff = next(a for a in artifacts if a.name == 'design_artifact')
     assert handoff.extra.get('requires_manual_handoff') is True
 
@@ -99,6 +100,7 @@ def test_execute_unknown_design_id_returns_manual_handoff() -> None:
     context = _context(design_id='nonexistent')
     artifacts = agent.execute(context)
     # Should produce manual handoff, not raise
-    assert len(artifacts) == 2
+    assert len(artifacts) == 3
+    assert any(a.name == 'design_manifest' for a in artifacts)
     handoff = next(a for a in artifacts if a.name == 'design_artifact')
     assert handoff.extra.get('requires_manual_handoff') is True

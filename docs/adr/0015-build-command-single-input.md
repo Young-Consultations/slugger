@@ -36,7 +36,7 @@ Extend `WorkflowEngine.run()` and `StepExecutor.execute()` with an optional
 `ExecutionContext`.
 
 Add `Slugger.build(project_input, workflow=None)` to the orchestrator as the
-high-level entry point.  The default workflow is `full-sdlc`; callers may
+high-level entry point.  The default workflow is `full-sdlc-v2`; callers may
 override it via `--workflow`.
 
 The existing `run`, `list`, and `status` subcommands are preserved unchanged,

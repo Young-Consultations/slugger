@@ -369,7 +369,7 @@ Install the package in editable mode and use the `slugger` command to explore or
 pip install -e .
 slugger list agents
 slugger list workflows
-slugger run full-sdlc
+slugger run full-sdlc-v2
 slugger status
 ```
 

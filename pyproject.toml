@@ -27,3 +27,7 @@ include = [
   "memory*", "models*", "observability*", "orchestrator*",
   "plugins*", "providers*", "scripts*", "services*", "state_machine*", "validators*", "workflow*"
 ]
+
+[tool.setuptools.package-data]
+config = ["*.yaml"]
+workflow = ["recipes/*.yaml", "*.json"]
