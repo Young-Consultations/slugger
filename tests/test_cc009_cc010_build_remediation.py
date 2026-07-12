@@ -11,6 +11,7 @@ from materializer import (
     BuildResult,
     CommandEvidence,
     FakeIsolatedBuildRunner,
+    IsolatedBuildRunner,
     PhaseStatus,
     ProjectMaterializer,
 )
@@ -101,6 +102,31 @@ class TestBuildRunnerIntegration:
         runner = FakeIsolatedBuildRunner(fail_phases={BuildPhase.TEST, BuildPhase.INSTALL})
         result = runner.run(tmp_path, ['python -m pytest'], app_id='broken-app')
         assert result.overall_success is False
+
+    def test_build_runner_rejects_unlisted_command(self, tmp_path: Path) -> None:
+        runner = IsolatedBuildRunner()
+
+        with pytest.raises(ValueError, match='allowlist'):
+            runner.run(tmp_path, ['rm -rf /'], app_id='bad-app')
+
+    def test_build_runner_uses_allowed_commands(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        runner = IsolatedBuildRunner()
+        executed: list[list[str]] = []
+        (tmp_path / 'pyproject.toml').write_text('[project]\nname="demo"\nversion="0.1.0"\n', encoding='utf-8')
+        (tmp_path / 'src').mkdir()
+        (tmp_path / 'src' / 'app.py').write_text('print("ok")\n', encoding='utf-8')
+
+        def fake_run_command(cmd: list[str], cwd: Path) -> CommandEvidence:
+            executed.append(cmd)
+            return CommandEvidence(command=' '.join(cmd), exit_code=0, stdout='ok', stderr='', duration_ms=1.0)
+
+        monkeypatch.setattr(runner, '_run_command', fake_run_command)
+
+        result = runner.run(tmp_path, ['pytest tests/ -q', 'pip install .'], app_id='good-app')
+
+        assert result.overall_success is True
+        assert any(cmd[0] == 'pip' for cmd in executed)
+        assert any(cmd[0] == 'pytest' for cmd in executed)
 
 
 # ---------------------------------------------------------------------------

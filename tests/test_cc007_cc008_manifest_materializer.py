@@ -213,6 +213,46 @@ class TestProjectMaterializer:
                 ],
             )
 
+    def test_materializer_rejects_path_traversal(self, tmp_path: Path) -> None:
+        mat = ProjectMaterializer(tmp_path / 'workspaces')
+        manifest = make_cli_manifest('app-1', 'MyApp')
+        manifest.files[0].path = '../evil.py'
+
+        result = mat.materialize(manifest)
+
+        assert result.success is False
+        assert any('Unsafe path pattern' in error or 'escapes workspace root' in error for error in result.errors)
+
+    def test_materializer_rejects_absolute_path(self, tmp_path: Path) -> None:
+        mat = ProjectMaterializer(tmp_path / 'workspaces')
+        manifest = make_cli_manifest('app-1', 'MyApp')
+        manifest.files[0].path = '/etc/passwd'
+
+        result = mat.materialize(manifest)
+
+        assert result.success is False
+        assert any('Unsafe path pattern' in error or 'escapes workspace root' in error for error in result.errors)
+
+    def test_materializer_rejects_symlink_escape(self, tmp_path: Path) -> None:
+        mat = ProjectMaterializer(tmp_path / 'workspaces')
+        manifest = make_cli_manifest('app-1', 'MyApp')
+        initial = mat.materialize(manifest)
+        assert initial.success is True
+
+        active_dir = tmp_path / 'workspaces' / 'active' / 'app-1'
+        outside_dir = tmp_path / 'outside'
+        outside_dir.mkdir()
+        package_dir = active_dir / 'src' / 'myapp'
+        if package_dir.exists():
+            for child in package_dir.iterdir():
+                child.unlink()
+            package_dir.rmdir()
+        package_dir.symlink_to(outside_dir, target_is_directory=True)
+        manifest.files[2].path = 'src/myapp/escape.py'
+
+        with pytest.raises(ValueError, match='escape staging directory'):
+            mat.resume(manifest)
+
     def test_existing_non_slugger_dir_rejected(self, tmp_path: Path) -> None:
         mat = ProjectMaterializer(tmp_path / 'workspaces')
         # Manually create an active dir without the .slugger marker

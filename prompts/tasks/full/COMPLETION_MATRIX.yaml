@@ -70,8 +70,10 @@ tasks:
   depends_on:
   - GA-006
   - GA-007
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Security: ProjectMaterializer validates staged, resumed, and checksum-verified writes against traversal, absolute-path, and symlink escapes'
+  - 'Tests: tests/test_cc007_cc008_manifest_materializer.py and tests/test_cc009_cc010_build_remediation.py'
 - id: GA-009
   title: Create one bounded remediation engine
   depends_on:

@@ -174,7 +174,7 @@ class ProjectMaterializer:
         inventory: list[FileInventoryEntry] = []
         errors: list[str] = []
         for entry in manifest.files:
-            dest = active_dir / entry.path
+            dest = self._resolve_workspace_file(active_dir, entry.path)
             expected = hashlib.sha256(entry.content.encode('utf-8')).hexdigest()
             if dest.exists():
                 actual = hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -242,12 +242,7 @@ class ProjectMaterializer:
         """Write files to staging dir; return inventory."""
         inventory: list[FileInventoryEntry] = []
         for entry in files:
-            dest = (staging_dir / entry.path).resolve()
-            # Path traversal check — must remain within staging_dir
-            try:
-                dest.relative_to(staging_dir.resolve())
-            except ValueError:
-                raise ValueError(f'Path {entry.path!r} would escape staging directory')
+            dest = self._resolve_workspace_file(staging_dir, entry.path)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(entry.content, encoding='utf-8')
             inventory.append(FileInventoryEntry(
@@ -261,7 +256,7 @@ class ProjectMaterializer:
     def _verify_checksums(self, files: list[FileEntry], staging_dir: Path) -> None:
         """Verify that written files match their declared checksums."""
         for entry in files:
-            dest = staging_dir / entry.path
+            dest = self._resolve_workspace_file(staging_dir, entry.path)
             if not dest.exists():
                 raise RuntimeError(f'Expected file not found after write: {entry.path!r}')
             actual = hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -271,3 +266,12 @@ class ProjectMaterializer:
                     f'Checksum mismatch for {entry.path!r}: '
                     f'expected {expected[:16]}... got {actual[:16]}...'
                 )
+
+    def _resolve_workspace_file(self, workspace_dir: Path, relative_path: str) -> Path:
+        """Resolve a manifest path and ensure it stays inside *workspace_dir*."""
+        dest = (workspace_dir / relative_path).resolve()
+        try:
+            dest.relative_to(workspace_dir.resolve())
+        except ValueError as exc:
+            raise ValueError(f'Path {relative_path!r} would escape staging directory') from exc
+        return dest

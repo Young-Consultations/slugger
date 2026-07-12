@@ -26,6 +26,7 @@ _LOG = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 120
 MAX_OUTPUT_BYTES = 64 * 1024  # 64 KiB cap on captured output
+DEFAULT_ALLOWED_COMMANDS = frozenset({'python', 'pip', 'pytest'})
 
 # Allowed environment variable names passed to the subprocess.
 # Host secrets (tokens, keys, etc.) are excluded.
@@ -114,7 +115,7 @@ class IsolatedBuildRunner:
         allowed_commands: list[str] | None = None,
     ) -> None:
         self._timeout = timeout_seconds
-        self._allowed_commands = allowed_commands
+        self._allowed_commands = frozenset(allowed_commands or DEFAULT_ALLOWED_COMMANDS)
 
     # ------------------------------------------------------------------
     # Public API
@@ -122,6 +123,7 @@ class IsolatedBuildRunner:
 
     def run(self, workspace_root: Path, commands: list[str], app_id: str = '') -> BuildResult:
         """Run all applicable build phases for the workspace."""
+        self._ensure_commands_allowed(commands)
         result = BuildResult(app_id=app_id, workspace_root=workspace_root)
         phases_results: list[PhaseResult] = []
 
@@ -176,15 +178,21 @@ class IsolatedBuildRunner:
         evidences: list[CommandEvidence] = []
         for cmd in commands:
             parts = cmd.split()
-            if self._allowed_commands and parts[0] not in self._allowed_commands:
-                _LOG.warning('Skipping disallowed command: %s', cmd)
-                continue
             evidences.append(self._run_command(parts, workspace_root))
         if not evidences:
             return PhaseResult(phase=phase, status=PhaseStatus.SKIPPED, message='No allowed commands')
         all_passed = all(e.passed for e in evidences)
         status = PhaseStatus.PASSED if all_passed else PhaseStatus.FAILED
         return PhaseResult(phase=phase, status=status, evidence=evidences)
+
+    def _ensure_commands_allowed(self, commands: list[str]) -> None:
+        """Reject any manifest command not owned by the template allowlist."""
+        for cmd in commands:
+            parts = cmd.split()
+            if not parts:
+                raise ValueError('Build commands must not be empty')
+            if parts[0] not in self._allowed_commands:
+                raise ValueError(f'Command {parts[0]!r} is not in the template command allowlist')
 
     def _run_command(self, cmd: list[str], cwd: Path) -> CommandEvidence:
         """Run a command in the workspace, capturing output."""
