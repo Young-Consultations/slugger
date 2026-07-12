@@ -34,8 +34,10 @@ tasks:
   depends_on:
   - GA-002
   - GA-003
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Artifacts: planning and architecture agents now emit stable traceability IDs and manual Canva handoff persists as awaiting_design'
+  - 'Tests: tests/test_canva_design_agent.py, tests/test_cc006_canva_design.py, tests/test_artifact_lineage.py, and tests/test_cc004_chatgpt_planning.py'
 - id: GA-005
   title: Implement one real Codex coding and review adapter
   depends_on:

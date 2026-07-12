@@ -85,6 +85,7 @@ class TestRequirementsWithChatGPT:
         ctx = _make_context(idea='task manager', chatgpt_service=None)
         artifacts = RequirementsAgent().execute(ctx)
         assert 'Requirements' in artifacts[0].content
+        assert artifacts[0].extra['requirement_id'] == 'REQ-001'
 
 
 class TestUserStoryWithChatGPT:
@@ -100,6 +101,8 @@ class TestUserStoryWithChatGPT:
         ctx = _make_context(idea='task manager')
         artifacts = UserStoryAgent().execute(ctx)
         assert 'User Stories' in artifacts[0].content
+        assert artifacts[0].extra['story_id'] == 'STORY-001'
+        assert artifacts[0].extra['requirement_id'] == 'REQ-001'
 
 
 class TestProjectPlanWithChatGPT:
@@ -115,6 +118,17 @@ class TestProjectPlanWithChatGPT:
         ctx = _make_context(idea='task manager')
         artifacts = ProjectPlanAgent().execute(ctx)
         assert 'Project Plan' in artifacts[0].content
+        assert artifacts[0].extra['story_id'] == 'STORY-001'
+        assert artifacts[0].extra['requirement_id'] == 'REQ-001'
+
+    def test_plan_preserves_upstream_traceability_ids(self):
+        from agents.planning.project_plan_agent import ProjectPlanAgent
+        req = DocumentArtifact(artifact_id='req-1', name='requirements', content='REQ-123: Login')
+        stories = DocumentArtifact(artifact_id='story-1', name='user_stories', content='STORY-456: As a user...')
+        ctx = _make_context(idea='task manager', requirements=req, user_stories=stories)
+        artifacts = ProjectPlanAgent().execute(ctx)
+        assert artifacts[0].extra['requirement_id'] == 'REQ-123'
+        assert artifacts[0].extra['story_id'] == 'STORY-456'
 
 
 class TestPromptReviewIntegration:

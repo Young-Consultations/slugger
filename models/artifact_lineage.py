@@ -173,7 +173,14 @@ class LineageGraph:
         ancestors = self.ancestors(artifact_id)
         # Sort ancestors by SdlcStage order
         stage_order = list(SdlcStage)
-        ancestors_sorted = sorted(ancestors, key=lambda n: stage_order.index(n.stage) if n.stage in stage_order else 99)
+        ancestors_sorted = sorted(
+            ancestors,
+            key=lambda n: (
+                stage_order.index(n.stage) if n.stage in stage_order else 99,
+                len(n.parent_ids),
+                n.name,
+            ),
+        )
         node = self._nodes.get(artifact_id)
         return ancestors_sorted + ([node] if node is not None else [])
 

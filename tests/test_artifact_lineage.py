@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import pytest
 
+from agents.architecture.system_design_agent import SystemDesignAgent
+from agents.planning.product_vision_agent import ProductVisionAgent
+from agents.planning.requirements_agent import RequirementsAgent
+from agents.planning.user_story_agent import UserStoryAgent
+from agents.registry import AgentRegistry
 from models.artifact_lineage import ArtifactLineageNode, LineageGraph, SdlcStage
+from validators import ArtifactValidator, QualityGateEvaluator
+from workflow.executor import StepExecutor
+from workflow.models import StepInstance, WorkflowStepDefinition
 
 
 # ---------------------------------------------------------------------------
@@ -130,3 +138,31 @@ def test_to_dict_structure() -> None:
     data = graph.to_dict()
     assert 'nodes' in data
     assert len(data['nodes']) == 9
+
+
+def test_lineage_traces_idea_to_system_design_chain() -> None:
+    registry = AgentRegistry()
+    for agent in (ProductVisionAgent(), RequirementsAgent(), UserStoryAgent(), SystemDesignAgent()):
+        registry.register(agent)
+    graph = LineageGraph()
+    executor = StepExecutor(
+        registry,
+        QualityGateEvaluator({'artifact_validator': ArtifactValidator()}),
+        lineage_graph=graph,
+    )
+    available_artifacts = {}
+    metadata = {'idea': 'Build a planner app'}
+    steps = [
+        WorkflowStepDefinition(name='product_vision', agent='product_vision_agent'),
+        WorkflowStepDefinition(name='requirements', agent='requirements_agent', inputs=['product_vision']),
+        WorkflowStepDefinition(name='user_stories', agent='user_story_agent', inputs=['product_vision', 'requirements']),
+        WorkflowStepDefinition(name='system_design', agent='system_design_agent', inputs=['requirements', 'user_stories']),
+    ]
+    for step_definition in steps:
+        step_instance = StepInstance(definition=step_definition)
+        artifacts, _ = executor.execute('wf', 'proj-1', step_instance, available_artifacts, metadata=metadata)
+        for artifact in artifacts:
+            available_artifacts[artifact.name] = artifact
+    design_artifact = available_artifacts['system_design']
+    chain = graph.chain(design_artifact.artifact_id)
+    assert [node.name for node in chain] == ['idea', 'product_vision', 'requirements', 'user_stories', 'system_design']

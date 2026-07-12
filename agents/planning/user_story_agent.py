@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
@@ -10,6 +11,8 @@ from models.artifact import DocumentArtifact
 from models.execution import ExecutionContext
 
 _LOG = logging.getLogger(__name__)
+_REQUIREMENT_ID_PATTERN = re.compile(r'\b(REQ-\d{3,})\b', re.IGNORECASE)
+_STORY_ID_PATTERN = re.compile(r'\b((?:STORY|US)-\d{3,})\b', re.IGNORECASE)
 
 _USER_STORY_PROMPT = """You are a product owner. Based on the project idea and requirements, generate detailed user stories.
 
@@ -48,7 +51,14 @@ class UserStoryAgent(BaseAgent):
         idea = context.get_idea()
         requirements_content = context.artifact_content('requirements')
         content = self._generate_stories(idea, requirements_content, context)
-        return [self.create_artifact(context, 'user_stories', content, DocumentArtifact)]
+        artifact = self.create_artifact(context, 'user_stories', content, DocumentArtifact)
+        requirement_id = _first_match(_REQUIREMENT_ID_PATTERN, requirements_content or content, 'REQ-001')
+        story_id = _first_match(_STORY_ID_PATTERN, content, 'STORY-001')
+        artifact.extra['requirement_id'] = requirement_id
+        artifact.extra['story_id'] = story_id
+        artifact.metadata.labels['requirement_id'] = requirement_id
+        artifact.metadata.labels['story_id'] = story_id
+        return [artifact]
 
     def _generate_stories(self, idea: str, requirements: str, context: ExecutionContext) -> str:
         svc = context.chatgpt_service
@@ -63,3 +73,10 @@ class UserStoryAgent(BaseAgent):
         if requirements:
             sections.append(f"**Requirements:**\n{requirements}\n")
         return '\n'.join(sections)
+
+
+def _first_match(pattern: re.Pattern[str], content: str, default: str) -> str:
+    match = pattern.search(content)
+    if match is not None:
+        return match.group(1).upper()
+    return default

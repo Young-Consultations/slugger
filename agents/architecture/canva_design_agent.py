@@ -19,7 +19,7 @@ import logging
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
-from models.artifact import DiagramArtifact, DocumentArtifact
+from models.artifact import ArtifactStatus, DiagramArtifact, DocumentArtifact
 from models.execution import ExecutionContext
 from services.canva.base import ICanvaService
 from services.canva.models import CanvaExportFormat
@@ -219,7 +219,10 @@ class CanvaDesignAgent(BaseAgent):
         handoff_artifact = self.create_artifact(
             context, 'design_artifact', handoff_content, DocumentArtifact
         )
+        handoff_artifact.status = ArtifactStatus.AWAITING_DESIGN
         handoff_artifact.extra['requires_manual_handoff'] = True
+        handoff_artifact.extra['status'] = ArtifactStatus.AWAITING_DESIGN.value
+        handoff_artifact.extra['workflow_state'] = ArtifactStatus.AWAITING_DESIGN.value
         handoff_artifact.extra['brief_hash'] = brief_hash
         handoff_artifact.extra['approved'] = False
         return [brief_artifact, handoff_artifact]

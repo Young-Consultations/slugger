@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from agents.base import BaseAgent
 from models.agent import AgentCapability, AgentMetadata
@@ -10,6 +11,7 @@ from models.artifact import DocumentArtifact
 from models.execution import ExecutionContext
 
 _LOG = logging.getLogger(__name__)
+_REQUIREMENT_ID_PATTERN = re.compile(r'\b(REQ-\d{3,})\b', re.IGNORECASE)
 
 _REQUIREMENTS_PROMPT = """You are a business analyst. Based on the project idea and vision, generate structured software requirements.
 
@@ -47,7 +49,11 @@ class RequirementsAgent(BaseAgent):
         idea = context.get_idea()
         vision_content = context.artifact_content('product_vision')
         content = self._generate_requirements(idea, vision_content, context)
-        return [self.create_artifact(context, 'requirements', content, DocumentArtifact)]
+        artifact = self.create_artifact(context, 'requirements', content, DocumentArtifact)
+        requirement_id = _first_requirement_id(content)
+        artifact.extra['requirement_id'] = requirement_id
+        artifact.metadata.labels['requirement_id'] = requirement_id
+        return [artifact]
 
     def _generate_requirements(self, idea: str, vision: str, context: ExecutionContext) -> str:
         svc = context.chatgpt_service
@@ -62,3 +68,10 @@ class RequirementsAgent(BaseAgent):
         if vision:
             sections.append(f"**Vision:**\n{vision}\n")
         return '\n'.join(sections)
+
+
+def _first_requirement_id(content: str) -> str:
+    match = _REQUIREMENT_ID_PATTERN.search(content)
+    if match is not None:
+        return match.group(1).upper()
+    return 'REQ-001'

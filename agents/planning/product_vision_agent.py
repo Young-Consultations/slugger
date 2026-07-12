@@ -52,7 +52,10 @@ class ProductVisionAgent(BaseAgent):
             platform = context.metadata['platform']
 
         content = self._generate_vision(idea, platform, context)
-        return [self.create_artifact(context, 'product_vision', content, DocumentArtifact)]
+        artifact = self.create_artifact(context, 'product_vision', content, DocumentArtifact)
+        artifact.extra['vision_id'] = 'VISION-001'
+        artifact.metadata.labels['vision_id'] = 'VISION-001'
+        return [artifact]
 
     def _generate_vision(self, idea: str, platform: str, context: ExecutionContext) -> str:
         svc = context.chatgpt_service

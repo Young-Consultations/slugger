@@ -149,6 +149,14 @@ class TestManualHandoff:
         names = [a.name for a in artifacts]
         assert 'design_brief' in names
 
+    def test_handoff_pauses_with_durable_pending_state(self) -> None:
+        svc = MockCanvaService()
+        agent = CanvaDesignAgent(svc)
+        artifacts = agent.execute(_context())
+        handoff = next(a for a in artifacts if a.name == 'design_artifact')
+        assert handoff.extra.get('workflow_state') == 'awaiting_design'
+        assert handoff.extra.get('status') == 'awaiting_design'
+
     def test_placeholder_cannot_be_auto_approved(self) -> None:
         """A placeholder design must never be interpreted as approved completion."""
         svc = MockCanvaService()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from agents.architecture.canva_design_agent import CanvaDesignAgent
-from models.artifact import DiagramArtifact, DocumentArtifact
+from models.artifact import ArtifactStatus, DiagramArtifact, DocumentArtifact
 from models.execution import ExecutionContext
 from services.canva import CanvaDesign, CanvaExportFormat, MockCanvaService
 
@@ -102,3 +102,11 @@ def test_execute_unknown_design_id_returns_manual_handoff() -> None:
     assert len(artifacts) == 2
     handoff = next(a for a in artifacts if a.name == 'design_artifact')
     assert handoff.extra.get('requires_manual_handoff') is True
+
+
+def test_manual_handoff_enters_awaiting_design_state() -> None:
+    agent = CanvaDesignAgent(MockCanvaService())
+    artifacts = agent.execute(_context())
+    handoff = next(a for a in artifacts if a.name == 'design_artifact')
+    assert handoff.status == ArtifactStatus.AWAITING_DESIGN
+    assert handoff.extra.get('status') == 'awaiting_design'

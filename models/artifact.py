@@ -23,6 +23,7 @@ class ArtifactStatus(str, Enum):
     """Lifecycle status for an artifact."""
 
     DRAFT = 'draft'
+    AWAITING_DESIGN = 'awaiting_design'
     READY = 'ready'
     VALIDATED = 'validated'
     REJECTED = 'rejected'

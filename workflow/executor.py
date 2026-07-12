@@ -46,6 +46,17 @@ def _infer_stage(step_name: str) -> SdlcStage:
     return SdlcStage.CODE
 
 
+def _idea_root_node(project_id: str, idea: str) -> ArtifactLineageNode:
+    return ArtifactLineageNode(
+        artifact_id=f'idea::{project_id}',
+        name='idea',
+        stage=SdlcStage.IDEA,
+        agent_name='workflow',
+        project_id=project_id,
+        metadata={'idea': idea},
+    )
+
+
 class StepExecutor:
     def __init__(
         self,
@@ -76,6 +87,17 @@ class StepExecutor:
         inputs = {name: available_artifacts[name] for name in step_instance.definition.inputs if name in available_artifacts}
         prior_artifacts = [a for a in available_artifacts.values() if hasattr(a, 'artifact_id')]
         parent_ids = [aid for a in prior_artifacts if (aid := getattr(a, 'artifact_id', None)) is not None]
+        idea_root_id = None
+        idea = ''
+        if metadata:
+            idea = str(metadata.get('idea', ''))
+        if self.lineage_graph is not None and idea:
+            root = _idea_root_node(project_id, idea)
+            idea_root_id = root.artifact_id
+            if self.lineage_graph.get(idea_root_id) is None:
+                self.lineage_graph.add(root)
+        if not parent_ids and idea_root_id is not None:
+            parent_ids = [idea_root_id]
         # Resolve project brief from the explicit argument or from metadata (supports resume).
         resolved_brief = project_brief
         if resolved_brief is None and metadata:
