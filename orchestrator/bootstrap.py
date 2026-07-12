@@ -20,6 +20,7 @@ from observability.dashboard import FailureAnalytics
 from observability.telemetry import TelemetryCollector
 from observability.token_budget import TokenBudget
 from orchestrator.context import ApplicationContext
+from prompts.catalog import build_default_catalog
 from providers import AnthropicProvider, CodexProvider, MockProvider, OpenAIProvider, ProviderRegistry
 from services.canva import ICanvaService, MockCanvaService
 from services.chatgpt import IChatGPTService, MockChatGPTService
@@ -69,12 +70,13 @@ class Bootstrap:
         telemetry = TelemetryCollector()
         failure_analytics = FailureAnalytics()
         knowledge_indexer = self._build_knowledge_indexer()
+        prompt_catalog = build_default_catalog()
         validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
         canva_service = self._build_canva_service(settings)
         chatgpt_service = self._build_chatgpt_service(settings)
         agents = self._build_agents(canva_service)
         parser = WorkflowParser(validators['workflow_validator'])
-        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service)
+        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service, prompt_catalog=prompt_catalog)
         persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
         workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
         github_settings = settings.github
@@ -120,6 +122,7 @@ class Bootstrap:
             knowledge_indexer=knowledge_indexer,
             chatgpt=chatgpt_service,
             canva=canva_service,
+            prompt_catalog=prompt_catalog,
             capability_resolver=capability_resolver,
         )
 

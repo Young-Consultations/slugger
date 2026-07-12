@@ -12,6 +12,7 @@ from models.artifact import Artifact
 if TYPE_CHECKING:
     from agents.messaging import MessageBus
     from models.project import ProjectBrief
+    from prompts.catalog import SdlcPromptCatalog
     from services.chatgpt.base import IChatGPTService
 
 
@@ -60,6 +61,8 @@ class ExecutionContext:
     """Approved prompt version used by the agent for this execution step."""
     prompt_content_hash: str | None = field(default=None)
     """SHA-256 hash of the prompt content for tamper detection."""
+    prompt_catalog: SdlcPromptCatalog | None = field(default=None)
+    """SdlcPromptCatalog instance for resolving managed prompts."""
 
     def add_event(self, event: ExecutionEvent) -> None:
         """Attach an execution event to the context."""

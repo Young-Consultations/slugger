@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from agents.messaging import MessageBus
 from agents.registry import AgentRegistry
@@ -24,6 +25,9 @@ from services.canva.base import ICanvaService
 from services.chatgpt.base import IChatGPTService
 from services.github.base import IGitHubService
 from workflow.engine import WorkflowEngine
+
+if TYPE_CHECKING:
+    from prompts.catalog import SdlcPromptCatalog
 
 
 @dataclass(slots=True)
@@ -47,6 +51,7 @@ class ApplicationContext:
     knowledge_indexer: KnowledgeIndexer | None = None
     chatgpt: IChatGPTService | None = None
     canva: ICanvaService | None = None
+    prompt_catalog: SdlcPromptCatalog | None = None
     capability_resolver: CapabilityResolver | None = None
     """Runtime capability resolver; populated by :class:`Bootstrap` (CC-003)."""
 

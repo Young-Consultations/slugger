@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from agents.messaging import MessageBus
 from models.artifact_lineage import ArtifactLineageNode, LineageGraph, SdlcStage
 from models.execution import ExecutionContext
 from models.project import ProjectBrief
 from validators.quality_gate import QualityGateEvaluator
 from workflow.models import StepInstance
+
+if TYPE_CHECKING:
+    from prompts.catalog import SdlcPromptCatalog
 
 # Maps step name keywords to SDLC stages for automatic lineage tagging
 _STAGE_KEYWORDS: list[tuple[str, SdlcStage]] = [
@@ -49,12 +54,14 @@ class StepExecutor:
         message_bus: MessageBus | None = None,
         lineage_graph: LineageGraph | None = None,
         chatgpt_service: object | None = None,
+        prompt_catalog: SdlcPromptCatalog | None = None,
     ) -> None:
         self.agent_registry = agent_registry
         self.quality_gate_evaluator = quality_gate_evaluator
         self.message_bus = message_bus
         self.lineage_graph = lineage_graph
         self.chatgpt_service = chatgpt_service
+        self.prompt_catalog = prompt_catalog
 
     def execute(
         self,
@@ -83,6 +90,7 @@ class StepExecutor:
             message_bus=self.message_bus,
             project_brief=resolved_brief,
             chatgpt_service=self.chatgpt_service,
+            prompt_catalog=self.prompt_catalog,
         )
         artifacts = agent.execute(context)
         results = []

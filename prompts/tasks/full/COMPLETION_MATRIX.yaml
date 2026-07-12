@@ -14,8 +14,11 @@ tasks:
   title: Make managed prompts the only runtime prompt source
   depends_on:
   - GA-001
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: prompt_catalog injected through ApplicationContext, Bootstrap,
+    StepExecutor, and ExecutionContext'
+  - 'Tests: tests/test_prompt_lifecycle.py and prompt catalog regression suite'
 - id: GA-003
   title: Create one provider and service resolution path
   depends_on:

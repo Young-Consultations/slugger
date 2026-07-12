@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from models.execution import ExecutionContext
+from prompts.catalog import build_default_catalog
 from prompts.lifecycle import (
     PromptApprovalStatus,
     PromptQualityScorer,
@@ -130,3 +132,50 @@ def test_all_prompts_returns_latest_versions(registry: PromptRegistry) -> None:
     registry.register('p2', 'P2', 'content')
     all_prompts = registry.all_prompts()
     assert len(all_prompts) == 2
+
+
+def test_execution_context_records_prompt_provenance() -> None:
+    context = ExecutionContext(project_id='project', workflow_name='workflow', step_name='step')
+    context.record_prompt(
+        prompt_id='sdlc.requirements.v1',
+        version='1.0.0',
+        content_hash='abc123',
+    )
+    assert context.prompt_id == 'sdlc.requirements.v1'
+    assert context.prompt_version == '1.0.0'
+    assert context.prompt_content_hash == 'abc123'
+
+
+def test_catalog_contains_all_production_prompts() -> None:
+    catalog = build_default_catalog()
+    for prompt_id in (
+        'sdlc.product_vision.v1',
+        'sdlc.requirements.v1',
+        'sdlc.user_stories.v1',
+        'sdlc.project_plan.v1',
+    ):
+        prompt = catalog.get(prompt_id)
+        assert prompt is not None
+        assert prompt.status == PromptApprovalStatus.APPROVED
+
+
+def test_unapproved_prompt_status() -> None:
+    draft = PromptVersion(prompt_id='draft', name='Draft', content='content')
+    rejected = PromptVersion(
+        prompt_id='rejected',
+        name='Rejected',
+        content='content',
+        status=PromptApprovalStatus.REJECTED,
+    )
+    approved = PromptVersion(
+        prompt_id='approved',
+        name='Approved',
+        content='content',
+        status=PromptApprovalStatus.APPROVED,
+    )
+
+    assert draft.status == PromptApprovalStatus.DRAFT
+    assert rejected.status == PromptApprovalStatus.REJECTED
+    assert draft.status != PromptApprovalStatus.APPROVED
+    assert rejected.status != PromptApprovalStatus.APPROVED
+    assert approved.status == PromptApprovalStatus.APPROVED
