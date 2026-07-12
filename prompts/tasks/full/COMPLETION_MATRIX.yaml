@@ -24,8 +24,11 @@ tasks:
   depends_on:
   - GA-001
   - GA-002
-  status: not_started
-  evidence: []
+  status: completed
+  evidence:
+  - 'Runtime wiring: Bootstrap now creates one CapabilityResolver with the active environment profile and stores it on ApplicationContext'
+  - 'Production enforcement: providers/capabilities.py adds resolve_strict() plus production mock restrictions for provider resolution'
+  - 'Tests: tests/test_cc003_capabilities.py and tests/test_provider_contracts.py'
 - id: GA-004
   title: Complete planning, architecture, ADR, and design stages
   depends_on:

@@ -19,9 +19,14 @@ from models.provider import HealthResult, ProviderConfig, ProviderType
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_provider(name: str = 'mock', available: bool = True, model: str = 'stub') -> MagicMock:
+def _make_provider(
+    name: str = 'mock',
+    available: bool = True,
+    model: str = 'stub',
+    provider_type: ProviderType = ProviderType.MOCK,
+) -> MagicMock:
     provider = MagicMock()
-    provider.config = ProviderConfig(name=name, provider_type=ProviderType.MOCK)
+    provider.config = ProviderConfig(name=name, provider_type=provider_type)
     provider.health_check.return_value = HealthResult(
         provider=name,
         available=available,
@@ -123,11 +128,51 @@ class TestCapabilityResolver:
         assert result.provider_name == 'mock'
         assert result.available
 
+    @pytest.mark.parametrize('profile', ['development', 'test'])
+    def test_mock_allowed_in_non_production_profiles(self, profile: str) -> None:
+        reg = _make_registry(('mock', _make_provider('mock')))
+        resolver = CapabilityResolver(reg, profile=profile)
+        result = resolver.resolve(Capability.CODE_AGENT)
+        assert result.provider_name == 'mock'
+        assert result.available
+
+    def test_mock_disallowed_in_production_profile(self) -> None:
+        reg = _make_registry(('mock', _make_provider('mock')))
+        resolver = CapabilityResolver(reg, profile='production')
+        with pytest.raises(CapabilityNotAvailableError) as exc_info:
+            resolver.resolve(Capability.CODE_AGENT)
+        assert 'mock providers are not allowed' in str(exc_info.value)
+
+    def test_resolve_strict_requires_real_provider_in_production(self) -> None:
+        reg = _make_registry(('mock', _make_provider('mock')))
+        resolver = CapabilityResolver(reg)
+        with pytest.raises(RuntimeError) as exc_info:
+            resolver.resolve_strict(Capability.CODE_AGENT, profile='production')
+        assert 'code_agent' in str(exc_info.value)
+
+    def test_resolve_strict_returns_real_provider(self) -> None:
+        codex_p = _make_provider('codex', provider_type=ProviderType.CODEX)
+        reg = _make_registry(('codex', codex_p), ('mock', _make_provider('mock')))
+        resolver = CapabilityResolver(reg)
+        result = resolver.resolve_strict(Capability.CODE_AGENT)
+        assert result.provider_name == 'codex'
+        assert result.provider_type == ProviderType.CODEX.value
+
     def test_resolution_returns_correct_capability(self) -> None:
         reg = _make_registry(('mock', _make_provider()))
         resolver = CapabilityResolver(reg)
         result = resolver.resolve(Capability.DESIGN)
         assert result.capability == Capability.DESIGN
+
+    def test_all_capabilities_resolve_with_mock_in_development(self) -> None:
+        reg = _make_registry(('mock', _make_provider('mock')))
+        resolver = CapabilityResolver(reg, profile='development')
+        for capability in Capability:
+            result = resolver.resolve(capability)
+            assert result.capability == capability
+            assert result.available
+            assert result.provider_name == 'mock'
+            assert result.provider_type == ProviderType.MOCK.value
 
     def test_resolution_records_model(self) -> None:
         p = _make_provider('openai', model='gpt-4o')

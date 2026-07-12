@@ -35,6 +35,7 @@ class Bootstrap:
 
     def build(self, config_path: str | None = None) -> ApplicationContext:
         settings = ConfigLoader(self.root_path).load(config_path)
+        profile = self._get_environment_profile(settings)
         providers = ProviderRegistry()
         for name, config in settings.providers.configs.items():
             if config.provider_type == ProviderType.OPENAI:
@@ -94,13 +95,12 @@ class Bootstrap:
                 github_service = GitHubClient(owner=github_settings.owner, repo=github_settings.repo, token=token)
             else:
                 github_service = MockGitHubService()
-        strict_mode = getattr(getattr(settings, 'environment', None), 'strict_mode', False) if hasattr(settings, 'environment') else False
-        if isinstance(strict_mode, str):
-            strict_mode = strict_mode.lower() in ('true', '1', 'yes')
+        strict_mode = profile.lower() in ('production', 'prod')
         from providers.capabilities import CapabilityResolver
         capability_resolver = CapabilityResolver(
             provider_registry=providers,
             strict_mode=bool(strict_mode),
+            profile=profile,
         )
         return ApplicationContext(
             settings=settings,
@@ -182,3 +182,15 @@ class Bootstrap:
                 )
             return indexer
         return None
+
+    def _get_environment_profile(self, settings: object) -> str:
+        environment = getattr(settings, 'environment', 'development')
+        if isinstance(environment, str):
+            return environment or 'development'
+        profile = getattr(environment, 'profile', None)
+        if profile:
+            return str(profile)
+        name = getattr(environment, 'name', None)
+        if name:
+            return str(name)
+        return 'development'
