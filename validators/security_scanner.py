@@ -17,11 +17,11 @@ from typing import Any
 class Severity(str, Enum):
     """Finding severity level."""
 
-    CRITICAL = 'critical'
-    HIGH = 'high'
-    MEDIUM = 'medium'
-    LOW = 'low'
-    INFO = 'info'
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
 
 
 @dataclass
@@ -46,15 +46,15 @@ class SecurityFinding:
     severity: Severity
     message: str
     line_number: int = 0
-    snippet: str = ''
+    snippet: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'rule_id': self.rule_id,
-            'severity': self.severity.value,
-            'message': self.message,
-            'line_number': self.line_number,
-            'snippet': self.snippet[:120],
+            "rule_id": self.rule_id,
+            "severity": self.severity.value,
+            "message": self.message,
+            "line_number": self.line_number,
+            "snippet": self.snippet[:120],
         }
 
 
@@ -68,7 +68,9 @@ class ScanResult:
     @property
     def passed(self) -> bool:
         """``True`` when no CRITICAL or HIGH findings exist."""
-        return not any(f.severity in (Severity.CRITICAL, Severity.HIGH) for f in self.findings)
+        return not any(
+            f.severity in (Severity.CRITICAL, Severity.HIGH) for f in self.findings
+        )
 
     @property
     def finding_count(self) -> int:
@@ -76,16 +78,17 @@ class ScanResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'artifact_name': self.artifact_name,
-            'passed': self.passed,
-            'finding_count': self.finding_count,
-            'findings': [f.to_dict() for f in self.findings],
+            "artifact_name": self.artifact_name,
+            "passed": self.passed,
+            "finding_count": self.finding_count,
+            "findings": [f.to_dict() for f in self.findings],
         }
 
 
 # --------------------------------------------------------------------------- #
 # Built-in rules                                                               #
 # --------------------------------------------------------------------------- #
+
 
 @dataclass
 class _Rule:
@@ -96,22 +99,75 @@ class _Rule:
 
 
 _RULES: list[_Rule] = [
-    _Rule('SEC001', Severity.CRITICAL, re.compile(r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{4,}["\']'), 'Hard-coded password detected'),
-    _Rule('SEC002', Severity.CRITICAL, re.compile(r'(?i)(api[_-]?key|apikey)\s*=\s*["\'][A-Za-z0-9_\-]{10,}["\']'), 'Hard-coded API key detected'),
-    _Rule('SEC003', Severity.CRITICAL, re.compile(r'(?i)(secret[_-]?key|secret)\s*=\s*["\'][A-Za-z0-9_\-]{8,}["\']'), 'Hard-coded secret detected'),
-    _Rule('SEC004', Severity.HIGH, re.compile(r'(?i)(access[_-]?token|auth[_-]?token)\s*=\s*["\'][A-Za-z0-9_\-.]{10,}["\']'), 'Hard-coded token detected'),
-    _Rule('SEC005', Severity.HIGH, re.compile(r'\beval\s*\('), 'Use of eval() — potential code injection'),
-    _Rule('SEC006', Severity.HIGH, re.compile(r'\bexec\s*\('), 'Use of exec() — potential code injection'),
-    _Rule('SEC007', Severity.MEDIUM, re.compile(r'\bsubprocess\.call\s*\(\s*["\']'), 'subprocess.call with string argument — prefer list form'),
-    _Rule('SEC008', Severity.MEDIUM, re.compile(r'\bos\.system\s*\('), 'os.system() — prefer subprocess with a list'),
-    _Rule('SEC009', Severity.LOW, re.compile(r'\bprint\s*\(.*password', re.IGNORECASE), 'Possible password logging'),
-    _Rule('SEC010', Severity.INFO, re.compile(r'\bTODO\s*:.*(?:auth|security|cred)', re.IGNORECASE), 'Security-related TODO comment'),
+    _Rule(
+        "SEC001",
+        Severity.CRITICAL,
+        re.compile(r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{4,}["\']'),
+        "Hard-coded password detected",
+    ),
+    _Rule(
+        "SEC002",
+        Severity.CRITICAL,
+        re.compile(r'(?i)(api[_-]?key|apikey)\s*=\s*["\'][A-Za-z0-9_\-]{10,}["\']'),
+        "Hard-coded API key detected",
+    ),
+    _Rule(
+        "SEC003",
+        Severity.CRITICAL,
+        re.compile(r'(?i)(secret[_-]?key|secret)\s*=\s*["\'][A-Za-z0-9_\-]{8,}["\']'),
+        "Hard-coded secret detected",
+    ),
+    _Rule(
+        "SEC004",
+        Severity.HIGH,
+        re.compile(
+            r'(?i)(access[_-]?token|auth[_-]?token)\s*=\s*["\'][A-Za-z0-9_\-.]{10,}["\']'
+        ),
+        "Hard-coded token detected",
+    ),
+    _Rule(
+        "SEC005",
+        Severity.HIGH,
+        re.compile(r"\beval\s*\("),
+        "Use of eval() — potential code injection",
+    ),
+    _Rule(
+        "SEC006",
+        Severity.HIGH,
+        re.compile(r"\bexec\s*\("),
+        "Use of exec() — potential code injection",
+    ),
+    _Rule(
+        "SEC007",
+        Severity.MEDIUM,
+        re.compile(r'\bsubprocess\.call\s*\(\s*["\']'),
+        "subprocess.call with string argument — prefer list form",
+    ),
+    _Rule(
+        "SEC008",
+        Severity.MEDIUM,
+        re.compile(r"\bos\.system\s*\("),
+        "os.system() — prefer subprocess with a list",
+    ),
+    _Rule(
+        "SEC009",
+        Severity.LOW,
+        re.compile(r"\bprint\s*\(.*password", re.IGNORECASE),
+        "Possible password logging",
+    ),
+    _Rule(
+        "SEC010",
+        Severity.INFO,
+        re.compile(r"\bTODO\s*:.*(?:auth|security|cred)", re.IGNORECASE),
+        "Security-related TODO comment",
+    ),
 ]
 
 
 # --------------------------------------------------------------------------- #
 # Scanner                                                                      #
 # --------------------------------------------------------------------------- #
+
 
 class SecurityScanner:
     """Scan artifact text for security issues using pattern-based rules.

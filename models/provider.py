@@ -10,11 +10,11 @@ from typing import Any
 class ProviderType(str, Enum):
     """Supported provider categories."""
 
-    OPENAI = 'openai'
-    ANTHROPIC = 'anthropic'
-    CODEX = 'codex'
-    MOCK = 'mock'
-    CUSTOM = 'custom'
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    CODEX = "codex"
+    MOCK = "mock"
+    CUSTOM = "custom"
 
 
 @dataclass(slots=True)
@@ -23,7 +23,7 @@ class ProviderConfig:
 
     name: str
     provider_type: ProviderType
-    model: str = 'stub-model'
+    model: str = "stub-model"
     api_key: str | None = None
     api_key_env: str | None = None
     base_url: str | None = None
@@ -51,7 +51,7 @@ class GenerationRequest:
     """Request model for text or code generation."""
 
     prompt: str
-    language: str = 'Python'
+    language: str = "Python"
     temperature: float | None = None
     max_tokens: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -62,7 +62,7 @@ class GenerationResult:
     """Result model for text or code generation."""
 
     content: str
-    model: str = ''
+    model: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -73,7 +73,7 @@ class ReviewRequest:
     """Request model for code or prompt review."""
 
     code: str
-    language: str = 'Python'
+    language: str = "Python"
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -94,7 +94,7 @@ class RefactorRequest:
 
     code: str
     instruction: str
-    language: str = 'Python'
+    language: str = "Python"
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -103,7 +103,7 @@ class RefactorResult:
     """Result model for code refactoring."""
 
     refactored_code: str
-    model: str = ''
+    model: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -112,7 +112,7 @@ class EmbeddingRequest:
     """Request model for embeddings."""
 
     texts: list[str]
-    model: str = ''
+    model: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -121,7 +121,7 @@ class EmbeddingResult:
     """Result model for embeddings."""
 
     embeddings: list[list[float]]
-    model: str = ''
+    model: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -131,7 +131,7 @@ class HealthResult:
 
     provider: str
     available: bool
-    model: str = ''
+    model: str = ""
     latency_ms: float | None = None
     has_credentials: bool = False
     reachable: bool = False

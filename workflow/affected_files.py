@@ -7,7 +7,7 @@ for targeted test selection, incremental builds, and rollback scoping.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -15,9 +15,9 @@ from pathlib import Path
 class FileChangeKind(str, Enum):
     """Nature of the file change."""
 
-    CREATED = 'created'
-    MODIFIED = 'modified'
-    DELETED = 'deleted'
+    CREATED = "created"
+    MODIFIED = "modified"
+    DELETED = "deleted"
 
 
 @dataclass
@@ -39,7 +39,7 @@ class FileChange:
     path: str
     kind: FileChangeKind
     step_name: str
-    artifact_name: str = ''
+    artifact_name: str = ""
 
 
 class AffectedFilesTracker:
@@ -67,7 +67,7 @@ class AffectedFilesTracker:
         path: str | Path,
         kind: FileChangeKind,
         step_name: str,
-        artifact_name: str = '',
+        artifact_name: str = "",
     ) -> FileChange:
         """Record a file change and return the created :class:`FileChange`.
 

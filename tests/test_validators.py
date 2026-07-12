@@ -4,7 +4,7 @@ from validators import AgentValidator, ArtifactValidator
 
 
 def test_artifact_validator_detects_missing_content() -> None:
-    artifact = DocumentArtifact(artifact_id='a1', name='empty', content='')
+    artifact = DocumentArtifact(artifact_id="a1", name="empty", content="")
     result = ArtifactValidator().validate(artifact)
     assert not result.valid
     assert result.errors

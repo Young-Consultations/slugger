@@ -20,34 +20,56 @@ class HelloVisionAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='product_vision_agent',
-                version='1.0.0',
-                description='Generates a product vision',
-                category='planning',
-                outputs=['product_vision'],
+                name="product_vision_agent",
+                version="1.0.0",
+                description="Generates a product vision",
+                category="planning",
+                outputs=["product_vision"],
             ),
-            capabilities=[AgentCapability(name='product_vision', description='Create product vision')],
+            capabilities=[
+                AgentCapability(
+                    name="product_vision", description="Create product vision"
+                )
+            ],
         )
 
     def _execute(self, context: ExecutionContext) -> list:
-        return [self.create_artifact(context, 'product_vision', '# Vision\n\nA simple hello-world app.', DocumentArtifact)]
+        return [
+            self.create_artifact(
+                context,
+                "product_vision",
+                "# Vision\n\nA simple hello-world app.",
+                DocumentArtifact,
+            )
+        ]
 
 
 class HelloRequirementsAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='requirements_agent',
-                version='1.0.0',
-                description='Derives requirements from the vision',
-                category='planning',
-                outputs=['requirements'],
+                name="requirements_agent",
+                version="1.0.0",
+                description="Derives requirements from the vision",
+                category="planning",
+                outputs=["requirements"],
             ),
-            capabilities=[AgentCapability(name='requirements', description='Generate requirements')],
+            capabilities=[
+                AgentCapability(
+                    name="requirements", description="Generate requirements"
+                )
+            ],
         )
 
     def _execute(self, context: ExecutionContext) -> list:
-        return [self.create_artifact(context, 'requirements', '# Requirements\n\n- Print "Hello, World!"', DocumentArtifact)]
+        return [
+            self.create_artifact(
+                context,
+                "requirements",
+                '# Requirements\n\n- Print "Hello, World!"',
+                DocumentArtifact,
+            )
+        ]
 
 
 def main() -> None:
@@ -55,21 +77,21 @@ def main() -> None:
     registry.register(HelloVisionAgent())
     registry.register(HelloRequirementsAgent())
 
-    evaluator = QualityGateEvaluator({'artifact_validator': ArtifactValidator()})
+    evaluator = QualityGateEvaluator({"artifact_validator": ArtifactValidator()})
     executor = StepExecutor(registry, evaluator)
     engine = WorkflowEngine(
-        recipe_directory=Path(__file__).parents[2] / 'workflow' / 'recipes',
+        recipe_directory=Path(__file__).parents[2] / "workflow" / "recipes",
         parser=WorkflowParser(WorkflowValidator()),
         executor=executor,
     )
 
-    result = engine.run('requirements-gathering', project_id='hello-world')
-    print(f'Status : {result.status}')
+    result = engine.run("requirements-gathering", project_id="hello-world")
+    print(f"Status : {result.status}")
     for artifact in result.artifacts:
-        print(f'Artifact: {artifact.name}')
+        print(f"Artifact: {artifact.name}")
         print(artifact.content)
-        print('---')
+        print("---")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -14,20 +14,37 @@ class ReleaseAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='release_agent',
-                version='1.0.0',
-                description='Create release artifacts.',
-                category='operations',
+                name="release_agent",
+                version="1.0.0",
+                description="Create release artifacts.",
+                category="operations",
                 inputs=[],
-                outputs=['release_notes'],
-                tags=['operations', 'release'],
-                provider='mock',
+                outputs=["release_notes"],
+                tags=["operations", "release"],
+                provider="mock",
             ),
-            capabilities=[AgentCapability(name='release', description='Create release artifacts.', outputs=('release_notes',))],
+            capabilities=[
+                AgentCapability(
+                    name="release",
+                    description="Create release artifacts.",
+                    outputs=("release_notes",),
+                )
+            ],
         )
 
     def _execute(self, context: ExecutionContext):
         idea = context.get_idea()
-        input_summaries = {name: context.artifact_content(name) for name in context.inputs}
-        content = f"# Release Notes\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n" + "\n\n".join(f"**{name}:**\n{content}" for name, content in input_summaries.items() if content)
-        return [self.create_artifact(context, 'release_notes', content, DocumentArtifact)]
+        input_summaries = {
+            name: context.artifact_content(name) for name in context.inputs
+        }
+        content = (
+            f"# Release Notes\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n"
+            + "\n\n".join(
+                f"**{name}:**\n{content}"
+                for name, content in input_summaries.items()
+                if content
+            )
+        )
+        return [
+            self.create_artifact(context, "release_notes", content, DocumentArtifact)
+        ]

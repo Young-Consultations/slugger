@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import List
 
 from models.artifact import Artifact
 
@@ -32,8 +33,10 @@ class InMemoryArtifactStore:
     def list(self) -> list[Artifact]:
         return list(self._artifacts.values())
 
-    def find_by_name(self, name: str) -> list[Artifact]:
-        return [artifact for artifact in self._artifacts.values() if artifact.name == name]
+    def find_by_name(self, name: str) -> List[Artifact]:
+        return [
+            artifact for artifact in self._artifacts.values() if artifact.name == name
+        ]
 
     def extend(self, artifacts: Iterable[Artifact]) -> None:
         for artifact in artifacts:

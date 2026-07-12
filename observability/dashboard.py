@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from observability.collector import MetricsCollector
-from observability.models import Metric, Span
+from observability.models import Metric
 from observability.tracer import ExecutionTracer
 
 
@@ -51,12 +51,12 @@ class FailureRecord:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'step_name': self.step_name,
-            'agent_name': self.agent_name,
-            'error_type': self.error_type,
-            'message': self.message,
-            'timestamp': self.timestamp.isoformat(),
-            'metadata': dict(self.metadata),
+            "step_name": self.step_name,
+            "agent_name": self.agent_name,
+            "error_type": self.error_type,
+            "message": self.message,
+            "timestamp": self.timestamp.isoformat(),
+            "metadata": dict(self.metadata),
         }
 
 
@@ -127,10 +127,10 @@ class FailureAnalytics:
             by_agent[f.agent_name] += 1
             by_step[f.step_name] += 1
         return {
-            'total_failures': len(self._failures),
-            'by_error_type': dict(by_type),
-            'by_agent': dict(by_agent),
-            'by_step': dict(by_step),
+            "total_failures": len(self._failures),
+            "by_error_type": dict(by_type),
+            "by_agent": dict(by_agent),
+            "by_step": dict(by_step),
         }
 
 
@@ -165,11 +165,11 @@ class DashboardSnapshot:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'generated_at': self.generated_at.isoformat(),
-            'metrics': self.metrics_summary,
-            'spans': self.span_summary,
-            'failures': self.failure_summary,
-            'tokens': self.token_summary,
+            "generated_at": self.generated_at.isoformat(),
+            "metrics": self.metrics_summary,
+            "spans": self.span_summary,
+            "failures": self.failure_summary,
+            "tokens": self.token_summary,
         }
 
 
@@ -218,14 +218,14 @@ class MetricsDashboard:
         for m in metrics:
             metric_names[m.name].append(m.value)
         metrics_summary: dict[str, Any] = {
-            'total_metrics': len(metrics),
-            'unique_names': len(metric_names),
-            'by_name': {
+            "total_metrics": len(metrics),
+            "unique_names": len(metric_names),
+            "by_name": {
                 name: {
-                    'count': len(vals),
-                    'min': min(vals),
-                    'max': max(vals),
-                    'avg': round(sum(vals) / len(vals), 4),
+                    "count": len(vals),
+                    "min": min(vals),
+                    "max": max(vals),
+                    "avg": round(sum(vals) / len(vals), 4),
                 }
                 for name, vals in metric_names.items()
             },
@@ -239,11 +239,13 @@ class MetricsDashboard:
             if s.ended_at is not None
         ]
         span_summary: dict[str, Any] = {
-            'total_spans': len(spans),
-            'completed_spans': len(completed),
-            'avg_duration_seconds': round(sum(durations) / len(durations), 4) if durations else 0.0,
-            'max_duration_seconds': round(max(durations), 4) if durations else 0.0,
-            'min_duration_seconds': round(min(durations), 4) if durations else 0.0,
+            "total_spans": len(spans),
+            "completed_spans": len(completed),
+            "avg_duration_seconds": round(sum(durations) / len(durations), 4)
+            if durations
+            else 0.0,
+            "max_duration_seconds": round(max(durations), 4) if durations else 0.0,
+            "min_duration_seconds": round(min(durations), 4) if durations else 0.0,
         }
 
         # Token / cost summary

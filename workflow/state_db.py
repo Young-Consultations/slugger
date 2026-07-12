@@ -29,16 +29,16 @@ class WorkflowStateDB:
         in-process store (useful in tests).
     """
 
-    def __init__(self, db_path: str | Path = ':memory:') -> None:
+    def __init__(self, db_path: str | Path = ":memory:") -> None:
         self._db_path = str(db_path)
-        if self._db_path != ':memory:':
+        if self._db_path != ":memory:":
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         # For in-memory databases we keep a single shared connection so data
         # is not lost between calls.  For file-backed databases a new
         # connection is opened per operation (safe for concurrent access).
         self._shared_conn: sqlite3.Connection | None = None
-        if self._db_path == ':memory:':
-            self._shared_conn = sqlite3.connect(':memory:')
+        if self._db_path == ":memory:":
+            self._shared_conn = sqlite3.connect(":memory:")
             self._shared_conn.isolation_level = None
         self._initialise()
 
@@ -57,22 +57,28 @@ class WorkflowStateDB:
         now = self._current_timestamp()
         with self._connection() as conn:
             conn.execute(
-                '''
+                """
                 INSERT INTO workflow_runs (run_id, workflow_name, status, payload, updated_at)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     status = excluded.status,
                     payload = excluded.payload,
                     updated_at = excluded.updated_at
-                ''',
-                (instance.run_id, instance.definition.name, instance.status, payload, now),
+                """,
+                (
+                    instance.run_id,
+                    instance.definition.name,
+                    instance.status,
+                    payload,
+                    now,
+                ),
             )
 
     def load(self, run_id: str) -> WorkflowInstance | None:
         """Return the :class:`WorkflowInstance` for *run_id*, or ``None``."""
         with self._connection() as conn:
             row = conn.execute(
-                'SELECT payload FROM workflow_runs WHERE run_id = ?', (run_id,)
+                "SELECT payload FROM workflow_runs WHERE run_id = ?", (run_id,)
             ).fetchone()
         if row is None:
             return None
@@ -82,17 +88,20 @@ class WorkflowStateDB:
         """Return stored run IDs, optionally filtered by *status*."""
         with self._connection() as conn:
             if status is None:
-                rows = conn.execute('SELECT run_id FROM workflow_runs ORDER BY updated_at').fetchall()
+                rows = conn.execute(
+                    "SELECT run_id FROM workflow_runs ORDER BY updated_at"
+                ).fetchall()
             else:
                 rows = conn.execute(
-                    'SELECT run_id FROM workflow_runs WHERE status = ? ORDER BY updated_at', (status,)
+                    "SELECT run_id FROM workflow_runs WHERE status = ? ORDER BY updated_at",
+                    (status,),
                 ).fetchall()
         return [row[0] for row in rows]
 
     def delete(self, run_id: str) -> None:
         """Remove the record for *run_id* from the database."""
         with self._connection() as conn:
-            conn.execute('DELETE FROM workflow_runs WHERE run_id = ?', (run_id,))
+            conn.execute("DELETE FROM workflow_runs WHERE run_id = ?", (run_id,))
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -101,7 +110,7 @@ class WorkflowStateDB:
     def _initialise(self) -> None:
         with self._connection() as conn:
             conn.execute(
-                '''
+                """
                 CREATE TABLE IF NOT EXISTS workflow_runs (
                     run_id       TEXT PRIMARY KEY,
                     workflow_name TEXT NOT NULL,
@@ -109,7 +118,7 @@ class WorkflowStateDB:
                     payload      TEXT NOT NULL,
                     updated_at   TEXT NOT NULL
                 )
-                '''
+                """
             )
 
     @contextmanager

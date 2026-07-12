@@ -14,20 +14,39 @@ class KnowledgeAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             metadata=AgentMetadata(
-                name='knowledge_agent',
-                version='1.0.0',
-                description='Create knowledge lookup artifacts.',
-                category='support',
+                name="knowledge_agent",
+                version="1.0.0",
+                description="Create knowledge lookup artifacts.",
+                category="support",
                 inputs=[],
-                outputs=['knowledge_response'],
-                tags=['support', 'knowledge'],
-                provider='mock',
+                outputs=["knowledge_response"],
+                tags=["support", "knowledge"],
+                provider="mock",
             ),
-            capabilities=[AgentCapability(name='knowledge', description='Create knowledge lookup artifacts.', outputs=('knowledge_response',))],
+            capabilities=[
+                AgentCapability(
+                    name="knowledge",
+                    description="Create knowledge lookup artifacts.",
+                    outputs=("knowledge_response",),
+                )
+            ],
         )
 
     def _execute(self, context: ExecutionContext):
         idea = context.get_idea()
-        input_summaries = {name: context.artifact_content(name) for name in context.inputs}
-        content = f"# Knowledge Response\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n" + "\n\n".join(f"**{name}:**\n{content}" for name, content in input_summaries.items() if content)
-        return [self.create_artifact(context, 'knowledge_response', content, DocumentArtifact)]
+        input_summaries = {
+            name: context.artifact_content(name) for name in context.inputs
+        }
+        content = (
+            f"# Knowledge Response\n\n**Idea:** {idea}\n\nAgent: {self.metadata.name}\n\n"
+            + "\n\n".join(
+                f"**{name}:**\n{content}"
+                for name, content in input_summaries.items()
+                if content
+            )
+        )
+        return [
+            self.create_artifact(
+                context, "knowledge_response", content, DocumentArtifact
+            )
+        ]

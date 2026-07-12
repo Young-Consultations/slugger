@@ -28,9 +28,9 @@ class FieldSchema:
     """
 
     name: str
-    description: str = ''
+    description: str = ""
     required: bool = True
-    field_type: str = 'str'
+    field_type: str = "str"
 
 
 @dataclass
@@ -54,7 +54,7 @@ class AgentContract:
     agent_name: str
     inputs: list[FieldSchema] = field(default_factory=list)
     outputs: list[FieldSchema] = field(default_factory=list)
-    version: str = '1.0.0'
+    version: str = "1.0.0"
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
@@ -99,53 +99,55 @@ class AgentContract:
         errors: list[str] = []
         for field_schema in self.outputs:
             if field_schema.required and field_schema.name not in produced:
-                errors.append(f"Required output '{field_schema.name}' was not produced.")
+                errors.append(
+                    f"Required output '{field_schema.name}' was not produced."
+                )
         return errors
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise the contract to a JSON-compatible dict."""
         return {
-            'agent_name': self.agent_name,
-            'version': self.version,
-            'inputs': [
+            "agent_name": self.agent_name,
+            "version": self.version,
+            "inputs": [
                 {
-                    'name': f.name,
-                    'description': f.description,
-                    'required': f.required,
-                    'field_type': f.field_type,
+                    "name": f.name,
+                    "description": f.description,
+                    "required": f.required,
+                    "field_type": f.field_type,
                 }
                 for f in self.inputs
             ],
-            'outputs': [
+            "outputs": [
                 {
-                    'name': f.name,
-                    'description': f.description,
-                    'required': f.required,
-                    'field_type': f.field_type,
+                    "name": f.name,
+                    "description": f.description,
+                    "required": f.required,
+                    "field_type": f.field_type,
                 }
                 for f in self.outputs
             ],
-            'metadata': self.metadata,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'AgentContract':
+    def from_dict(cls, data: dict[str, Any]) -> "AgentContract":
         """Deserialise a contract from a plain dict."""
 
         def _field(raw: dict[str, Any]) -> FieldSchema:
             return FieldSchema(
-                name=raw['name'],
-                description=raw.get('description', ''),
-                required=raw.get('required', True),
-                field_type=raw.get('field_type', 'str'),
+                name=raw["name"],
+                description=raw.get("description", ""),
+                required=raw.get("required", True),
+                field_type=raw.get("field_type", "str"),
             )
 
         return cls(
-            agent_name=data['agent_name'],
-            inputs=[_field(f) for f in data.get('inputs', [])],
-            outputs=[_field(f) for f in data.get('outputs', [])],
-            version=data.get('version', '1.0.0'),
-            metadata=data.get('metadata', {}),
+            agent_name=data["agent_name"],
+            inputs=[_field(f) for f in data.get("inputs", [])],
+            outputs=[_field(f) for f in data.get("outputs", [])],
+            version=data.get("version", "1.0.0"),
+            metadata=data.get("metadata", {}),
         )
 
 

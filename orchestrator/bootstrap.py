@@ -6,7 +6,33 @@ import logging
 import os
 from pathlib import Path
 
-from agents import ADRAgent, APIDesignAgent, AgentRegistry, CICDAgent, ChangelogAgent, CodeGeneratorAgent, CodeReviewAgent, DeploymentAgent, DiagramAgent, DocumentationAgent, GitHubIssuesAgent, KnowledgeAgent, MonitoringAgent, PerformanceAgent, ProductVisionAgent, ProjectPlanAgent, RefactorAgent, ReflectionAgent, ReleaseAgent, RequirementsAgent, SecurityReviewAgent, SystemDesignAgent, TestGeneratorAgent, TestRunnerAgent, UserStoryAgent
+from agents import (
+    ADRAgent,
+    APIDesignAgent,
+    AgentRegistry,
+    CICDAgent,
+    ChangelogAgent,
+    CodeGeneratorAgent,
+    CodeReviewAgent,
+    DeploymentAgent,
+    DiagramAgent,
+    DocumentationAgent,
+    GitHubIssuesAgent,
+    KnowledgeAgent,
+    MonitoringAgent,
+    PerformanceAgent,
+    ProductVisionAgent,
+    ProjectPlanAgent,
+    RefactorAgent,
+    ReflectionAgent,
+    ReleaseAgent,
+    RequirementsAgent,
+    SecurityReviewAgent,
+    SystemDesignAgent,
+    TestGeneratorAgent,
+    TestRunnerAgent,
+    UserStoryAgent,
+)
 from agents.architecture.canva_design_agent import CanvaDesignAgent
 from agents.messaging import MessageBus
 from config.loader import ConfigLoader
@@ -22,11 +48,24 @@ from observability.telemetry import TelemetryCollector
 from observability.token_budget import TokenBudget
 from orchestrator.context import ApplicationContext
 from prompts.catalog import build_default_catalog
-from providers import AnthropicProvider, CodexCliAdapter, CodexProvider, FakeCodexAgentClient, MockProvider, OpenAIProvider, ProviderRegistry
+from providers import (
+    AnthropicProvider,
+    CodexCliAdapter,
+    CodexProvider,
+    FakeCodexAgentClient,
+    MockProvider,
+    OpenAIProvider,
+    ProviderRegistry,
+)
 from services.canva import ICanvaService, MockCanvaService
 from services.chatgpt import IChatGPTService, MockChatGPTService
 from services.github import IGitHubService, MockGitHubService
-from validators import AgentValidator, ArtifactValidator, QualityGateEvaluator, WorkflowValidator
+from validators import (
+    AgentValidator,
+    ArtifactValidator,
+    QualityGateEvaluator,
+    WorkflowValidator,
+)
 from workflow import StepExecutor, WorkflowEngine, WorkflowParser, WorkflowPersistence
 
 
@@ -47,22 +86,46 @@ class Bootstrap:
                 providers.register(name, CodexProvider(config))
             else:
                 providers.register(name, MockProvider(config))
-        if 'mock' not in providers.list():
-            providers.register('mock', MockProvider(ProviderConfig(name='mock', provider_type=ProviderType.MOCK)))
+        if "mock" not in providers.list():
+            providers.register(
+                "mock",
+                MockProvider(
+                    ProviderConfig(name="mock", provider_type=ProviderType.MOCK)
+                ),
+            )
         # Register Codex provider when OPENAI_API_KEY is present and codex is not yet registered.
         # Codex is registered separately from the openai provider so it gets the correct
         # ProviderType.CODEX discriminator for capability routing.
-        if 'codex' not in providers.list():
-            codex_key = os.environ.get('OPENAI_API_KEY', '')
+        if "codex" not in providers.list():
+            codex_key = os.environ.get("OPENAI_API_KEY", "")
             if codex_key:
-                chatgpt_settings = getattr(settings, 'chatgpt', None)
-                codex_model = getattr(chatgpt_settings, 'model', 'gpt-4o') if chatgpt_settings is not None else 'gpt-4o'
-                providers.register('codex', CodexProvider(ProviderConfig(name='codex', provider_type=ProviderType.CODEX, api_key=codex_key, model=codex_model)))
+                chatgpt_settings = getattr(settings, "chatgpt", None)
+                codex_model = (
+                    getattr(chatgpt_settings, "model", "gpt-4o")
+                    if chatgpt_settings is not None
+                    else "gpt-4o"
+                )
+                providers.register(
+                    "codex",
+                    CodexProvider(
+                        ProviderConfig(
+                            name="codex",
+                            provider_type=ProviderType.CODEX,
+                            api_key=codex_key,
+                            model=codex_model,
+                        )
+                    ),
+                )
         artifact_store = self._build_artifact_store(settings, profile)
-        backend = InMemoryBackend() if settings.memory.backend == 'in_memory' else FileMemoryBackend(self.root_path / settings.memory.storage_path)
+        backend = (
+            InMemoryBackend()
+            if settings.memory.backend == "in_memory"
+            else FileMemoryBackend(self.root_path / settings.memory.storage_path)
+        )
         memory = MemoryManager(backend)
         message_bus = MessageBus()
         from models.artifact_lineage import LineageGraph
+
         lineage_graph = LineageGraph()
         metrics = MetricsCollector()
         tracer = ExecutionTracer()
@@ -73,32 +136,60 @@ class Bootstrap:
         failure_analytics = FailureAnalytics()
         knowledge_indexer = self._build_knowledge_indexer()
         prompt_catalog = build_default_catalog()
-        validators = {'artifact_validator': ArtifactValidator(), 'workflow_validator': WorkflowValidator(), 'agent_validator': AgentValidator()}
+        workflow_validator = WorkflowValidator()
+        validators = {
+            "artifact_validator": ArtifactValidator(),
+            "workflow_validator": workflow_validator,
+            "agent_validator": AgentValidator(),
+        }
         canva_service = self._build_canva_service(settings)
         chatgpt_service = self._build_chatgpt_service(settings)
         codex_agent_client = self._build_codex_agent_client(settings, profile)
         agents = self._build_agents(canva_service)
-        parser = WorkflowParser(validators['workflow_validator'])
-        executor = StepExecutor(agents, QualityGateEvaluator({'artifact_validator': validators['artifact_validator']}), message_bus=message_bus, lineage_graph=lineage_graph, chatgpt_service=chatgpt_service, codex_agent_client=codex_agent_client, prompt_catalog=prompt_catalog)
-        persistence = WorkflowPersistence(self.root_path / settings.workflow.state_store)
-        workflow_engine = WorkflowEngine(self.root_path / settings.workflow.recipe_directory, parser, executor, artifact_store, persistence=persistence)
+        parser = WorkflowParser(workflow_validator)
+        executor = StepExecutor(
+            agents,
+            QualityGateEvaluator(
+                {"artifact_validator": validators["artifact_validator"]}
+            ),
+            message_bus=message_bus,
+            lineage_graph=lineage_graph,
+            chatgpt_service=chatgpt_service,
+            codex_agent_client=codex_agent_client,
+            prompt_catalog=prompt_catalog,
+        )
+        persistence = WorkflowPersistence(
+            self.root_path / settings.workflow.state_store
+        )
+        workflow_engine = WorkflowEngine(
+            self.root_path / settings.workflow.recipe_directory,
+            parser,
+            executor,
+            artifact_store,
+            persistence=persistence,
+        )
         github_settings = settings.github
         if github_settings.token and github_settings.owner and github_settings.repo:
             from services.github import GitHubClient
+
             github_service: IGitHubService = GitHubClient(
                 owner=github_settings.owner,
                 repo=github_settings.repo,
                 token=github_settings.token,
             )
         else:
-            token = os.environ.get(github_settings.token_env, '')
+            token = os.environ.get(github_settings.token_env, "")
             if token and github_settings.owner and github_settings.repo:
                 from services.github import GitHubClient
-                github_service = GitHubClient(owner=github_settings.owner, repo=github_settings.repo, token=token)
+
+                github_service = GitHubClient(
+                    owner=github_settings.owner, repo=github_settings.repo, token=token
+                )
             else:
                 github_service = MockGitHubService()
-        strict_mode = profile.lower() in ('production', 'prod')
+        strict_mode = profile.lower() in ("production", "prod")
         from providers.capabilities import CapabilityResolver
+
         capability_resolver = CapabilityResolver(
             provider_registry=providers,
             strict_mode=bool(strict_mode),
@@ -131,25 +222,31 @@ class Bootstrap:
 
     def _build_canva_service(self, settings: object) -> ICanvaService:
         """Resolve the Canva service — live client if credentials present, mock otherwise."""
-        canva_settings = getattr(settings, 'canva', None)
+        canva_settings = getattr(settings, "canva", None)
         if canva_settings is None:
             return MockCanvaService()
-        token = canva_settings.access_token or os.environ.get(canva_settings.access_token_env, '')
+        token = canva_settings.access_token or os.environ.get(
+            canva_settings.access_token_env, ""
+        )
         if token:
             from services.canva import CanvaClient
+
             return CanvaClient(access_token=token, base_url=canva_settings.base_url)
         return MockCanvaService()
 
     def _build_chatgpt_service(self, settings: object) -> IChatGPTService:
         """Resolve the ChatGPT service — live client if credentials present, mock otherwise."""
-        chatgpt_settings = getattr(settings, 'chatgpt', None)
+        chatgpt_settings = getattr(settings, "chatgpt", None)
         if chatgpt_settings is None:
             return MockChatGPTService()
-        if getattr(chatgpt_settings, 'mock_mode', False):
+        if getattr(chatgpt_settings, "mock_mode", False):
             return MockChatGPTService()
-        api_key = chatgpt_settings.api_key or os.environ.get(chatgpt_settings.api_key_env, '')
+        api_key = chatgpt_settings.api_key or os.environ.get(
+            chatgpt_settings.api_key_env, ""
+        )
         if api_key:
             from services.chatgpt import ChatGPTClient
+
             return ChatGPTClient(
                 api_key=api_key,
                 model=chatgpt_settings.model,
@@ -161,63 +258,108 @@ class Bootstrap:
     def _build_artifact_store(self, settings: object, profile: str):
         """Resolve the artifact store: SQLite for durable environments, in-memory for tests only."""
         normalized = profile.lower()
-        if normalized in ('test', 'testing'):
+        if normalized in ("test", "testing"):
             return InMemoryArtifactStore()
-        artifact_settings = getattr(settings, 'artifact_store', None)
-        db_path = getattr(artifact_settings, 'db_path', 'artifacts.db') if artifact_settings is not None else 'artifacts.db'
+        artifact_settings = getattr(settings, "artifact_store", None)
+        db_path = (
+            getattr(artifact_settings, "db_path", "artifacts.db")
+            if artifact_settings is not None
+            else "artifacts.db"
+        )
         return SQLiteArtifactStore(self.root_path / db_path)
 
     def _build_codex_agent_client(self, settings: object, profile: str):
         """Resolve the Codex agent client for the active environment profile."""
-        codex_settings = getattr(settings, 'codex', None)
+        codex_settings = getattr(settings, "codex", None)
         normalized = profile.lower()
-        if normalized in ('test', 'testing', 'development', 'dev'):
-            if codex_settings is None or getattr(codex_settings, 'use_fake_in_development', True):
+        if normalized in ("test", "testing", "development", "dev"):
+            if codex_settings is None or getattr(
+                codex_settings, "use_fake_in_development", True
+            ):
                 return FakeCodexAgentClient()
         if codex_settings is None:
             return CodexCliAdapter()
         return CodexCliAdapter(
-            command=getattr(codex_settings, 'command', 'codex'),
-            model=getattr(codex_settings, 'model', 'codex'),
-            api_key=getattr(codex_settings, 'api_key', '') or None,
+            command=getattr(codex_settings, "command", "codex"),
+            model=getattr(codex_settings, "model", "codex"),
+            api_key=getattr(codex_settings, "api_key", "") or None,
         )
 
-    def _build_agents(self, canva_service: ICanvaService | None = None) -> AgentRegistry:
+    def _build_agents(
+        self, canva_service: ICanvaService | None = None
+    ) -> AgentRegistry:
         registry = AgentRegistry()
-        planning_agents = [ProductVisionAgent(), RequirementsAgent(), UserStoryAgent(), ProjectPlanAgent()]
-        architecture_agents = [SystemDesignAgent(), ADRAgent(), DiagramAgent(), APIDesignAgent()]
+        planning_agents = [
+            ProductVisionAgent(),
+            RequirementsAgent(),
+            UserStoryAgent(),
+            ProjectPlanAgent(),
+        ]
+        architecture_agents = [
+            SystemDesignAgent(),
+            ADRAgent(),
+            DiagramAgent(),
+            APIDesignAgent(),
+        ]
         if canva_service is not None:
             architecture_agents.append(CanvaDesignAgent(canva_service))
-        development_agents = [CodeGeneratorAgent(), CodeReviewAgent(), RefactorAgent(), DocumentationAgent()]
-        qa_agents = [TestGeneratorAgent(), TestRunnerAgent(), SecurityReviewAgent(), PerformanceAgent()]
-        operations_agents = [DeploymentAgent(), CICDAgent(), MonitoringAgent(), ReleaseAgent()]
-        support_agents = [KnowledgeAgent(), GitHubIssuesAgent(), ChangelogAgent(), ReflectionAgent()]
-        for agent in planning_agents + architecture_agents + development_agents + qa_agents + operations_agents + support_agents:
+        development_agents = [
+            CodeGeneratorAgent(),
+            CodeReviewAgent(),
+            RefactorAgent(),
+            DocumentationAgent(),
+        ]
+        qa_agents = [
+            TestGeneratorAgent(),
+            TestRunnerAgent(),
+            SecurityReviewAgent(),
+            PerformanceAgent(),
+        ]
+        operations_agents = [
+            DeploymentAgent(),
+            CICDAgent(),
+            MonitoringAgent(),
+            ReleaseAgent(),
+        ]
+        support_agents = [
+            KnowledgeAgent(),
+            GitHubIssuesAgent(),
+            ChangelogAgent(),
+            ReflectionAgent(),
+        ]
+        for agent in (
+            planning_agents
+            + architecture_agents
+            + development_agents
+            + qa_agents
+            + operations_agents
+            + support_agents
+        ):
             registry.register(agent)
         return registry
 
     def _build_knowledge_indexer(self) -> KnowledgeIndexer | None:
         """Build and index the knowledge base if the directory exists."""
-        knowledge_dir = self.root_path / 'knowledge'
+        knowledge_dir = self.root_path / "knowledge"
         if knowledge_dir.is_dir():
             indexer = KnowledgeIndexer(knowledge_dir)
             try:
                 indexer.index()
             except Exception as exc:  # noqa: BLE001
                 logging.getLogger(__name__).warning(
-                    'Knowledge indexing failed for %s: %s', knowledge_dir, exc
+                    "Knowledge indexing failed for %s: %s", knowledge_dir, exc
                 )
             return indexer
         return None
 
     def _get_environment_profile(self, settings: object) -> str:
-        environment = getattr(settings, 'environment', 'development')
+        environment = getattr(settings, "environment", "development")
         if isinstance(environment, str):
-            return environment or 'development'
-        profile = getattr(environment, 'profile', None)
+            return environment or "development"
+        profile = getattr(environment, "profile", None)
         if profile:
             return str(profile)
-        name = getattr(environment, 'name', None)
+        name = getattr(environment, "name", None)
         if name:
             return str(name)
-        return 'development'
+        return "development"

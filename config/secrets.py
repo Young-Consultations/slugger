@@ -51,14 +51,14 @@ class SecretsManager:
     def __init__(
         self,
         secrets_path: Path | None = None,
-        env_prefix: str = '',
+        env_prefix: str = "",
     ) -> None:
         self._env_prefix = env_prefix.upper()
         self._overrides: dict[str, str] = {}
         self._file_secrets: dict[str, Any] = {}
 
         if secrets_path is not None and secrets_path.exists():
-            raw = yaml.safe_load(secrets_path.read_text(encoding='utf-8')) or {}
+            raw = yaml.safe_load(secrets_path.read_text(encoding="utf-8")) or {}
             self._file_secrets = raw if isinstance(raw, dict) else {}
 
     # ------------------------------------------------------------------
@@ -95,7 +95,7 @@ class SecretsManager:
             return self._overrides[name]
 
         # 2. Environment variables
-        env_name = self._env_prefix + name.upper().replace('-', '_').replace(' ', '_')
+        env_name = self._env_prefix + name.upper().replace("-", "_").replace(" ", "_")
         env_value = os.environ.get(env_name)
         if env_value is not None:
             return env_value

@@ -38,25 +38,25 @@ class Profile:
     name: str
     overrides: dict[str, Any] = field(default_factory=dict)
     extends: str | None = None
-    description: str = ''
+    description: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            'name': self.name,
-            'overrides': self.overrides,
-            'description': self.description,
+            "name": self.name,
+            "overrides": self.overrides,
+            "description": self.description,
         }
         if self.extends:
-            result['extends'] = self.extends
+            result["extends"] = self.extends
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'Profile':
+    def from_dict(cls, data: dict[str, Any]) -> "Profile":
         return cls(
-            name=data['name'],
-            overrides=data.get('overrides', {}),
-            extends=data.get('extends'),
-            description=data.get('description', ''),
+            name=data["name"],
+            overrides=data.get("overrides", {}),
+            extends=data.get("extends"),
+            description=data.get("description", ""),
         )
 
 
@@ -88,7 +88,7 @@ class ProfileManager:
         self._profiles: dict[str, Profile] = {}
         self._active: str | None = None
 
-        path = profiles_path or (root_path / 'config' / 'profiles.yaml')
+        path = profiles_path or (root_path / "config" / "profiles.yaml")
         if path.exists():
             self._load_file(path)
 
@@ -162,14 +162,14 @@ class ProfileManager:
         """Write all profiles to a YAML *path*."""
         data = [p.to_dict() for p in self._profiles.values()]
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(yaml.safe_dump(data, sort_keys=False), encoding='utf-8')
+        path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _load_file(self, path: Path) -> None:
-        raw = yaml.safe_load(path.read_text(encoding='utf-8')) or []
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or []
         for item in raw:
             if isinstance(item, dict):
                 self.register(Profile.from_dict(item))
@@ -186,7 +186,7 @@ class ProfileManager:
     def _apply_overrides(self, settings: Settings, overrides: dict[str, Any]) -> None:
         """Apply dot-notation overrides to *settings* in place."""
         for key, value in overrides.items():
-            parts = key.split('.')
+            parts = key.split(".")
             obj: Any = settings
             for part in parts[:-1]:
                 obj = getattr(obj, part, None)

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -38,15 +38,15 @@ class DependencyStatus:
     declared_version: str
     latest_version: str | None = None
     up_to_date: bool = False
-    error: str = ''
+    error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            'name': self.name,
-            'declared_version': self.declared_version,
-            'latest_version': self.latest_version,
-            'up_to_date': self.up_to_date,
-            'error': self.error,
+            "name": self.name,
+            "declared_version": self.declared_version,
+            "latest_version": self.latest_version,
+            "up_to_date": self.up_to_date,
+            "error": self.error,
         }
 
 
@@ -69,7 +69,7 @@ class DependencyChecker:
     [DependencyStatus(name='requests', declared_version='2.31.0', latest_version='2.32.0', up_to_date=False)]
     """
 
-    PYPI_URL = 'https://pypi.org/pypi/{package}/json'
+    PYPI_URL = "https://pypi.org/pypi/{package}/json"
 
     def __init__(
         self,
@@ -122,11 +122,11 @@ class DependencyChecker:
         outdated = [s for s in statuses if not s.up_to_date and not s.error]
         errors = [s for s in statuses if s.error]
         return {
-            'total': len(statuses),
-            'up_to_date': len(up_to_date),
-            'outdated': len(outdated),
-            'errors': len(errors),
-            'packages': [s.to_dict() for s in statuses],
+            "total": len(statuses),
+            "up_to_date": len(up_to_date),
+            "outdated": len(outdated),
+            "errors": len(errors),
+            "packages": [s.to_dict() for s in statuses],
         }
 
     # ------------------------------------------------------------------
@@ -139,18 +139,19 @@ class DependencyChecker:
             latest = self._version_map.get(name)
             if latest is None:
                 return None, f"Package '{name}' not found in version map."
-            return latest, ''
+            return latest, ""
         # Validate the package name before constructing the URL to prevent SSRF.
         # PyPI package names may only contain alphanumerics, hyphens, underscores,
         # and dots per PEP 508 / the PyPI API specification.
         import re
-        if not re.match(r'^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$', name):
+
+        if not re.match(r"^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$", name):
             return None, f"Package name '{name}' contains invalid characters."
         # Network lookup
         url = self.PYPI_URL.format(package=name)
         try:
             with urllib.request.urlopen(url, timeout=self._timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read())
-            return data['info']['version'], ''
+            return data["info"]["version"], ""
         except Exception as exc:  # noqa: BLE001
             return None, str(exc)
