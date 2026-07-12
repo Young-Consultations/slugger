@@ -1,0 +1,124 @@
+{
+  "name": "Slugger 100 Percent Completion Tasks",
+  "task_count": 14,
+  "canonical_path": "slugger build -> full-sdlc-v2 -> draft release candidate",
+  "tasks": [
+    {
+      "id": "GA-001",
+      "title": "Freeze the canonical architecture and delete alternate runtime paths",
+      "depends_on": []
+    },
+    {
+      "id": "GA-002",
+      "title": "Make managed prompts the only runtime prompt source",
+      "depends_on": [
+        "GA-001"
+      ]
+    },
+    {
+      "id": "GA-003",
+      "title": "Create one provider and service resolution path",
+      "depends_on": [
+        "GA-001",
+        "GA-002"
+      ]
+    },
+    {
+      "id": "GA-004",
+      "title": "Complete planning, architecture, ADR, and design stages",
+      "depends_on": [
+        "GA-002",
+        "GA-003"
+      ]
+    },
+    {
+      "id": "GA-005",
+      "title": "Implement one real Codex coding and review adapter",
+      "depends_on": [
+        "GA-003",
+        "GA-004"
+      ]
+    },
+    {
+      "id": "GA-006",
+      "title": "Make AppManifest the only generated application output",
+      "depends_on": [
+        "GA-004",
+        "GA-005"
+      ]
+    },
+    {
+      "id": "GA-007",
+      "title": "Use one durable artifact, lineage, and workflow persistence system",
+      "depends_on": [
+        "GA-001",
+        "GA-006"
+      ]
+    },
+    {
+      "id": "GA-008",
+      "title": "Secure and connect the single materialization and build path",
+      "depends_on": [
+        "GA-006",
+        "GA-007"
+      ]
+    },
+    {
+      "id": "GA-009",
+      "title": "Create one bounded remediation engine",
+      "depends_on": [
+        "GA-005",
+        "GA-008"
+      ]
+    },
+    {
+      "id": "GA-010",
+      "title": "Fix approvals and make one durable approval path",
+      "depends_on": [
+        "GA-007",
+        "GA-009"
+      ]
+    },
+    {
+      "id": "GA-011",
+      "title": "Create one readiness and release-gate engine",
+      "depends_on": [
+        "GA-008",
+        "GA-009",
+        "GA-010"
+      ]
+    },
+    {
+      "id": "GA-012",
+      "title": "Connect one GitHub delivery path and complete CI/package distribution",
+      "depends_on": [
+        "GA-011"
+      ]
+    },
+    {
+      "id": "GA-013",
+      "title": "Delete dead code, duplicate tests, cache artifacts, and unsupported templates",
+      "depends_on": [
+        "GA-001",
+        "GA-002",
+        "GA-003",
+        "GA-004",
+        "GA-005",
+        "GA-006",
+        "GA-007",
+        "GA-008",
+        "GA-009",
+        "GA-010",
+        "GA-011",
+        "GA-012"
+      ]
+    },
+    {
+      "id": "GA-014",
+      "title": "Prove the single path end to end and certify 100% completion",
+      "depends_on": [
+        "GA-013"
+      ]
+    }
+  ]
+}
