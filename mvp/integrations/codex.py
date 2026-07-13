@@ -226,11 +226,12 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
     return {
         "README.md": f"# {request.project_name}\n\n{request.idea}\n",
         "pyproject.toml": (
-            "[build-system]\nrequires = ['setuptools>=68']\nbuild-backend = 'setuptools.build_meta'\n\n"
+            "[build-system]\nrequires = []\nbuild-backend = 'slugger_mvp_backend'\nbackend-path = ['.']\n\n"
             "[project]\n"
             f"name = '{request.project_name}'\nversion = '0.1.0'\nrequires-python = '>=3.11'\n"
-            "dependencies = []\n\n[project.optional-dependencies]\ntest = ['pytest']\n"
+            "dependencies = []\n\n[project.optional-dependencies]\ntest = []\n"
         ),
+        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name),
         f"src/{package_name}/__init__.py": "__all__ = ['main']\n",
         f"src/{package_name}/main.py": (
             "from __future__ import annotations\nimport argparse\n\n"
@@ -248,3 +249,74 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
             "def test_main_exits_successfully():\n    assert main([]) == 0\n"
         ),
     }
+
+
+def _minimal_build_backend(project_name: str) -> str:
+    safe_dist = project_name.replace("-", "_")
+    template = r'''
+from __future__ import annotations
+
+from pathlib import Path
+import base64
+import hashlib
+import zipfile
+
+NAME = __PROJECT_NAME__
+VERSION = "0.1.0"
+DIST = __SAFE_DIST__
+
+
+def _dist_info() -> str:
+    return f"{DIST}-{VERSION}.dist-info"
+
+
+def _metadata() -> str:
+    return f"Metadata-Version: 2.1\nName: {NAME}\nVersion: {VERSION}\n"
+
+
+def _wheel() -> str:
+    return "Wheel-Version: 1.0\nGenerator: slugger-mvp-backend\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+
+
+def _hash(data: bytes) -> str:
+    digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode("ascii")
+    return f"sha256={digest}"
+
+
+def prepare_metadata_for_build_editable(metadata_directory: str, config_settings=None) -> str:
+    info = Path(metadata_directory) / _dist_info()
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "METADATA").write_text(_metadata(), encoding="utf-8")
+    (info / "WHEEL").write_text(_wheel(), encoding="utf-8")
+    return info.name
+
+
+def build_editable(wheel_directory: str, config_settings=None, metadata_directory: str | None = None) -> str:
+    wheel_name = f"{DIST}-{VERSION}-py3-none-any.whl"
+    wheel_path = Path(wheel_directory) / wheel_name
+    records: list[tuple[str, bytes]] = []
+
+    def add(name: str, text: str) -> None:
+        records.append((name, text.encode("utf-8")))
+
+    add(f"{DIST}.pth", str(Path.cwd() / "src") + "\n")
+    add(f"{_dist_info()}/METADATA", _metadata())
+    add(f"{_dist_info()}/WHEEL", _wheel())
+    record_name = f"{_dist_info()}/RECORD"
+    with zipfile.ZipFile(wheel_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in records:
+            archive.writestr(name, data)
+        lines = [f"{name},{_hash(data)},{len(data)}" for name, data in records]
+        lines.append(f"{record_name},,")
+        archive.writestr(record_name, "\n".join(lines) + "\n")
+    return wheel_name
+
+
+def get_requires_for_build_editable(config_settings=None) -> list[str]:
+    return []
+
+
+def get_requires_for_build_wheel(config_settings=None) -> list[str]:
+    return []
+'''.lstrip()
+    return template.replace("__PROJECT_NAME__", repr(project_name)).replace("__SAFE_DIST__", repr(safe_dist))
