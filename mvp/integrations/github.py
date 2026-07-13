@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 from mvp.basic_runner import BasicRunnerResult
-from mvp.models import CheckResult, GitHubPublishResult, MvpProjectRequest, MvpRun
+from mvp.models import CheckResult, GeneratedProjectInventory, GitHubPublishResult, MvpProjectRequest, MvpRun
 from mvp.project_validator import ProjectValidator
 from mvp.workspace import MvpWorkspace, WorkspaceManager
 
@@ -92,7 +92,7 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         self._run(["git", "remote", "add", "origin", f"https://github.com/{run.request.github_repository}.git"], workspace_path)
         self._run(["git", "fetch", "origin", run.request.base_branch, "--depth", "1"], workspace_path)
         self._run(["git", "checkout", "-B", branch, "FETCH_HEAD"], workspace_path)
-        self._run(["git", "add", "."], workspace_path)
+        self._stage_inventory(workspace_path, run.inventory)
         self._run(["git", "commit", "-m", f"Add generated {run.request.project_name} project"], workspace_path)
         self._run(["git", "push", "-u", "origin", branch], workspace_path)
         body = pr_body(run, validation_results, runner_result)
@@ -104,6 +104,17 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         result = GitHubPublishResult(branch=branch, pull_request_url=url, draft=True)
         run.github_publish_result = result
         return result
+
+    def _stage_inventory(self, workspace_path: Path, inventory: GeneratedProjectInventory | None) -> None:
+        if inventory is None:
+            raise GitHubPublishError("Refusing to publish without a generated-file inventory")
+        paths: list[str] = []
+        for file in inventory.files:
+            generated_path = self.workspace_manager.resolve_generated_path(workspace_path, file.path)
+            if not generated_path.is_file():
+                raise GitHubPublishError(f"Recorded generated file is missing: {file.path}")
+            paths.append(file.path)
+        self._run(["git", "add", "--", *paths], workspace_path)
 
     def _run(self, command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         executable = shutil.which(command[0])
