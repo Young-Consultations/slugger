@@ -92,7 +92,7 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         self._run(["git", "remote", "add", "origin", f"https://github.com/{run.request.github_repository}.git"], workspace_path)
         self._run(["git", "fetch", "origin", run.request.base_branch, "--depth", "1"], workspace_path)
         self._run(["git", "checkout", "-B", branch, "FETCH_HEAD"], workspace_path)
-        self._run(["git", "add", "."], workspace_path)
+        self._stage_generated_files(run, workspace_path)
         self._run(["git", "commit", "-m", f"Add generated {run.request.project_name} project"], workspace_path)
         self._run(["git", "push", "-u", "origin", branch], workspace_path)
         body = pr_body(run, validation_results, runner_result)
@@ -104,6 +104,19 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         result = GitHubPublishResult(branch=branch, pull_request_url=url, draft=True)
         run.github_publish_result = result
         return result
+
+    def _stage_generated_files(self, run: MvpRun, workspace_path: Path) -> None:
+        if run.inventory is None:
+            raise GitHubPublishError("Refusing to publish without a generated-file inventory")
+        generated_paths: list[str] = []
+        for generated_file in run.inventory.files:
+            resolved = self.workspace_manager.resolve_generated_path(workspace_path, generated_file.path)
+            if not resolved.exists():
+                raise GitHubPublishError(f"Recorded generated file is missing: {generated_file.path}")
+            generated_paths.append(generated_file.path)
+        if not generated_paths:
+            raise GitHubPublishError("Refusing to publish an empty generated-file inventory")
+        self._run(["git", "add", "--", *generated_paths], workspace_path)
 
     def _run(self, command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         executable = shutil.which(command[0])

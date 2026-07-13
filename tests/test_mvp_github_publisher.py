@@ -1,10 +1,40 @@
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from mvp.basic_runner import BasicRunnerResult
-from mvp.integrations.github import FakeMvpGitHubPublisher, GitHubPublishError, branch_name, pr_body
-from mvp.models import CheckResult, GeneratedFile, GeneratedProjectInventory, MvpProjectRequest, MvpRun
+from mvp.integrations.github import (
+    FakeMvpGitHubPublisher,
+    GitHubCliMvpPublisher,
+    GitHubPublishError,
+    branch_name,
+    pr_body,
+)
+from mvp.models import (
+    CheckResult,
+    GeneratedFile,
+    GeneratedProjectInventory,
+    MvpProjectRequest,
+    MvpRun,
+)
+from mvp.workspace import WorkspaceManager
+
+
+class RecordingGitHubCliPublisher(GitHubCliMvpPublisher):
+    def __init__(self, workspace_manager: WorkspaceManager) -> None:
+        super().__init__(workspace_manager)
+        self.commands: list[list[str]] = []
+
+    def _run(self, command: list[str], cwd):  # type: ignore[override]
+        self.commands.append(command)
+        stdout = (
+            "https://github.com/owner/task-tracker/pull/123\n"
+            if command[:3] == ["gh", "pr", "create"]
+            else ""
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
 
 def _request() -> MvpProjectRequest:
@@ -95,3 +125,35 @@ def test_pr_body_includes_required_audit_sections():
 
 def test_branch_name_uses_project_and_short_run_id():
     assert branch_name(_request(), "1234567890") == "slugger/generated-task-tracker-12345678"
+
+
+def test_cli_publisher_stages_only_recorded_generated_files(tmp_path):
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("abcdef123456")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    (workspace.path / ".pytest_cache").mkdir()
+    (workspace.path / ".pytest_cache" / "README.md").write_text("runner cache", encoding="utf-8")
+    (workspace.path / ".venv").mkdir()
+    (workspace.path / ".venv" / "pyvenv.cfg").write_text("runner venv", encoding="utf-8")
+    run = _run()
+    publisher = RecordingGitHubCliPublisher(manager)
+
+    result = publisher.publish(run, workspace, _validation(), _runner())
+
+    assert result.pull_request_url == "https://github.com/owner/task-tracker/pull/123"
+    assert ["git", "add", "."] not in publisher.commands
+    assert ["git", "add", "--", "README.md"] in publisher.commands
+    add_command = next(command for command in publisher.commands if command[:3] == ["git", "add", "--"])
+    assert ".venv/pyvenv.cfg" not in add_command
+    assert ".pytest_cache/README.md" not in add_command
+
+
+def test_cli_publisher_requires_recorded_inventory(tmp_path):
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("abcdef123456")
+    run = _run()
+    run.inventory = None
+    publisher = RecordingGitHubCliPublisher(manager)
+
+    with pytest.raises(GitHubPublishError, match="without a generated-file inventory"):
+        publisher.publish(run, workspace, _validation(), _runner())
