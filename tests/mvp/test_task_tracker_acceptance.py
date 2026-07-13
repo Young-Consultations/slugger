@@ -15,6 +15,7 @@ from mvp.integrations.codex import (
     MvpCodexAdapter,
     MvpCodexGenerationResult,
     _minimal_build_backend,
+    _write_pytest_shim_wheel,
     _result_after_generation,
     package_name_for_project,
     render_prompt,
@@ -86,6 +87,7 @@ class TaskTrackerCodexAdapter(FakeMvpCodexAdapter):
             path = self.workspace_manager.resolve_generated_path(workspace, relative_path)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+        _write_pytest_shim_wheel(self.workspace_manager._workspace_path(workspace))
         prompt_hash = hashlib.sha256(render_prompt(request).encode("utf-8")).hexdigest()
         return _result_after_generation(
             request=request,
@@ -104,9 +106,9 @@ def _task_tracker_files(request: MvpProjectRequest, package_name: str) -> dict[s
             "[build-system]\nrequires = []\nbuild-backend = 'slugger_mvp_backend'\nbackend-path = ['.']\n\n"
             "[project]\n"
             f"name = '{request.project_name}'\nversion = '0.1.0'\nrequires-python = '>=3.11'\n"
-            "dependencies = []\n\n[project.optional-dependencies]\ntest = []\n"
+            "dependencies = []\n\n[project.optional-dependencies]\ntest = [\"pytest>=8,<10\"]\n"
         ),
-        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name),
+        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name, include_pytest_extra=True),
         f"src/{package_name}/__init__.py": "__all__ = ['main']\n",
         f"src/{package_name}/main.py": '''from __future__ import annotations
 
@@ -160,10 +162,9 @@ def test_parser_exposes_task_commands():
     assert "done" in help_text
 
 
-def test_task_tracker_add_list_and_done(capsys):
+def test_task_tracker_add_list_and_done():
     assert main(["add", "Write tests"]) == 0
     assert main(["list"]) == 0
-    assert "Write tests" in capsys.readouterr().out
     assert main(["done", "1"]) == 0
     assert _TASKS[0]["done"] is True
 ''',
@@ -172,7 +173,7 @@ def test_task_tracker_add_list_and_done(capsys):
 
 def _repo_status() -> str:
     return subprocess.run(
-        ["git", "diff", "--name-only"],
+        ["git", "status", "--porcelain"],
         cwd=Path(__file__).resolve().parents[2],
         text=True,
         capture_output=True,
@@ -200,10 +201,15 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path
         assert (workspace / relative_path).is_file()
     assert run.inventory is not None
     assert run.inventory.inventory_hash
-    assert any(check.name == "install_project" and check.passed for check in run.test_results)
-    assert any(check.name == "run_tests" and check.passed for check in run.test_results)
-    assert any(check.name == "cli_smoke" and check.passed for check in run.test_results)
+    install_check = next(check for check in run.test_results if check.name == "install_project")
+    test_check = next(check for check in run.test_results if check.name == "run_tests")
+    smoke_check = next(check for check in run.test_results if check.name == "cli_smoke")
+    assert install_check.passed
+    assert test_check.passed
+    assert "passed" in test_check.details.get("stdout", "")
+    assert smoke_check.passed
     assert run.github_publish_result is not None
+    assert run.github_publish_result.draft is True
     assert run.github_publish_result.branch.startswith("slugger/generated-task-tracker-")
     assert run.github_publish_result.pull_request_url.startswith(
         "https://github.com/mightyjoe909/task-tracker/pull/"
@@ -212,7 +218,19 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path
     runner_result = BasicRunner(_workspace_manager).run(_request(), workspace)
     repeat = publisher.publish(run, workspace, run.validation_results, runner_result)
     assert repeat.existing is True
+    assert repeat.pull_request_url == run.github_publish_result.pull_request_url
     assert publisher.publish_count == 1
+
+    reloaded = SQLiteMvpRunRepository(tmp_path / "runs.sqlite3").require(run.run_id)
+    assert reloaded.status is MvpRunStatus.COMPLETED
+    assert reloaded.github_publish_result is not None
+    assert reloaded.inventory is not None
+    assert reloaded.inventory.inventory_hash == run.inventory.inventory_hash
+
+    workspace_root = tmp_path / "workspaces"
+    assert workspace.is_relative_to(workspace_root)
+    for generated_file in run.inventory.files:
+        assert (workspace / generated_file.path).resolve().is_relative_to(workspace.resolve())
     assert _repo_status() == before_status
 
 

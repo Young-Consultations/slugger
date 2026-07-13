@@ -36,30 +36,34 @@ class BasicRunner:
     def run(self, request: MvpProjectRequest, workspace: MvpWorkspace | Path) -> BasicRunnerResult:
         workspace_path = self.workspace_manager._workspace_path(workspace)
         checks = [
-            self._run_phase("create_environment", [sys.executable, "-m", "venv", "--system-site-packages", str(workspace_path / ".venv")], workspace_path),
+            self._run_phase("create_environment", [sys.executable, "-m", "venv", str(workspace_path / ".venv")], workspace_path),
         ]
         python = workspace_path / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if checks[-1].passed:
-            checks.append(self._run_phase("install_project", [str(python), "-m", "pip", "install", "--no-build-isolation", "-e", ".[test]"], workspace_path))
+            checks.append(self._run_phase("install_project", [str(python), "-m", "pip", "install", "-e", ".[test]"], workspace_path))
         else:
             checks.append(CheckResult("install_project", False, "Skipped because virtual environment creation failed"))
         if checks[-1].passed:
+            checks.append(self._run_phase("verify_pytest_available", [str(python), "-c", "import pytest; print(pytest.__version__)"], workspace_path))
+        else:
+            checks.append(CheckResult("verify_pytest_available", False, "Skipped because installation failed"))
+        if checks[-1].passed:
             checks.append(self._run_phase("run_tests", [str(python), "-m", "pytest", "-q"], workspace_path))
         else:
-            checks.append(CheckResult("run_tests", False, "Skipped because installation failed"))
+            checks.append(CheckResult("run_tests", False, "Skipped because pytest is not installed"))
         if checks[-1].passed:
             package = package_name_for_project(request.project_name)
-            checks.append(self._run_phase("cli_smoke", [str(python), "-m", f"{package}.main", "--help"], workspace_path))
+            checks.append(self._run_phase("cli_smoke", [str(python), "-m", f"{package}.main", "--help"], workspace_path, require_stdout=("usage", request.project_name)))
         else:
             checks.append(CheckResult("cli_smoke", False, "Skipped because tests failed"))
         return BasicRunnerResult(tuple(checks))
 
-    def _run_phase(self, name: str, command: list[str], workspace_path: Path) -> CheckResult:
+    def _run_phase(self, name: str, command: list[str], workspace_path: Path, *, require_stdout: tuple[str, ...] = ()) -> CheckResult:
         try:
             completed = subprocess.run(
                 command,
                 cwd=workspace_path,
-                env=_minimal_environment(),
+                env=_minimal_environment(workspace_path),
                 text=True,
                 capture_output=True,
                 timeout=self.timeout_seconds,
@@ -75,11 +79,17 @@ class BasicRunner:
         }
         if completed.returncode != 0:
             return CheckResult(name, False, f"Command exited with status {completed.returncode}", details)
+        missing_stdout = [text for text in require_stdout if text not in completed.stdout]
+        if missing_stdout:
+            details["missing_stdout"] = missing_stdout
+            return CheckResult(name, False, f"Command succeeded but stdout missed expected text: {', '.join(missing_stdout)}", details)
         return CheckResult(name, True, "Command completed successfully", details)
 
 
-def _minimal_environment() -> dict[str, str]:
-    allowed = {"HOME", "PATH", "SYSTEMROOT", "TEMP", "TMP", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"}
+def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
+    allowed = {"HOME", "PATH", "SYSTEMROOT", "TEMP", "TMP", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_TRUSTED_HOST", "PIP_CERT"}
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env["PYTHONNOUSERSITE"] = "1"
+    if workspace_path is not None and (workspace_path / "test-deps" / "wheelhouse").is_dir():
+        env["PIP_FIND_LINKS"] = str(workspace_path / "test-deps" / "wheelhouse")
     return env

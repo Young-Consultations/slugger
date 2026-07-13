@@ -14,7 +14,7 @@ from mvp.workspace import MvpWorkspace, WorkspaceManager, WorkspaceSafetyError
 
 SECRET_FILENAMES = {".env", ".env.local", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"}
 SECRET_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db")
-ALLOWED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico"}
+ALLOWED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".whl"}
 MAX_FILE_BYTES = 1_000_000
 _PACKAGE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
