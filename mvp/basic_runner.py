@@ -36,7 +36,7 @@ class BasicRunner:
     def run(self, request: MvpProjectRequest, workspace: MvpWorkspace | Path) -> BasicRunnerResult:
         workspace_path = self.workspace_manager._workspace_path(workspace)
         checks = [
-            self._run_phase("create_environment", [sys.executable, "-m", "venv", "--system-site-packages", str(workspace_path / ".venv")], workspace_path),
+            self._run_phase("create_environment", [sys.executable, "-m", "venv", str(workspace_path / ".venv")], workspace_path),
         ]
         python = workspace_path / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if checks[-1].passed:
@@ -59,7 +59,7 @@ class BasicRunner:
             completed = subprocess.run(
                 command,
                 cwd=workspace_path,
-                env=_minimal_environment(),
+                env=_minimal_environment(workspace_path),
                 text=True,
                 capture_output=True,
                 timeout=self.timeout_seconds,
@@ -78,8 +78,11 @@ class BasicRunner:
         return CheckResult(name, True, "Command completed successfully", details)
 
 
-def _minimal_environment() -> dict[str, str]:
-    allowed = {"HOME", "PATH", "SYSTEMROOT", "TEMP", "TMP", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"}
+def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
+    allowed = {"HOME", "PATH", "SYSTEMROOT", "TEMP", "TMP", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "PIP_TRUSTED_HOST", "PIP_CERT"}
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env["PYTHONNOUSERSITE"] = "1"
+    if workspace_path is not None and (workspace_path / "test-deps" / "wheelhouse").is_dir():
+        env["PIP_FIND_LINKS"] = str(workspace_path / "test-deps" / "wheelhouse")
+        env["PIP_NO_INDEX"] = "1"
     return env

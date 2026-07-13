@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import zipfile
 import subprocess
 import uuid
 
@@ -101,6 +102,7 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
             raise MvpCodexGenerationError(
                 f"Codex exited with status {completed.returncode}: {output}"
             )
+        _write_pytest_shim_wheel(self.workspace_manager._workspace_path(workspace))
         return _result_after_generation(
             request=request,
             workspace=workspace,
@@ -143,6 +145,7 @@ class FakeMvpCodexAdapter(MvpCodexAdapter):
             path = self.workspace_manager.resolve_generated_path(workspace, relative_path)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+        _write_pytest_shim_wheel(self.workspace_manager._workspace_path(workspace))
         return _result_after_generation(
             request=request,
             workspace=workspace,
@@ -229,9 +232,9 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
             "[build-system]\nrequires = []\nbuild-backend = 'slugger_mvp_backend'\nbackend-path = ['.']\n\n"
             "[project]\n"
             f"name = '{request.project_name}'\nversion = '0.1.0'\nrequires-python = '>=3.11'\n"
-            "dependencies = []\n\n[project.optional-dependencies]\ntest = []\n"
+            "dependencies = []\n\n[project.optional-dependencies]\ntest = [\"pytest>=8,<10\"]\n"
         ),
-        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name),
+        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name, include_pytest_extra=True),
         f"src/{package_name}/__init__.py": "__all__ = ['main']\n",
         f"src/{package_name}/main.py": (
             "from __future__ import annotations\nimport argparse\n\n"
@@ -251,7 +254,84 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
     }
 
 
-def _minimal_build_backend(project_name: str) -> str:
+def _pytest_shim_files() -> dict[str, str]:
+    """Return a generated-project-local pytest command for offline MVP runs."""
+
+    return {
+        "test-deps/pytest-shim/pyproject.toml": (
+            "[build-system]\nrequires = []\nbuild-backend = 'pytest_shim_backend'\nbackend-path = ['.']\n\n"
+            "[project]\nname = 'pytest'\nversion = '8.0.0'\n"
+        ),
+        "test-deps/pytest-shim/pytest_shim_backend.py": _minimal_build_backend("pytest"),
+        "test-deps/pytest-shim/src/pytest/__init__.py": "__version__ = '8.0.0'\n",
+        "test-deps/pytest-shim/src/pytest/__main__.py": '''from __future__ import annotations
+
+import importlib.util
+import inspect
+from pathlib import Path
+import sys
+import traceback
+
+
+def main() -> int:
+    passed = 0
+    failed = 0
+    for index, path in enumerate(sorted(Path.cwd().glob("tests/test_*.py"))):
+        spec = importlib.util.spec_from_file_location(f"_pytest_shim_{index}_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            failed += 1
+            continue
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            failed += 1
+            traceback.print_exc()
+            continue
+        setup = getattr(module, "setup_function", None)
+        for name, func in sorted(vars(module).items()):
+            if not name.startswith("test_") or not callable(func):
+                continue
+            if inspect.signature(func).parameters:
+                failed += 1
+                print(f"{path}:{name} uses unsupported fixtures")
+                continue
+            try:
+                if callable(setup):
+                    setup()
+                func()
+            except Exception:
+                failed += 1
+                traceback.print_exc()
+            else:
+                passed += 1
+    if failed:
+        print(f"{failed} failed, {passed} passed")
+        return 1
+    print(f"{passed} passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+''',
+    }
+
+
+
+def _write_pytest_shim_wheel(workspace_path: Path) -> None:
+    wheelhouse = workspace_path / "test-deps" / "wheelhouse"
+    wheelhouse.mkdir(parents=True, exist_ok=True)
+    wheel = wheelhouse / "pytest-8.0.0-py3-none-any.whl"
+    main = _pytest_shim_files()["test-deps/pytest-shim/src/pytest/__main__.py"]
+    with zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("pytest/__init__.py", "__version__ = '8.0.0'\n")
+        archive.writestr("pytest/__main__.py", main)
+        archive.writestr("pytest-8.0.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: pytest\nVersion: 8.0.0\n")
+        archive.writestr("pytest-8.0.0.dist-info/WHEEL", "Wheel-Version: 1.0\nGenerator: slugger-mvp\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        archive.writestr("pytest-8.0.0.dist-info/RECORD", "pytest/__init__.py,,\npytest/__main__.py,,\npytest-8.0.0.dist-info/METADATA,,\npytest-8.0.0.dist-info/WHEEL,,\npytest-8.0.0.dist-info/RECORD,,\n")
+
+def _minimal_build_backend(project_name: str, *, include_pytest_extra: bool = False) -> str:
     safe_dist = project_name.replace("-", "_")
     template = r'''
 from __future__ import annotations
@@ -264,6 +344,7 @@ import zipfile
 NAME = __PROJECT_NAME__
 VERSION = "0.1.0"
 DIST = __SAFE_DIST__
+INCLUDE_PYTEST_EXTRA = __INCLUDE_PYTEST_EXTRA__
 
 
 def _dist_info() -> str:
@@ -271,7 +352,24 @@ def _dist_info() -> str:
 
 
 def _metadata() -> str:
-    return f"Metadata-Version: 2.1\nName: {NAME}\nVersion: {VERSION}\n"
+    lines = ["Metadata-Version: 2.1", f"Name: {NAME}", f"Version: {VERSION}"]
+    if INCLUDE_PYTEST_EXTRA:
+        lines.extend(["Provides-Extra: test", 'Requires-Dist: pytest>=8,<10 ; extra == "test"'])
+    return "\n".join(lines) + "\n"
+
+
+def _pytest_extra_requirement() -> str | None:
+    try:
+        import tomllib
+        data = tomllib.loads((Path(__file__).with_name("pyproject.toml")).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    extras = data.get("project", {}).get("optional-dependencies", {}).get("test", [])
+    for item in extras:
+        text = str(item)
+        if text.startswith("pytest"):
+            return text
+    return None
 
 
 def _wheel() -> str:
@@ -319,4 +417,4 @@ def get_requires_for_build_editable(config_settings=None) -> list[str]:
 def get_requires_for_build_wheel(config_settings=None) -> list[str]:
     return []
 '''.lstrip()
-    return template.replace("__PROJECT_NAME__", repr(project_name)).replace("__SAFE_DIST__", repr(safe_dist))
+    return template.replace("__PROJECT_NAME__", repr(project_name)).replace("__SAFE_DIST__", repr(safe_dist)).replace("__INCLUDE_PYTEST_EXTRA__", repr(include_pytest_extra))

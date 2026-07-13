@@ -51,3 +51,67 @@ def test_install_failure_blocks_later_phases(tmp_path: Path) -> None:
     assert not result.passed
     assert any(check.name == "install_project" and not check.passed for check in result.checks)
     assert any(check.name == "run_tests" and not check.passed and "Skipped" in check.message for check in result.checks)
+
+
+def _all_commands(result):
+    return [check.details.get("command", []) for check in result.checks if check.details.get("command")]
+
+
+def test_generated_environment_does_not_inherit_ambient_pytest(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    pyproject = workspace.path / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text(encoding="utf-8").replace(next(line for line in pyproject.read_text(encoding="utf-8").splitlines() if line.startswith('test = [')), 'test = []'), encoding="utf-8")
+    backend = workspace.path / "slugger_mvp_backend.py"
+    backend.write_text(backend.read_text(encoding="utf-8").replace("INCLUDE_PYTEST_EXTRA = True", "INCLUDE_PYTEST_EXTRA = False"), encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    create = next(check for check in result.checks if check.name == "create_environment")
+    tests = next(check for check in result.checks if check.name == "run_tests")
+    assert "--system-site-packages" not in create.details["command"]
+    assert not tests.passed
+    assert "No module named pytest" in tests.details.get("stderr", "")
+
+
+def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    pyproject = workspace.path / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text(encoding="utf-8").replace(next(line for line in pyproject.read_text(encoding="utf-8").splitlines() if line.startswith('test = [')), 'test = []'), encoding="utf-8")
+    backend = workspace.path / "slugger_mvp_backend.py"
+    backend.write_text(backend.read_text(encoding="utf-8").replace("INCLUDE_PYTEST_EXTRA = True", "INCLUDE_PYTEST_EXTRA = False"), encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    assert not result.passed
+    assert [check.name for check in result.checks] == ["create_environment", "install_project", "run_tests", "cli_smoke"]
+    assert next(check for check in result.checks if check.name == "install_project").passed
+    assert not next(check for check in result.checks if check.name == "run_tests").passed
+    assert not next(check for check in result.checks if check.name == "cli_smoke").passed
+
+
+def test_smoke_failure_blocks_success_preconditions(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    package_dir = workspace.path / "src" / "task_tracker"
+    (package_dir / "main.py").write_text(
+        "from __future__ import annotations\n\ndef build_parser():\n    return None\n\ndef main(argv=None):\n    return 0\n\nif __name__ == '__main__':\n    raise SystemExit(7)\n",
+        encoding="utf-8",
+    )
+    (workspace.path / "tests" / "test_main.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    assert not result.passed
+    assert next(check for check in result.checks if check.name == "run_tests").passed
+    assert not next(check for check in result.checks if check.name == "cli_smoke").passed
+
+
+def test_every_generated_project_command_uses_venv_python(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    venv_python = str(workspace.path / ".venv" / ("Scripts/python.exe" if __import__('os').name == "nt" else "bin/python"))
+    commands = {check.name: check.details.get("command", []) for check in result.checks}
+    assert commands["install_project"][:3] == [venv_python, "-m", "pip"]
+    assert commands["run_tests"][:3] == [venv_python, "-m", "pytest"]
+    assert commands["cli_smoke"][:2] == [venv_python, "-m"]
