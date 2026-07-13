@@ -10,13 +10,14 @@ from typing import cast
 
 from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
-from workflow.durable_approvals import DurableApprovalStore
 
 _PLATFORMS = [p.value for p in Platform]
 _CODING_AGENTS = [a.value for a in CodingAgent]
 
 
-def _approval_store(root_path: Path) -> DurableApprovalStore:
+def _approval_store(root_path: Path):
+    from workflow.durable_approvals import DurableApprovalStore
+
     return DurableApprovalStore(root_path / "workflow" / "approvals.db")
 
 
@@ -86,6 +87,15 @@ def build_parser() -> argparse.ArgumentParser:
     list_subparsers.add_parser("workflows", help="List available workflows")
     subparsers.add_parser("status", help="Show system status")
 
+    mvp_parser = subparsers.add_parser("mvp", help="Run focused MVP commands")
+    mvp_subparsers = mvp_parser.add_subparsers(dest="mvp_command", required=True)
+    mvp_build = mvp_subparsers.add_parser("build", help="Build a Python project through the MVP path")
+    mvp_build.add_argument("idea", help="Description of the Python project to generate")
+    mvp_build.add_argument("--name", required=True, dest="project_name", help="Lowercase kebab-case project name")
+    mvp_build.add_argument("--template", default="cli", choices=["cli"], help="MVP project template")
+    mvp_build.add_argument("--repo", required=True, dest="github_repository", help="GitHub repository in owner/repository form")
+    mvp_build.add_argument("--base", default="main", dest="base_branch", help="Base branch for the draft pull request")
+
     # lineage — show artifact traceability (WP-020)
     lineage_parser = subparsers.add_parser(
         "lineage", help="Show artifact lineage and traceability"
@@ -140,6 +150,36 @@ def main(argv: list[str] | None = None) -> int:
             slugger = Slugger(Bootstrap(root_path).build())
         return slugger
 
+    if args.command == "mvp" and args.mvp_command == "build":
+        from mvp.build_service import production_mvp_build_service
+        from mvp.models import MvpProjectRequest
+
+        request = MvpProjectRequest(
+            idea=args.idea,
+            project_name=args.project_name,
+            template=args.template,
+            github_repository=args.github_repository,
+            base_branch=args.base_branch,
+        )
+        result = production_mvp_build_service(root_path).build(request)
+        run = result.run
+        print(
+            json.dumps(
+                {
+                    "run_id": run.run_id,
+                    "status": run.status.value,
+                    "workspace_path": run.workspace_path,
+                    "generated_files": len(run.inventory.files) if run.inventory else 0,
+                    "validation_passed": bool(run.validation_results) and all(check.passed for check in run.validation_results),
+                    "test_passed": bool(run.test_results) and all(check.passed for check in run.test_results),
+                    "smoke_passed": any(check.name == "cli_smoke" and check.passed for check in run.test_results),
+                    "github_branch": run.github_publish_result.branch if run.github_publish_result else None,
+                    "draft_pr_url": run.github_publish_result.pull_request_url if run.github_publish_result else None,
+                    "error_details": run.error_details,
+                }
+            )
+        )
+        return 0 if run.status.value == "completed" else 1
     if args.command == "build":
         slugger = get_slugger()
         project_input = ProjectInput(
