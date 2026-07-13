@@ -5,9 +5,9 @@ Version: 1.0.0
 
 ## Purpose
 
-This document defines the Slugger AI Software Development Life Cycle (AI-SDLC): the structured process by which Slugger transforms an initial software idea into a production-ready system.
+This document defines the experimental Slugger AI Software Development Life Cycle (AI-SDLC): the structured process by which Slugger explores transforming an initial software idea into a production-grade system.
 
-The AI-SDLC is the primary operating framework for all Slugger workflows. It establishes the phases, agents, artifacts, quality gates, and traceability rules that govern every software project produced by Slugger.
+The AI-SDLC is not the primary MVP build path. The supported primary path is documented in `docs/mvp.md` and exposed by `slugger mvp build`. This specification remains a reference for the broader full-SDLC research workflow and future Slugger V2 design. It establishes the phases, agents, artifacts, quality gates, and traceability rules for that experimental workflow.
 
 ---
 
