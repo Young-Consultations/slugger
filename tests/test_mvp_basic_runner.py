@@ -76,6 +76,32 @@ def test_generated_environment_does_not_inherit_ambient_pytest(tmp_path: Path) -
     assert "Skipped because pytest is not installed" in tests.message
 
 
+def test_standard_setuptools_backend_installs_in_isolated_venv(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "pyproject.toml").write_text(
+        (
+            "[build-system]\n"
+            "requires = [\"setuptools>=68\", \"wheel\"]\n"
+            "build-backend = \"setuptools.build_meta\"\n\n"
+            "[project]\n"
+            "name = \"task-tracker\"\n"
+            "version = \"0.1.0\"\n"
+            "requires-python = \">=3.11\"\n"
+            "dependencies = []\n\n"
+            "[project.optional-dependencies]\n"
+            "test = [\"pytest>=8,<10\"]\n\n"
+            "[tool.setuptools.packages.find]\n"
+            "where = [\"src\"]\n"
+        ),
+        encoding="utf-8",
+    )
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    assert result.passed
+    assert next(check for check in result.checks if check.name == "install_project").passed
+
+
 def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) -> None:
     manager, workspace = _workspace(tmp_path)
     pyproject = workspace.path / "pyproject.toml"

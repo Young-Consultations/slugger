@@ -92,5 +92,4 @@ def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
     env["PYTHONNOUSERSITE"] = "1"
     if workspace_path is not None and (workspace_path / "test-deps" / "wheelhouse").is_dir():
         env["PIP_FIND_LINKS"] = str(workspace_path / "test-deps" / "wheelhouse")
-        env["PIP_NO_INDEX"] = "1"
     return env
