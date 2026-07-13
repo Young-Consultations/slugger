@@ -40,6 +40,15 @@ def test_missing_required_files_fail(tmp_path: Path) -> None:
     assert any(result.name == "required_files" and not result.passed for result in results)
 
 
+def test_missing_main_module_fails(tmp_path: Path) -> None:
+    manager, workspace, inventory = _generated(tmp_path)
+    (workspace.path / "src" / "task_tracker" / "main.py").unlink()
+
+    results = ProjectValidator(manager).validate(_request(), workspace, inventory)
+
+    assert any(result.name == "required_files" and not result.passed and "src/task_tracker/main.py" in result.details["missing"] for result in results)
+
+
 def test_invalid_python_syntax_fails(tmp_path: Path) -> None:
     manager, workspace, inventory = _generated(tmp_path)
     (workspace.path / "src" / "task_tracker" / "main.py").write_text("def nope(:\n", encoding="utf-8")
@@ -67,6 +76,18 @@ def test_symlink_escape_fails(tmp_path: Path) -> None:
     results = ProjectValidator(manager).validate(_request(), workspace, inventory)
 
     assert any(result.name == "path_safety" and not result.passed for result in results)
+
+
+def test_escaped_python_symlink_is_not_read_by_syntax_check(tmp_path: Path) -> None:
+    manager, workspace, inventory = _generated(tmp_path)
+    outside = tmp_path / "outside.py"
+    outside.write_text("def nope(:\n", encoding="utf-8")
+    (workspace.path / "tests" / "test_outside.py").symlink_to(outside)
+
+    results = ProjectValidator(manager).validate(_request(), workspace, inventory)
+
+    assert any(result.name == "path_safety" and not result.passed for result in results)
+    assert any(result.name == "python_syntax" and result.passed for result in results)
 
 
 def test_invalid_pyproject_fails(tmp_path: Path) -> None:

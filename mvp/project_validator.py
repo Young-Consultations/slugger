@@ -94,8 +94,8 @@ class ProjectValidator:
 
     def _check_required_files(self, request: MvpProjectRequest, workspace_path: Path, inventory: GeneratedProjectInventory | None) -> CheckResult:
         package_name = package_name_for_project(request.project_name)
-        required = ["README.md", "pyproject.toml", f"src/{package_name}/__init__.py"]
-        paths = {p.relative_to(workspace_path).as_posix() for p in workspace_path.rglob("*") if p.is_file()}
+        required = ["README.md", "pyproject.toml", f"src/{package_name}/__init__.py", f"src/{package_name}/main.py"]
+        paths = {p.relative_to(workspace_path).as_posix() for p in workspace_path.rglob("*") if not p.is_symlink() and p.is_file()}
         missing = [path for path in required if path not in paths]
         source_files = [path for path in paths if path.startswith("src/") and path.endswith(".py")]
         test_files = [path for path in paths if path.startswith("tests/") and path.endswith(".py")]
@@ -107,6 +107,8 @@ class ProjectValidator:
 
     def _check_python_syntax(self, workspace_path: Path) -> CheckResult:
         for path in sorted(workspace_path.rglob("*.py")):
+            if path.is_symlink():
+                continue
             try:
                 ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             except SyntaxError as exc:
