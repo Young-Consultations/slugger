@@ -69,7 +69,7 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
         self,
         workspace_manager: WorkspaceManager,
         *,
-        codex_command: tuple[str, ...] = ("codex", "exec"),
+        codex_command: tuple[str, ...] = ("codex", "exec", "--skip-git-repo-check"),
         timeout_seconds: int = 900,
         prompt_path: Path = PROMPT_PATH,
     ) -> None:

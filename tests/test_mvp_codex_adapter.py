@@ -118,9 +118,7 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
     monkeypatch.setenv("PYTHONPATH", "must-not-leak")
     monkeypatch.setenv("UNRELATED_SECRET", "must-not-leak")
 
-    adapter = CodexCliMvpAdapter(
-        manager, codex_command=("codex", "exec"), timeout_seconds=12
-    )
+    adapter = CodexCliMvpAdapter(manager, timeout_seconds=12)
     result = adapter.generate_project(_request(), workspace)
 
     assert captured["cwd"] == workspace.path
@@ -142,7 +140,7 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
     assert "PYTHONPATH" not in captured["env"]
     assert "UNRELATED_SECRET" not in captured["env"]
     assert result.codex_session_id == "abc123"
-    assert result.commands[0][0:2] == ("codex", "exec")
+    assert result.commands[0][0:3] == ("codex", "exec", "--skip-git-repo-check")
 
 
 def test_production_adapter_fails_on_codex_nonzero_exit(
