@@ -340,6 +340,16 @@ if __name__ == "__main__":
 def _write_pytest_shim_wheel(workspace_path: Path) -> None:
     wheelhouse = workspace_path / "test-deps" / "wheelhouse"
     wheelhouse.mkdir(parents=True, exist_ok=True)
+    _write_build_dependency_wheel(wheelhouse, "wheel", "0.45.0", {"wheel/__init__.py": "__version__ = '0.45.0'\n"})
+    _write_build_dependency_wheel(
+        wheelhouse,
+        "setuptools",
+        "68.0.0",
+        {
+            "setuptools/__init__.py": "__version__ = '68.0.0'\n",
+            "setuptools/build_meta.py": _setuptools_build_meta_shim(),
+        },
+    )
     wheel = wheelhouse / "pytest-8.0.0-py3-none-any.whl"
     main = _pytest_shim_files()["test-deps/pytest-shim/src/pytest/__main__.py"]
     with zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -348,6 +358,93 @@ def _write_pytest_shim_wheel(workspace_path: Path) -> None:
         archive.writestr("pytest-8.0.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: pytest\nVersion: 8.0.0\n")
         archive.writestr("pytest-8.0.0.dist-info/WHEEL", "Wheel-Version: 1.0\nGenerator: slugger-mvp\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
         archive.writestr("pytest-8.0.0.dist-info/RECORD", "pytest/__init__.py,,\npytest/__main__.py,,\npytest-8.0.0.dist-info/METADATA,,\npytest-8.0.0.dist-info/WHEEL,,\npytest-8.0.0.dist-info/RECORD,,\n")
+
+
+def _write_build_dependency_wheel(wheelhouse: Path, name: str, version: str, files: dict[str, str]) -> None:
+    dist = name.replace("-", "_")
+    wheel = wheelhouse / f"{dist}-{version}-py3-none-any.whl"
+    dist_info = f"{dist}-{version}.dist-info"
+    with zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path, content in files.items():
+            archive.writestr(path, content)
+        archive.writestr(f"{dist_info}/METADATA", f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n")
+        archive.writestr(f"{dist_info}/WHEEL", "Wheel-Version: 1.0\nGenerator: slugger-mvp\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        record_lines = [f"{path},," for path in files]
+        record_lines.extend([f"{dist_info}/METADATA,,", f"{dist_info}/WHEEL,,", f"{dist_info}/RECORD,,"])
+        archive.writestr(f"{dist_info}/RECORD", "\n".join(record_lines) + "\n")
+
+
+def _setuptools_build_meta_shim() -> str:
+    """Return a small setuptools.build_meta-compatible backend for offline MVP runs."""
+
+    return r'''
+from __future__ import annotations
+
+from pathlib import Path
+import base64
+import hashlib
+import re
+import zipfile
+
+VERSION = "0.1.0"
+
+
+def _project_name() -> str:
+    text = Path("pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r"(?m)^name\s*=\s*['\"]([^'\"]+)['\"]", text)
+    return match.group(1) if match else Path.cwd().name
+
+
+def _dist() -> str:
+    return _project_name().replace("-", "_")
+
+
+def _dist_info() -> str:
+    return f"{_dist()}-{VERSION}.dist-info"
+
+
+def _metadata() -> str:
+    return f"Metadata-Version: 2.1\nName: {_project_name()}\nVersion: {VERSION}\nProvides-Extra: test\nRequires-Dist: pytest>=8,<10 ; extra == \"test\"\n"
+
+
+def _wheel() -> str:
+    return "Wheel-Version: 1.0\nGenerator: slugger-setuptools-shim\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+
+
+def _hash(data: bytes) -> str:
+    digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode("ascii")
+    return f"sha256={digest}"
+
+
+def prepare_metadata_for_build_editable(metadata_directory: str, config_settings=None) -> str:
+    info = Path(metadata_directory) / _dist_info()
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "METADATA").write_text(_metadata(), encoding="utf-8")
+    (info / "WHEEL").write_text(_wheel(), encoding="utf-8")
+    return info.name
+
+
+def build_editable(wheel_directory: str, config_settings=None, metadata_directory: str | None = None) -> str:
+    wheel_name = f"{_dist()}-{VERSION}-py3-none-any.whl"
+    wheel_path = Path(wheel_directory) / wheel_name
+    records = [(f"{_dist()}.pth", (str(Path.cwd() / "src") + "\n").encode()), (f"{_dist_info()}/METADATA", _metadata().encode()), (f"{_dist_info()}/WHEEL", _wheel().encode())]
+    record_name = f"{_dist_info()}/RECORD"
+    with zipfile.ZipFile(wheel_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in records:
+            archive.writestr(name, data)
+        lines = [f"{name},{_hash(data)},{len(data)}" for name, data in records]
+        lines.append(f"{record_name},,")
+        archive.writestr(record_name, "\n".join(lines) + "\n")
+    return wheel_name
+
+
+def get_requires_for_build_editable(config_settings=None) -> list[str]:
+    return []
+
+
+def get_requires_for_build_wheel(config_settings=None) -> list[str]:
+    return []
+'''.lstrip()
 
 def _minimal_build_backend(project_name: str, *, include_pytest_extra: bool = False) -> str:
     safe_dist = project_name.replace("-", "_")
