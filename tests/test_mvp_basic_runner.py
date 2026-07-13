@@ -27,7 +27,7 @@ def test_real_runner_installs_tests_and_smokes_valid_cli_project(tmp_path: Path)
     result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
 
     assert result.passed
-    assert [check.name for check in result.checks] == ["create_environment", "install_project", "run_tests", "cli_smoke"]
+    assert [check.name for check in result.checks] == ["create_environment", "install_project", "verify_pytest_available", "run_tests", "cli_smoke"]
     assert any("1 passed" in check.details.get("stdout", "") or "2 passed" in check.details.get("stdout", "") for check in result.checks)
 
 
@@ -67,10 +67,13 @@ def test_generated_environment_does_not_inherit_ambient_pytest(tmp_path: Path) -
     result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
 
     create = next(check for check in result.checks if check.name == "create_environment")
+    pytest_check = next(check for check in result.checks if check.name == "verify_pytest_available")
     tests = next(check for check in result.checks if check.name == "run_tests")
     assert "--system-site-packages" not in create.details["command"]
+    assert not pytest_check.passed
+    assert "No module named" in pytest_check.details.get("stderr", "") and "pytest" in pytest_check.details.get("stderr", "")
     assert not tests.passed
-    assert "No module named pytest" in tests.details.get("stderr", "")
+    assert "Skipped because pytest is not installed" in tests.message
 
 
 def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) -> None:
@@ -83,8 +86,9 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
     result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
 
     assert not result.passed
-    assert [check.name for check in result.checks] == ["create_environment", "install_project", "run_tests", "cli_smoke"]
+    assert [check.name for check in result.checks] == ["create_environment", "install_project", "verify_pytest_available", "run_tests", "cli_smoke"]
     assert next(check for check in result.checks if check.name == "install_project").passed
+    assert not next(check for check in result.checks if check.name == "verify_pytest_available").passed
     assert not next(check for check in result.checks if check.name == "run_tests").passed
     assert not next(check for check in result.checks if check.name == "cli_smoke").passed
 
@@ -113,5 +117,41 @@ def test_every_generated_project_command_uses_venv_python(tmp_path: Path) -> Non
     venv_python = str(workspace.path / ".venv" / ("Scripts/python.exe" if __import__('os').name == "nt" else "bin/python"))
     commands = {check.name: check.details.get("command", []) for check in result.checks}
     assert commands["install_project"][:3] == [venv_python, "-m", "pip"]
+    assert "--no-build-isolation" not in commands["install_project"]
+    assert commands["verify_pytest_available"][:2] == [venv_python, "-c"]
     assert commands["run_tests"][:3] == [venv_python, "-m", "pytest"]
     assert commands["cli_smoke"][:2] == [venv_python, "-m"]
+
+
+def test_pytest_shim_fails_when_no_tests_are_collected(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "tests" / "test_main.py").write_text("class Helper:\n    def test_hidden(self):\n        assert False\n", encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    tests = next(check for check in result.checks if check.name == "run_tests")
+    assert not tests.passed
+    assert "0 tests collected" in tests.details.get("stdout", "")
+
+
+def test_pytest_shim_runs_class_based_tests(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "tests" / "test_main.py").write_text("class TestMain:\n    def test_bad(self):\n        assert False\n", encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    tests = next(check for check in result.checks if check.name == "run_tests")
+    assert not tests.passed
+    assert "failed" in tests.details.get("stdout", "")
+
+
+def test_cli_smoke_requires_meaningful_help_output(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "src" / "task_tracker" / "main.py").write_text("def main(argv=None):\n    return 0\nif __name__ == '__main__':\n    raise SystemExit(main())\n", encoding="utf-8")
+    (workspace.path / "tests" / "test_main.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    smoke = next(check for check in result.checks if check.name == "cli_smoke")
+    assert not smoke.passed
+    assert smoke.details.get("missing_stdout")

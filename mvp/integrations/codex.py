@@ -273,9 +273,24 @@ import sys
 import traceback
 
 
+def _run_test(path: Path, name: str, func, setup) -> tuple[int, int]:
+    if inspect.signature(func).parameters:
+        print(f"{path}:{name} uses unsupported fixtures")
+        return 0, 1
+    try:
+        if callable(setup):
+            setup()
+        func()
+    except Exception:
+        traceback.print_exc()
+        return 0, 1
+    return 1, 0
+
+
 def main() -> int:
     passed = 0
     failed = 0
+    collected = 0
     for index, path in enumerate(sorted(Path.cwd().glob("tests/test_*.py"))):
         spec = importlib.util.spec_from_file_location(f"_pytest_shim_{index}_{path.stem}", path)
         if spec is None or spec.loader is None:
@@ -290,21 +305,24 @@ def main() -> int:
             continue
         setup = getattr(module, "setup_function", None)
         for name, func in sorted(vars(module).items()):
-            if not name.startswith("test_") or not callable(func):
-                continue
-            if inspect.signature(func).parameters:
-                failed += 1
-                print(f"{path}:{name} uses unsupported fixtures")
-                continue
-            try:
-                if callable(setup):
-                    setup()
-                func()
-            except Exception:
-                failed += 1
-                traceback.print_exc()
-            else:
-                passed += 1
+            if name.startswith("test_") and callable(func):
+                collected += 1
+                ok, bad = _run_test(path, name, func, setup)
+                passed += ok
+                failed += bad
+            if name.startswith("Test") and inspect.isclass(func):
+                for method_name, method in sorted(vars(func).items()):
+                    if not method_name.startswith("test_") or not callable(method):
+                        continue
+                    collected += 1
+                    instance = func()
+                    bound = getattr(instance, method_name)
+                    ok, bad = _run_test(path, f"{name}.{method_name}", bound, setup)
+                    passed += ok
+                    failed += bad
+    if collected == 0:
+        print("0 tests collected")
+        return 1
     if failed:
         print(f"{failed} failed, {passed} passed")
         return 1
