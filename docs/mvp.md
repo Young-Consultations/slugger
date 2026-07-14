@@ -176,3 +176,19 @@ SLUGGER_MVP_SKIP_PUBLISH=1 slugger mvp build \
 ```
 
 Record the Codex version, Codex session ID, prompt hash, workspace path, generated inventory, installation result, pytest result, CLI smoke result, and source-tree change check from the run JSON and persisted SQLite state.
+
+## Coding-agent lesson learned
+
+Using GitHub Agents as the primary coding agent was not effective for this project. The agents often completed narrowly interpreted tasks without fully integrating the changes, validating the end-to-end execution path, or accurately identifying remaining work. This resulted in repeated cycles of implementation, review, defect discovery, and rework.
+
+Codex has proven more reliable for the current development approach. It has produced more focused changes, responded better to detailed acceptance criteria, and moved the MVP forward more quickly.
+
+For the remainder of the Slugger MVP:
+
+* Codex will be the preferred coding agent.
+* GitHub will remain the source-control, pull-request, issue-tracking, and CI platform.
+* Work will be divided into small, testable Codex tasks.
+* Completion will be based on executable acceptance evidence rather than agent-reported status.
+* Human and independent AI review will remain required before merging significant changes.
+
+This conclusion applies to the experience of developing Slugger and does not imply that GitHub Agents are unsuitable for every project or task.
