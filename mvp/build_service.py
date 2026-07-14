@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+import hashlib
+import json
 import uuid
 
 from mvp.basic_runner import BasicRunner
@@ -13,6 +15,7 @@ from mvp.integrations.github import MvpGitHubPublisher
 from mvp.models import MvpBuildResult, MvpProjectRequest, MvpRun, MvpRunStatus
 from mvp.project_validator import ProjectValidator
 from mvp.run_repository import SQLiteMvpRunRepository
+from mvp.runtime_paths import runtime_home, sqlite_path, workspace_root
 from mvp.workspace import WorkspaceManager
 
 
@@ -33,6 +36,7 @@ class DefaultMvpBuildService(MvpBuildService):
     project_validator: ProjectValidator
     basic_runner: BasicRunner
     github_publisher: MvpGitHubPublisher
+    source_root: Path | None = None
 
     def build(self, request: MvpProjectRequest) -> MvpBuildResult:
         run = MvpRun(run_id=uuid.uuid4().hex, request=request)
@@ -45,7 +49,12 @@ class DefaultMvpBuildService(MvpBuildService):
             run.workspace_path = str(workspace.path)
             self.run_repository.save(run)
 
+            before_source = _source_tree_inventory(self.source_root) if self.source_root else None
             generation = self.codex_adapter.generate_project(request, workspace)
+            if before_source is not None:
+                after_source = _source_tree_inventory(self.source_root)
+                if after_source != before_source:
+                    raise MvpBuildPhaseError("Codex modified Slugger source tree")
             run.inventory = generation.inventory
             run.codex_session_id = generation.codex_session_id
             run.prompt_version = generation.prompt_version
@@ -64,6 +73,10 @@ class DefaultMvpBuildService(MvpBuildService):
             run.test_results = runner_result.checks
             if not runner_result.passed:
                 raise MvpBuildPhaseError("Generated project tests or smoke check failed")
+            if _github_publish_disabled():
+                run.transition_to(MvpRunStatus.COMPLETED)
+                self.run_repository.save(run)
+                return MvpBuildResult(run=run)
             run.transition_to(MvpRunStatus.PUBLISHING)
             self.run_repository.save(run)
 
@@ -90,8 +103,9 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     from mvp.integrations.codex import CodexCliMvpAdapter
     from mvp.integrations.github import GitHubCliMvpPublisher
 
-    workspace_manager = WorkspaceManager(root_path / ".slugger" / "workspaces")
-    run_repository = SQLiteMvpRunRepository(root_path / ".slugger" / "mvp_runs.sqlite3")
+    home = runtime_home()
+    workspace_manager = WorkspaceManager(workspace_root(home))
+    run_repository = SQLiteMvpRunRepository(sqlite_path(home))
     project_validator = ProjectValidator(workspace_manager)
     basic_runner = BasicRunner(workspace_manager)
     return DefaultMvpBuildService(
@@ -101,4 +115,28 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
         project_validator=project_validator,
         basic_runner=basic_runner,
         github_publisher=GitHubCliMvpPublisher(workspace_manager),
+        source_root=root_path.resolve(strict=False),
     )
+
+
+def _github_publish_disabled() -> bool:
+    import os
+
+    return os.environ.get("SLUGGER_MVP_SKIP_PUBLISH", "").lower() in {"1", "true", "yes"}
+
+
+def _source_tree_inventory(source_root: Path | None) -> str:
+    if source_root is None:
+        return ""
+    root = source_root.resolve(strict=True)
+    entries: list[dict[str, str | int]] = []
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        relative = path.relative_to(root)
+        parts = set(relative.parts)
+        if parts & {".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build"}:
+            continue
+        if any(part.endswith(".egg-info") for part in relative.parts):
+            continue
+        data = path.read_bytes()
+        entries.append({"path": relative.as_posix(), "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)})
+    return hashlib.sha256(json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()).hexdigest()

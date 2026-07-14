@@ -88,15 +88,18 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
         prompt = render_prompt(request, self.prompt_path)
         prompt_hash = _sha256_text(prompt)
         command = (*self.codex_command, prompt)
-        completed = subprocess.run(
-            command,
-            cwd=workspace_path,
-            env=_minimal_environment(),
-            text=True,
-            capture_output=True,
-            timeout=self.timeout_seconds,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=workspace_path,
+                env=_minimal_environment(),
+                text=True,
+                capture_output=True,
+                timeout=self.timeout_seconds,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MvpCodexGenerationError(f"Codex command failed: {exc}") from exc
         if completed.returncode != 0:
             output = _bounded(completed.stderr or completed.stdout)
             raise MvpCodexGenerationError(

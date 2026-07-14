@@ -10,6 +10,7 @@ from typing import cast
 
 from models.project import CodingAgent, Platform, ProjectInput
 from orchestrator import Bootstrap, Slugger
+from mvp.runtime_paths import diagnostics as runtime_diagnostics
 
 _PLATFORMS = [p.value for p in Platform]
 _CODING_AGENTS = [a.value for a in CodingAgent]
@@ -163,12 +164,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = production_mvp_build_service(root_path).build(request)
         run = result.run
+        runtime = runtime_diagnostics()
         print(
             json.dumps(
                 {
                     "run_id": run.run_id,
                     "status": run.status.value,
                     "workspace_path": run.workspace_path,
+                    "runtime": runtime,
+                    "workspace_root": runtime["workspace_root"],
+                    "sqlite_path": runtime["sqlite_path"],
                     "generated_files": len(run.inventory.files) if run.inventory else 0,
                     "validation_passed": bool(run.validation_results) and all(check.passed for check in run.validation_results),
                     "test_passed": bool(run.test_results) and all(check.passed for check in run.test_results),

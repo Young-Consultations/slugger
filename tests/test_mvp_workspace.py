@@ -88,3 +88,34 @@ def test_cleanup_is_explicit_and_removes_workspace(tmp_path: Path) -> None:
     manager.cleanup(MvpWorkspace(run_id=workspace.run_id, path=workspace.path))
 
     assert not workspace.path.exists()
+
+
+def test_slugger_home_override_resolves_runtime_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mvp.runtime_paths import diagnostics, runtime_home
+
+    home = tmp_path / "slugger-home"
+    monkeypatch.setenv("SLUGGER_HOME", str(home))
+
+    assert runtime_home() == home.resolve()
+    diag = diagnostics()
+    assert Path(diag["workspace_root"]).is_relative_to(home.resolve())
+    assert Path(diag["sqlite_path"]).is_relative_to(home.resolve() / "state")
+
+
+def test_runtime_home_default_is_outside_source_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mvp.runtime_paths import runtime_home
+
+    monkeypatch.delenv("SLUGGER_HOME", raising=False)
+    home = runtime_home()
+    repo_root = Path(__file__).resolve().parents[1]
+
+    assert not home.is_relative_to(repo_root)
+
+
+def test_runtime_paths_reject_site_packages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from mvp.runtime_paths import RuntimePathError, runtime_home
+
+    monkeypatch.setenv("SLUGGER_HOME", str(tmp_path / "venv" / "lib" / "python3.11" / "site-packages" / "slugger-state"))
+
+    with pytest.raises(RuntimePathError, match="site-packages"):
+        runtime_home()

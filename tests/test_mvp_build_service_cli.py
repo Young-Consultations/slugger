@@ -122,3 +122,55 @@ def test_mvp_cli_build_outputs_structured_summary(monkeypatch, capsys, tmp_path:
     assert payload["smoke_passed"] is True
     assert payload["github_branch"].startswith("slugger/generated-task-tracker-")
     assert payload["draft_pr_url"].startswith("https://github.com/owner/task-tracker/pull/")
+
+
+def test_build_service_detects_source_tree_mutation(tmp_path: Path) -> None:
+    class MutatingCodex(FakeMvpCodexAdapter):
+        def __init__(self, manager: WorkspaceManager, source_file: Path) -> None:
+            super().__init__(manager)
+            self.source_file = source_file
+
+        def generate_project(self, request, workspace):
+            result = super().generate_project(request, workspace)
+            self.source_file.write_text("changed\n", encoding="utf-8")
+            return result
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    source_file = source_root / "tracked.py"
+    source_file.write_text("original\n", encoding="utf-8")
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    publisher = FakeMvpGitHubPublisher()
+    service = DefaultMvpBuildService(
+        run_repository=SQLiteMvpRunRepository(tmp_path / "runs.sqlite3"),
+        workspace_manager=workspace_manager,
+        codex_adapter=MutatingCodex(workspace_manager, source_file),
+        project_validator=ProjectValidator(workspace_manager),
+        basic_runner=BasicRunner(workspace_manager),
+        github_publisher=publisher,
+        source_root=source_root,
+    )
+
+    result = service.build(_request())
+
+    assert result.run.status is MvpRunStatus.FAILED
+    assert "source tree" in (result.run.error_details or "")
+    assert result.run.validation_results == ()
+    assert publisher.publish_count == 0
+
+
+def test_installed_wheel_style_cli_runtime_path_outside_site_packages(monkeypatch, capsys, tmp_path: Path) -> None:
+    home = tmp_path / "runtime-home"
+    monkeypatch.setenv("SLUGGER_HOME", str(home))
+
+    class StubService:
+        def build(self, request: MvpProjectRequest):
+            service, _publisher = _service(tmp_path)
+            return service.build(request)
+
+    monkeypatch.setattr("mvp.build_service.production_mvp_build_service", lambda root_path: StubService())
+    assert cli_main.main(["mvp", "build", "Create a CLI task tracker with add, list, and done commands", "--name", "task-tracker", "--template", "cli", "--repo", "owner/task-tracker"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert Path(payload["workspace_root"]).is_relative_to(home.resolve())
+    assert "site-packages" not in payload["sqlite_path"]
