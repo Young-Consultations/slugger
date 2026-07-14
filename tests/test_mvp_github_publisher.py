@@ -5,8 +5,20 @@ import subprocess
 import pytest
 
 from mvp.basic_runner import BasicRunnerResult
-from mvp.integrations.github import FakeMvpGitHubPublisher, GitHubCliMvpPublisher, GitHubPublishError, branch_name, pr_body
-from mvp.models import CheckResult, GeneratedFile, GeneratedProjectInventory, MvpProjectRequest, MvpRun
+from mvp.integrations.github import (
+    FakeMvpGitHubPublisher,
+    GitHubCliMvpPublisher,
+    GitHubPublishError,
+    branch_name,
+    pr_body,
+)
+from mvp.models import (
+    CheckResult,
+    GeneratedFile,
+    GeneratedProjectInventory,
+    MvpProjectRequest,
+    MvpRun,
+)
 from mvp.workspace import WorkspaceManager
 
 
@@ -36,7 +48,12 @@ def _validation(passed: bool = True) -> tuple[CheckResult, ...]:
 
 
 def _runner(passed: bool = True) -> BasicRunnerResult:
-    return BasicRunnerResult((CheckResult("run_tests", passed), CheckResult("cli_smoke", passed),))
+    return BasicRunnerResult(
+        (
+            CheckResult("run_tests", passed),
+            CheckResult("cli_smoke", passed),
+        )
+    )
 
 
 def test_fake_publisher_creates_one_draft_pr_and_is_idempotent(tmp_path):
@@ -97,7 +114,10 @@ def test_pr_body_includes_required_audit_sections():
 
 
 def test_branch_name_uses_project_and_short_run_id():
-    assert branch_name(_request(), "1234567890") == "slugger/generated-task-tracker-12345678"
+    assert (
+        branch_name(_request(), "1234567890")
+        == "slugger/generated-task-tracker-12345678"
+    )
 
 
 class RecordingGitHubCliPublisher(GitHubCliMvpPublisher):
@@ -107,7 +127,11 @@ class RecordingGitHubCliPublisher(GitHubCliMvpPublisher):
 
     def _run(self, command: list[str], cwd):  # type: ignore[no-untyped-def]
         self.commands.append(command)
-        stdout = "https://github.com/owner/task-tracker/pull/1\n" if command[:3] == ["gh", "pr", "create"] else ""
+        stdout = (
+            "https://github.com/owner/task-tracker/pull/1\n"
+            if command[:3] == ["gh", "pr", "create"]
+            else ""
+        )
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
 
@@ -115,11 +139,17 @@ def test_cli_publisher_stages_only_recorded_inventory_files(tmp_path):
     workspace_manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = workspace_manager.create_workspace("run-1")
     (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
-    (workspace.path / "pyproject.toml").write_text("[project]\nname = 'task-tracker'\n", encoding="utf-8")
+    (workspace.path / "pyproject.toml").write_text(
+        "[project]\nname = 'task-tracker'\n", encoding="utf-8"
+    )
     (workspace.path / ".venv").mkdir()
-    (workspace.path / ".venv" / "artifact.py").write_text("runner artifact", encoding="utf-8")
+    (workspace.path / ".venv" / "artifact.py").write_text(
+        "runner artifact", encoding="utf-8"
+    )
     (workspace.path / ".pytest_cache").mkdir()
-    (workspace.path / ".pytest_cache" / "README.md").write_text("cache", encoding="utf-8")
+    (workspace.path / ".pytest_cache" / "README.md").write_text(
+        "cache", encoding="utf-8"
+    )
     run = _run()
     run.inventory = GeneratedProjectInventory(
         files=(
@@ -132,9 +162,14 @@ def test_cli_publisher_stages_only_recorded_inventory_files(tmp_path):
 
     publisher.publish(run, workspace, _validation(), _runner())
 
-    add_commands = [command for command in publisher.commands if command[:3] == ["git", "add", "--"]]
+    add_commands = [
+        command for command in publisher.commands if command[:3] == ["git", "add", "--"]
+    ]
     assert add_commands == [["git", "add", "--", "README.md", "pyproject.toml"]]
-    assert all(".venv" not in command and ".pytest_cache" not in command for command in add_commands[0])
+    assert all(
+        ".venv" not in command and ".pytest_cache" not in command
+        for command in add_commands[0]
+    )
 
 
 def test_cli_publisher_rejects_missing_inventory(tmp_path):

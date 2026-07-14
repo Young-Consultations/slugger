@@ -49,20 +49,45 @@ class DefaultMvpBuildService(MvpBuildService):
             run.workspace_path = str(workspace.path)
             self.run_repository.save(run)
 
-            before_source = _source_tree_inventory(self.source_root) if self.source_root else None
-            generation = self.codex_adapter.generate_project(request, workspace)
-            if before_source is not None:
-                after_source = _source_tree_inventory(self.source_root)
-                if after_source != before_source:
-                    raise MvpBuildPhaseError("Codex modified Slugger source tree")
+            before_source = (
+                _source_tree_inventory(self.source_root) if self.source_root else None
+            )
+            run.source_hash_before_codex = (
+                before_source["hash"] if before_source else None
+            )
+            generation = None
+            generation_error: Exception | None = None
+            try:
+                generation = self.codex_adapter.generate_project(request, workspace)
+            except Exception as exc:
+                generation_error = exc
+            finally:
+                if before_source is not None:
+                    after_source = _source_tree_inventory(self.source_root)
+                    run.source_hash_after_codex = str(after_source["hash"])
+                    changed = _changed_source_paths(before_source, after_source)
+                    run.changed_source_paths = tuple(changed)
+                    run.source_integrity_result = "failed" if changed else "passed"
+            if generation_error is not None:
+                if run.changed_source_paths:
+                    raise MvpBuildPhaseError(
+                        f"Codex failed and modified Slugger source tree: {generation_error}; changed: {', '.join(run.changed_source_paths)}"
+                    ) from generation_error
+                raise generation_error
+            if run.changed_source_paths:
+                raise MvpBuildPhaseError("Codex modified Slugger source tree")
+            assert generation is not None
             run.inventory = generation.inventory
             run.codex_session_id = generation.codex_session_id
+            run.slugger_correlation_id = generation.slugger_correlation_id
             run.prompt_version = generation.prompt_version
             run.prompt_hash = generation.prompt_hash
             run.transition_to(MvpRunStatus.VALIDATING)
             self.run_repository.save(run)
 
-            validation_results = self.project_validator.validate(request, workspace, generation.inventory)
+            validation_results = self.project_validator.validate(
+                request, workspace, generation.inventory
+            )
             run.validation_results = validation_results
             if not self.project_validator.passed(validation_results):
                 raise MvpBuildPhaseError("Generated project validation failed")
@@ -72,15 +97,22 @@ class DefaultMvpBuildService(MvpBuildService):
             runner_result = self.basic_runner.run(request, workspace)
             run.test_results = runner_result.checks
             if not runner_result.passed:
-                raise MvpBuildPhaseError("Generated project tests or smoke check failed")
+                raise MvpBuildPhaseError(
+                    "Generated project tests or smoke check failed"
+                )
             if _github_publish_disabled():
-                run.transition_to(MvpRunStatus.COMPLETED)
+                run.publication_skipped = True
+                run.transition_to(MvpRunStatus.READY_TO_PUBLISH)
                 self.run_repository.save(run)
                 return MvpBuildResult(run=run)
+            run.transition_to(MvpRunStatus.READY_TO_PUBLISH)
+            self.run_repository.save(run)
             run.transition_to(MvpRunStatus.PUBLISHING)
             self.run_repository.save(run)
 
-            publish_result = self.github_publisher.publish(run, workspace, validation_results, runner_result)
+            publish_result = self.github_publisher.publish(
+                run, workspace, validation_results, runner_result
+            )
             run.github_publish_result = publish_result
             run.transition_to(MvpRunStatus.COMPLETED)
             self.run_repository.save(run)
@@ -122,21 +154,54 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
 def _github_publish_disabled() -> bool:
     import os
 
-    return os.environ.get("SLUGGER_MVP_SKIP_PUBLISH", "").lower() in {"1", "true", "yes"}
+    return os.environ.get("SLUGGER_MVP_SKIP_PUBLISH", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
-def _source_tree_inventory(source_root: Path | None) -> str:
+def _source_tree_inventory(source_root: Path | None) -> dict[str, object]:
     if source_root is None:
-        return ""
+        return {"hash": "", "files": {}}
     root = source_root.resolve(strict=True)
     entries: list[dict[str, str | int]] = []
+    files: dict[str, str] = {}
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         relative = path.relative_to(root)
         parts = set(relative.parts)
-        if parts & {".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build"}:
+        if parts & {
+            ".git",
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+            "dist",
+            "build",
+        }:
             continue
         if any(part.endswith(".egg-info") for part in relative.parts):
             continue
         data = path.read_bytes()
-        entries.append({"path": relative.as_posix(), "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)})
-    return hashlib.sha256(json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        digest = hashlib.sha256(data).hexdigest()
+        files[relative.as_posix()] = digest
+        entries.append(
+            {"path": relative.as_posix(), "sha256": digest, "size": len(data)}
+        )
+    inventory_hash = hashlib.sha256(
+        json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return {"hash": inventory_hash, "files": files}
+
+
+def _changed_source_paths(
+    before: dict[str, object], after: dict[str, object]
+) -> list[str]:
+    before_files = before.get("files", {})
+    after_files = after.get("files", {})
+    if not isinstance(before_files, dict) or not isinstance(after_files, dict):
+        return []
+    paths = set(before_files) | set(after_files)
+    return sorted(
+        path for path in paths if before_files.get(path) != after_files.get(path)
+    )

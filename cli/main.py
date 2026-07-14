@@ -90,12 +90,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     mvp_parser = subparsers.add_parser("mvp", help="Run focused MVP commands")
     mvp_subparsers = mvp_parser.add_subparsers(dest="mvp_command", required=True)
-    mvp_build = mvp_subparsers.add_parser("build", help="Build a Python project through the MVP path")
+    mvp_build = mvp_subparsers.add_parser(
+        "build", help="Build a Python project through the MVP path"
+    )
     mvp_build.add_argument("idea", help="Description of the Python project to generate")
-    mvp_build.add_argument("--name", required=True, dest="project_name", help="Lowercase kebab-case project name")
-    mvp_build.add_argument("--template", default="cli", choices=["cli"], help="MVP project template")
-    mvp_build.add_argument("--repo", required=True, dest="github_repository", help="GitHub repository in owner/repository form")
-    mvp_build.add_argument("--base", default="main", dest="base_branch", help="Base branch for the draft pull request")
+    mvp_build.add_argument(
+        "--name",
+        required=True,
+        dest="project_name",
+        help="Lowercase kebab-case project name",
+    )
+    mvp_build.add_argument(
+        "--template", default="cli", choices=["cli"], help="MVP project template"
+    )
+    mvp_build.add_argument(
+        "--repo",
+        required=True,
+        dest="github_repository",
+        help="GitHub repository in owner/repository form",
+    )
+    mvp_build.add_argument(
+        "--base",
+        default="main",
+        dest="base_branch",
+        help="Base branch for the draft pull request",
+    )
 
     # lineage — show artifact traceability (WP-020)
     lineage_parser = subparsers.add_parser(
@@ -162,8 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             github_repository=args.github_repository,
             base_branch=args.base_branch,
         )
-        result = production_mvp_build_service(root_path).build(request)
-        run = result.run
+        mvp_result = production_mvp_build_service(root_path).build(request)
+        run = mvp_result.run
         runtime = runtime_diagnostics()
         print(
             json.dumps(
@@ -175,16 +194,34 @@ def main(argv: list[str] | None = None) -> int:
                     "workspace_root": runtime["workspace_root"],
                     "sqlite_path": runtime["sqlite_path"],
                     "generated_files": len(run.inventory.files) if run.inventory else 0,
-                    "validation_passed": bool(run.validation_results) and all(check.passed for check in run.validation_results),
-                    "test_passed": bool(run.test_results) and all(check.passed for check in run.test_results),
-                    "smoke_passed": any(check.name == "cli_smoke" and check.passed for check in run.test_results),
-                    "github_branch": run.github_publish_result.branch if run.github_publish_result else None,
-                    "draft_pr_url": run.github_publish_result.pull_request_url if run.github_publish_result else None,
+                    "validation_passed": bool(run.validation_results)
+                    and all(check.passed for check in run.validation_results),
+                    "test_passed": bool(run.test_results)
+                    and all(check.passed for check in run.test_results),
+                    "smoke_passed": any(
+                        check.name == "cli_smoke" and check.passed
+                        for check in run.test_results
+                    ),
+                    "github_branch": run.github_publish_result.branch
+                    if run.github_publish_result
+                    else None,
+                    "codex_session_id": run.codex_session_id,
+                    "slugger_correlation_id": run.slugger_correlation_id,
+                    "prompt_version": run.prompt_version,
+                    "prompt_hash": run.prompt_hash,
+                    "source_integrity_result": run.source_integrity_result,
+                    "source_hash_before_codex": run.source_hash_before_codex,
+                    "source_hash_after_codex": run.source_hash_after_codex,
+                    "changed_source_paths": list(run.changed_source_paths),
+                    "publication_skipped": run.publication_skipped,
+                    "draft_pr_url": run.github_publish_result.pull_request_url
+                    if run.github_publish_result
+                    else None,
                     "error_details": run.error_details,
                 }
             )
         )
-        return 0 if run.status.value == "completed" else 1
+        return 0 if run.status.value in {"completed", "ready_to_publish"} else 1
     if args.command == "build":
         slugger = get_slugger()
         project_input = ProjectInput(
