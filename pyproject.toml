@@ -37,6 +37,7 @@ include = [
 
 [tool.pytest.ini_options]
 filterwarnings = ["ignore::pytest.PytestCollectionWarning"]
+markers = ["real_codex: manually gated tests that invoke the real Codex CLI"]
 
 [tool.mypy]
 python_version = "3.11"

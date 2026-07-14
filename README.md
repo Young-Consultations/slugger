@@ -51,6 +51,15 @@ A successful run returns a structured terminal summary with the run ID, final st
 
 See [docs/mvp.md](docs/mvp.md) for setup, failure recovery, architecture, operations, and known limitations.
 
+### Local Codex demo
+
+For a local-only end-to-end demo that uses the real Codex CLI and intentionally skips GitHub publication, see [docs/codex-demo.md](docs/codex-demo.md). The demo command is:
+
+```bash
+./scripts/run_codex_demo.sh
+```
+
+
 ⸻
 
 ## Installation
