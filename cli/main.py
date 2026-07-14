@@ -115,6 +115,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="base_branch",
         help="Base branch for the draft pull request",
     )
+    mvp_publish = mvp_subparsers.add_parser(
+        "publish", help="Resume or complete GitHub publication for a persisted MVP run"
+    )
+    mvp_publish.add_argument("run_id", help="Persisted MVP run ID")
+    mvp_resume = mvp_subparsers.add_parser("resume", help="Alias for mvp publish")
+    mvp_resume.add_argument("run_id", help="Persisted MVP run ID")
 
     # lineage — show artifact traceability (WP-020)
     lineage_parser = subparsers.add_parser(
@@ -169,6 +175,29 @@ def main(argv: list[str] | None = None) -> int:
         if slugger is None:
             slugger = Slugger(Bootstrap(root_path).build())
         return slugger
+
+    if args.command == "mvp" and args.mvp_command in {"publish", "resume"}:
+        from mvp.build_service import production_mvp_build_service
+
+        service = production_mvp_build_service(root_path)
+        mvp_result = service.publish(args.run_id)
+        run = mvp_result.run
+        print(
+            json.dumps(
+                {
+                    "run_id": run.run_id,
+                    "status": run.status.value,
+                    "github_branch": run.github_publish_result.branch
+                    if run.github_publish_result
+                    else None,
+                    "draft_pr_url": run.github_publish_result.pull_request_url
+                    if run.github_publish_result
+                    else None,
+                    "error_details": run.error_details,
+                }
+            )
+        )
+        return 0 if run.status.value == "completed" else 1
 
     if args.command == "mvp" and args.mvp_command == "build":
         from mvp.build_service import production_mvp_build_service

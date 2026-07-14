@@ -38,7 +38,7 @@ _ALLOWED_TRANSITIONS: dict[MvpRunStatus, frozenset[MvpRunStatus]] = {
     ),
     MvpRunStatus.PUBLISHING: frozenset({MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
     MvpRunStatus.COMPLETED: frozenset(),
-    MvpRunStatus.FAILED: frozenset(),
+    MvpRunStatus.FAILED: frozenset({MvpRunStatus.PUBLISHING}),
 }
 
 
@@ -146,6 +146,8 @@ class GitHubPublishResult:
     pull_request_url: str
     draft: bool = True
     existing: bool = False
+    commit_sha: str | None = None
+    pull_request_number: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "branch", _require_non_empty(self.branch, "branch"))
