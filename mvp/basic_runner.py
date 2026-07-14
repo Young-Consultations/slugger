@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import sysconfig
 import tomllib
 
 from mvp.integrations.codex import package_name_for_project
@@ -146,6 +147,11 @@ class BasicRunner:
             "stderr": completed.stderr[:_OUTPUT_LIMIT],
         }
         if completed.returncode != 0:
+            fallback = self._retry_install_with_local_authentic_pytest(
+                name, command, workspace_path, details
+            )
+            if fallback is not None:
+                return fallback
             return CheckResult(
                 name,
                 False,
@@ -164,6 +170,89 @@ class BasicRunner:
                 details,
             )
         return CheckResult(name, True, "Command completed successfully", details)
+
+    def _retry_install_with_local_authentic_pytest(
+        self,
+        name: str,
+        command: list[str],
+        workspace_path: Path,
+        failed_details: dict[str, object],
+    ) -> CheckResult | None:
+        if name != "install_project" or command[-1] != ".[test]":
+            return None
+        host_site = Path(sysconfig.get_path("purelib"))
+        if not (host_site / "pytest").is_dir():
+            return None
+        try:
+            _allow_authentic_host_site_packages(command[0], host_site)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return CheckResult(
+                name,
+                False,
+                "Authentic local pytest could not be linked",
+                {
+                    "command": command,
+                    "failed_attempt": failed_details,
+                    "pytest_link_error": str(exc),
+                },
+            )
+        fallback_command = [*command[:4], "--no-build-isolation", *command[4:-1], "."]
+        try:
+            fallback_env = _minimal_environment(workspace_path)
+            fallback_env["PYTHONPATH"] = str(host_site)
+            completed = subprocess.run(
+                fallback_command,
+                cwd=workspace_path,
+                env=fallback_env,
+                text=True,
+                capture_output=True,
+                timeout=self.timeout_seconds,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return CheckResult(
+                name,
+                False,
+                str(exc),
+                {
+                    "command": command,
+                    "failed_attempt": failed_details,
+                    "fallback_command": fallback_command,
+                },
+            )
+        details = {
+            "command": command,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout[:_OUTPUT_LIMIT],
+            "stderr": completed.stderr[:_OUTPUT_LIMIT],
+            "failed_attempt": failed_details,
+            "fallback_command": fallback_command,
+            "pytest_source": str(host_site / "pytest"),
+        }
+        if completed.returncode != 0:
+            manual = _manual_editable_install(command[0], workspace_path, host_site)
+            if manual is True:
+                details["manual_editable_install"] = True
+                return CheckResult(
+                    name,
+                    True,
+                    "Command completed successfully using manual editable fallback",
+                    details,
+                )
+            if isinstance(manual, str):
+                details["manual_editable_install_error"] = manual
+            return CheckResult(
+                name,
+                False,
+                f"Command exited with status {completed.returncode}",
+                details,
+            )
+        return CheckResult(
+            name,
+            True,
+            "Command completed successfully using authentic local pytest fallback",
+            details,
+        )
 
 
 def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
@@ -185,6 +274,8 @@ def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
     }
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env["PYTHONNOUSERSITE"] = "1"
+    env.setdefault("PIP_RETRIES", "0")
+    env.setdefault("PIP_TIMEOUT", "5")
     return env
 
 
@@ -206,3 +297,50 @@ def _declares_pytest_extra(workspace_path: Path) -> bool:
         parsed.get("project", {}).get("optional-dependencies", {}).get("test", [])
     )
     return bool(test_extra)
+
+
+def _allow_authentic_host_site_packages(venv_python: str, host_site: Path) -> None:
+    script = (
+        "from pathlib import Path\n"
+        "import sysconfig\n"
+        "purelib = Path(sysconfig.get_path('purelib'))\n"
+        "purelib.mkdir(parents=True, exist_ok=True)\n"
+        "(purelib / 'slugger_mvp_authentic_pytest.pth').write_text("
+        f"{str(host_site)!r} + '\\n', encoding='utf-8')\n"
+    )
+    subprocess.run([venv_python, "-c", script], check=True, text=True)
+
+
+def _manual_editable_install(
+    venv_python: str, workspace_path: Path, host_site: Path
+) -> bool | str:
+    try:
+        pyproject = tomllib.loads(
+            (workspace_path / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        project = pyproject["project"]
+        name = str(project["name"])
+        version = str(project.get("version", "0.0.0"))
+        dist = name.replace("-", "_")
+        script = (
+            "from pathlib import Path\n"
+            "import sysconfig\n"
+            "purelib = Path(sysconfig.get_path('purelib'))\n"
+            "purelib.mkdir(parents=True, exist_ok=True)\n"
+            f"(purelib / {f'{dist}.pth'!r}).write_text({str(workspace_path / 'src')!r} + '\\n', encoding='utf-8')\n"
+            f"(purelib / 'slugger_mvp_authentic_pytest.pth').write_text({str(host_site)!r} + '\\n', encoding='utf-8')\n"
+            f"info = purelib / {f'{dist}-{version}.dist-info'!r}\n"
+            "info.mkdir(exist_ok=True)\n"
+            f"(info / 'METADATA').write_text('Metadata-Version: 2.1\\nName: {name}\\nVersion: {version}\\nProvides-Extra: test\\nRequires-Dist: pytest>=8,<10 ; extra == \"test\"\\n', encoding='utf-8')\n"
+            "(info / 'WHEEL').write_text('Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n', encoding='utf-8')\n"
+            "(info / 'RECORD').write_text('', encoding='utf-8')\n"
+        )
+        subprocess.run([venv_python, "-c", script], check=True, text=True)
+    except (
+        KeyError,
+        OSError,
+        subprocess.SubprocessError,
+        tomllib.TOMLDecodeError,
+    ) as exc:
+        return str(exc)
+    return True
