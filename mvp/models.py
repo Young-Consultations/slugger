@@ -29,7 +29,7 @@ _ALLOWED_TRANSITIONS: dict[MvpRunStatus, frozenset[MvpRunStatus]] = {
     MvpRunStatus.CREATED: frozenset({MvpRunStatus.GENERATING, MvpRunStatus.FAILED}),
     MvpRunStatus.GENERATING: frozenset({MvpRunStatus.VALIDATING, MvpRunStatus.FAILED}),
     MvpRunStatus.VALIDATING: frozenset({MvpRunStatus.TESTING, MvpRunStatus.FAILED}),
-    MvpRunStatus.TESTING: frozenset({MvpRunStatus.PUBLISHING, MvpRunStatus.FAILED}),
+    MvpRunStatus.TESTING: frozenset({MvpRunStatus.PUBLISHING, MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
     MvpRunStatus.PUBLISHING: frozenset({MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
     MvpRunStatus.COMPLETED: frozenset(),
     MvpRunStatus.FAILED: frozenset(),

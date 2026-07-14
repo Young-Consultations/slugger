@@ -57,6 +57,21 @@ def test_build_service_invokes_components_in_order_and_completes(tmp_path: Path)
     assert publisher.publish_count == 1
 
 
+def test_build_service_skip_publish_completes_after_tests(monkeypatch, tmp_path: Path) -> None:
+    service, publisher = _service(tmp_path)
+    monkeypatch.setenv("SLUGGER_MVP_SKIP_PUBLISH", "1")
+
+    result = service.build(_request())
+
+    run = result.run
+    assert run.status is MvpRunStatus.COMPLETED
+    assert run.error_details is None
+    assert run.validation_results and all(check.passed for check in run.validation_results)
+    assert run.test_results and all(check.passed for check in run.test_results)
+    assert run.github_publish_result is None
+    assert publisher.publish_count == 0
+
+
 def test_build_service_stops_after_codex_failure(tmp_path: Path) -> None:
     service, publisher = _service(tmp_path, codex_fail=True)
 
