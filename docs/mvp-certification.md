@@ -1,0 +1,80 @@
+# Slugger MVP Certification Evidence
+
+Status: **not 100% certified in this environment**. Offline MVP acceptance, package build, and recoverable publication code paths are evidenced here. Real Codex generation, real GitHub sandbox publication, and green protected CI require credentials and repository administrator controls that were not available to this local agent run.
+
+## Scope
+
+Controlling scope is GitHub issue #24 and the MVP-001 through MVP-011 focused path. The first MVP release supports publishing only to an empty target repository or a repository already Slugger-managed for the same persisted run. Merging generated applications into arbitrary existing Python repositories remains out of scope.
+
+## Local certification fields
+
+| Field | Evidence |
+| --- | --- |
+| Commit SHA | Filled by release manager after final commit for this branch. |
+| Python version | To be captured with `python --version` during final validation. |
+| Codex version | Not executed in this environment; capture with `codex --version` in the protected integration environment. |
+| GitHub tooling | Production publisher uses `git` and GitHub CLI `gh`; capture `git --version` and `gh --version` in the protected integration environment. |
+| Wheel filename/checksum | To be captured after `python -m build` with `sha256sum dist/*.whl`. |
+| Runtime-state path | Slugger MVP runtime state is resolved through `mvp.runtime_paths` and verified outside site-packages by CI package verification. |
+| Real Codex run/session ID | Not executed here; required before issue #24 closure. |
+| Real GitHub sandbox PR URL | Not executed here; required before issue #24 closure. |
+| Generated inventory hash | Persisted as `MvpRun.inventory.inventory_hash` and included in draft PR content. |
+| Installation evidence | `install_project` check in persisted run test results and draft PR body. |
+| Pytest evidence | `run_tests` check in persisted run test results and draft PR body. |
+| CLI smoke evidence | `cli_smoke` check in persisted run test results and draft PR body. |
+| Idempotency evidence | Publisher reuses deterministic branch/open PR and fake acceptance proves repeat publication returns the same PR. |
+| Restart/recovery evidence | `slugger mvp publish <run-id>` and `slugger mvp resume <run-id>` load persisted evidence and finish missing publication work. |
+
+## Exact final validation commands
+
+Required local validation:
+
+```bash
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy mvp cli
+python -m pytest tests/test_mvp_*.py tests/mvp/ -q
+python -m build
+```
+
+Required clean installed-wheel validation:
+
+```bash
+python -m venv /tmp/slugger-wheel-cert
+. /tmp/slugger-wheel-cert/bin/activate
+python -m pip install --upgrade pip
+pip install dist/*.whl
+slugger mvp build --help
+```
+
+Required protected credential validation:
+
+```bash
+codex --version
+gh --version
+git --version
+slugger mvp build "Create a CLI task tracker with add, list, and done commands" --name task-tracker --repo OWNER/EMPTY-SANDBOX --base main
+slugger mvp publish <run-id>
+slugger mvp resume <run-id>
+```
+
+## Required GitHub sandbox assertions
+
+Before closing issue #24, record one protected run proving:
+
+- Branch creation.
+- Commit creation and SHA.
+- Push to the sandbox repository.
+- One draft pull request with draft status true.
+- PR body contains original idea, project name, template, Codex session ID, prompt version/hash, generated inventory, inventory hash, install/test/smoke results, known limitations, and Slugger run ID.
+- Commit contains only generated inventory files.
+- No `.venv`, `.pytest_cache`, databases, logs, or runtime state are committed.
+- Second execution returns the same PR.
+- Restarted publication returns the same PR.
+- No automatic approval, merge, or release publication occurred.
+
+## Known limitations
+
+- MVP publication intentionally rejects non-empty repositories unless they are Slugger-managed for the same run.
+- Real Codex and real GitHub sandbox evidence are credential-dependent and must run from protected CI or an administrator workstation.
+- Branch protection and approval requirements may require repository administrator configuration outside the codebase.

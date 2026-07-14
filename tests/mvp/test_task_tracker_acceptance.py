@@ -305,7 +305,7 @@ def test_github_failure_preserves_validated_workspace(tmp_path: Path) -> None:
 
     result = service.build(_request())
 
-    assert result.run.status is MvpRunStatus.FAILED
+    assert result.run.status is MvpRunStatus.PUBLICATION_FAILED
     assert publisher.publish_count == 0
     assert result.run.workspace_path is not None
     assert Path(result.run.workspace_path).is_dir()
@@ -342,4 +342,25 @@ def test_completed_run_publication_is_idempotent(tmp_path: Path) -> None:
     assert second.pull_request_url == first.pull_request_url
     assert second.branch == first.branch
     assert second.existing is True
+    assert publisher.publish_count == 1
+
+
+def test_resume_publish_ignores_runner_artifacts_when_inventory_is_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SLUGGER_MVP_SKIP_PUBLISH", "1")
+    service, _manager, publisher = _service(tmp_path)
+    result = service.build(_request())
+
+    assert result.run.status is MvpRunStatus.READY_TO_PUBLISH
+    assert result.run.workspace_path is not None
+    artifact = Path(result.run.workspace_path) / ".venv" / "runner-artifact.txt"
+    artifact.parent.mkdir(exist_ok=True)
+    artifact.write_text("created after validation", encoding="utf-8")
+    monkeypatch.delenv("SLUGGER_MVP_SKIP_PUBLISH")
+
+    published = service.publish(result.run.run_id)
+
+    assert published.run.status is MvpRunStatus.COMPLETED
+    assert published.run.github_publish_result is not None
     assert publisher.publish_count == 1

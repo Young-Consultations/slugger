@@ -181,3 +181,41 @@ def test_cli_publisher_rejects_missing_inventory(tmp_path):
 
     with pytest.raises(GitHubPublishError, match="without a generated-file inventory"):
         publisher.publish(run, workspace, _validation(), _runner())
+
+
+class ExistingPrGitHubCliPublisher(GitHubCliMvpPublisher):
+    def __init__(self, workspace_manager: WorkspaceManager) -> None:
+        super().__init__(workspace_manager)
+        self.commands: list[list[str]] = []
+
+    def _find_pr(self, repository: str, branch: str):  # type: ignore[no-untyped-def]
+        return {
+            "url": "https://github.com/owner/task-tracker/pull/7",
+            "number": 7,
+            "isDraft": True,
+        }
+
+    def _remote_branch_sha(self, repository: str, branch: str, cwd):  # type: ignore[no-untyped-def]
+        return "remote-sha"
+
+    def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+        self.commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+
+def test_cli_publisher_reuses_existing_pr_without_saved_publish_metadata(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    run = _run()
+    publisher = ExistingPrGitHubCliPublisher(workspace_manager)
+
+    result = publisher.publish(run, workspace, _validation(), _runner())
+
+    assert result.pull_request_url == "https://github.com/owner/task-tracker/pull/7"
+    assert result.pull_request_number == 7
+    assert result.commit_sha == "remote-sha"
+    assert result.existing is True
+    assert not any(command[:2] == ["git", "push"] for command in publisher.commands)
+    assert not any(
+        command[:3] == ["gh", "pr", "create"] for command in publisher.commands
+    )

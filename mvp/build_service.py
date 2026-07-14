@@ -9,10 +9,16 @@ import hashlib
 import json
 import uuid
 
-from mvp.basic_runner import BasicRunner
+from mvp.basic_runner import BasicRunner, BasicRunnerResult
 from mvp.integrations.codex import MvpCodexAdapter
 from mvp.integrations.github import MvpGitHubPublisher
-from mvp.models import MvpBuildResult, MvpProjectRequest, MvpRun, MvpRunStatus
+from mvp.models import (
+    GeneratedProjectInventory,
+    MvpBuildResult,
+    MvpProjectRequest,
+    MvpRun,
+    MvpRunStatus,
+)
 from mvp.project_validator import ProjectValidator
 from mvp.run_repository import SQLiteMvpRunRepository
 from mvp.runtime_paths import runtime_home, sqlite_path, workspace_root
@@ -24,6 +30,9 @@ class MvpBuildService(Protocol):
 
     def build(self, request: MvpProjectRequest) -> MvpBuildResult:
         """Build a generated project for the supplied MVP request."""
+
+    def publish(self, run_id: str) -> MvpBuildResult:
+        """Resume or complete GitHub publication for a persisted MVP run."""
 
 
 @dataclass
@@ -53,7 +62,7 @@ class DefaultMvpBuildService(MvpBuildService):
                 _source_tree_inventory(self.source_root) if self.source_root else None
             )
             run.source_hash_before_codex = (
-                before_source["hash"] if before_source else None
+                str(before_source["hash"]) if before_source else None
             )
             generation = None
             generation_error: Exception | None = None
@@ -118,11 +127,97 @@ class DefaultMvpBuildService(MvpBuildService):
             self.run_repository.save(run)
             return MvpBuildResult(run=run)
         except Exception as exc:
-            if run.status is not MvpRunStatus.FAILED:
-                run.error_details = str(exc)
+            run.error_details = str(exc)
+            if run.status is MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLICATION_FAILED)
+            elif run.status not in {MvpRunStatus.FAILED, MvpRunStatus.COMPLETED}:
                 run.transition_to(MvpRunStatus.FAILED)
-                self.run_repository.save(run)
+            self.run_repository.save(run)
             return MvpBuildResult(run=run)
+
+    def publish(self, run_id: str) -> MvpBuildResult:
+        run = self.run_repository.require(run_id)
+        try:
+            if (
+                run.inventory is None
+                or not run.validation_results
+                or not run.test_results
+            ):
+                raise MvpBuildPhaseError(
+                    "Cannot publish without inventory, validation, and test evidence"
+                )
+            if not self.project_validator.passed(run.validation_results):
+                raise MvpBuildPhaseError("Cannot publish after failed validation")
+            if not all(check.passed for check in run.test_results):
+                raise MvpBuildPhaseError(
+                    "Cannot publish after failed generated-project checks"
+                )
+            if run.workspace_path is None:
+                raise MvpBuildPhaseError(
+                    "Cannot publish without a persisted workspace path"
+                )
+            workspace = self.workspace_manager.workspace_from_path(
+                Path(run.workspace_path)
+            )
+            if not _inventory_matches_workspace(
+                run.inventory, workspace.path, self.workspace_manager
+            ):
+                raise MvpBuildPhaseError(
+                    "Cannot publish changed generated inventory without revalidation"
+                )
+            validation_results = run.validation_results
+            runner_result = BasicRunnerResult(run.test_results)
+            if (
+                run.status is MvpRunStatus.COMPLETED
+                and run.github_publish_result is not None
+            ):
+                run.error_details = None
+                return MvpBuildResult(run=run)
+            if run.status not in {
+                MvpRunStatus.READY_TO_PUBLISH,
+                MvpRunStatus.PUBLICATION_FAILED,
+                MvpRunStatus.PUBLISHING,
+            }:
+                raise MvpBuildPhaseError(
+                    f"Cannot publish run in status {run.status.value}"
+                )
+            if run.status is not MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLISHING)
+                self.run_repository.save(run)
+            publish_result = self.github_publisher.publish(
+                run, workspace, validation_results, runner_result
+            )
+            run.github_publish_result = publish_result
+            run.error_details = None
+            run.transition_to(MvpRunStatus.COMPLETED)
+            self.run_repository.save(run)
+            return MvpBuildResult(run=run)
+        except Exception as exc:
+            run.error_details = str(exc)
+            if run.status is MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLICATION_FAILED)
+            self.run_repository.save(run)
+            return MvpBuildResult(run=run)
+
+
+def _inventory_matches_workspace(
+    inventory: GeneratedProjectInventory,
+    workspace_path: Path,
+    workspace_manager: WorkspaceManager,
+) -> bool:
+    for generated_file in inventory.files:
+        path = workspace_manager.resolve_generated_path(
+            workspace_path, generated_file.path
+        )
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return False
+        if len(data) != generated_file.size_bytes:
+            return False
+        if hashlib.sha256(data).hexdigest() != generated_file.sha256:
+            return False
+    return True
 
 
 class MvpBuildPhaseError(RuntimeError):

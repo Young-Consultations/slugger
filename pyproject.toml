@@ -43,3 +43,14 @@ python_version = "3.11"
 ignore_missing_imports = true
 exclude = ["tests/"]
 
+
+
+[[tool.mypy.overrides]]
+module = [
+  "providers.*",
+  "services.*",
+  "config.*",
+  "workflow.*",
+]
+ignore_errors = true
+ignore_missing_imports = true

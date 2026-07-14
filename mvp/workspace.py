@@ -123,6 +123,15 @@ class WorkspaceManager:
         self._require_below_root(workspace_path)
         shutil.rmtree(workspace_path)
 
+    def workspace_from_path(self, path: Path | str) -> MvpWorkspace:
+        """Return a workspace wrapper for a previously persisted workspace path."""
+
+        workspace_path = Path(path).resolve(strict=False)
+        self._require_below_root(workspace_path)
+        if workspace_path == self.root:
+            raise WorkspaceSafetyError("Workspace must be a run-specific directory")
+        return MvpWorkspace(run_id=workspace_path.name, path=workspace_path)
+
     def _workspace_path(self, workspace: Path | MvpWorkspace) -> Path:
         path = (
             workspace.path if isinstance(workspace, MvpWorkspace) else Path(workspace)

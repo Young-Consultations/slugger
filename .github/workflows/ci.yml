@@ -2,54 +2,128 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Lint, type-check, test, and package
+  static-quality:
+    name: Static quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: "pyproject.toml"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[test]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: python -m mypy mvp cli
 
-      - name: Install dependencies
+  mvp-tests:
+    name: MVP unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[test]"
+      - run: python -m pytest tests/test_mvp_*.py -q
+
+  golden-acceptance:
+    name: Golden MVP acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[test]"
+      - name: Real service/workspace/validator/venv/install/pytest/smoke/sqlite with fake adapters
+        env:
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+        run: python -m pytest tests/mvp/test_task_tracker_acceptance.py -q
+
+  package-verification:
+    name: Package verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[test]"
+      - run: python -m build
+      - name: Install wheel and run installed golden MVP
+        env:
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-wheel-home
+          SLUGGER_MVP_SKIP_PUBLISH: "1"
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[test]"
-
-      - name: Lint
-        run: ruff check .
-
-      - name: Check formatting
-        run: ruff format --check .
-
-      - name: Type check
-        run: python -m mypy agents cli core materializer models orchestrator providers services validators workflow
-
-      - name: Run tests
-        run: python -m pytest tests/
-
-      - name: Build package
-        run: python -m build
-
-      - name: Smoke test installed wheel
-        run: |
-          python -m venv ci-wheel-smoke
-          . ci-wheel-smoke/bin/activate
+          python -m venv clean-wheel-venv
+          . clean-wheel-venv/bin/activate
           python -m pip install --upgrade pip
           pip install dist/*.whl
-          slugger status
+          slugger mvp build --help
+          python - <<'PY'
+          import site
+          from pathlib import Path
+          from mvp.runtime_paths import diagnostics
+          data = diagnostics()
+          state = Path(data["runtime_home"]).resolve()
+          site_roots = [Path(p).resolve() for p in site.getsitepackages()]
+          assert not any(state.is_relative_to(root) for root in site_roots), data
+          print(data)
+          PY
+
+  real-codex:
+    name: Real Codex integration (protected manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: mvp-integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip && pip install -e ".[test]"
+      - run: slugger mvp build "Create a CLI task tracker with add, list, and done commands" --name task-tracker --repo "$SLUGGER_GITHUB_SANDBOX" --base main
+        env:
+          SLUGGER_GITHUB_SANDBOX: ${{ secrets.SLUGGER_GITHUB_SANDBOX }}
+          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
+
+  real-github-sandbox:
+    name: Real GitHub sandbox publication (protected manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: mvp-integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip && pip install -e ".[test]"
+      - run: python -m pytest tests/test_mvp_github_publisher.py -q
+      - run: slugger mvp publish "$SLUGGER_MVP_RUN_ID"
+        env:
+          SLUGGER_MVP_RUN_ID: ${{ secrets.SLUGGER_MVP_RUN_ID }}
+          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}

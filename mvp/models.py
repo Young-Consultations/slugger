@@ -23,6 +23,7 @@ class MvpRunStatus(StrEnum):
     READY_TO_PUBLISH = "ready_to_publish"
     PUBLISHING = "publishing"
     COMPLETED = "completed"
+    PUBLICATION_FAILED = "publication_failed"
     FAILED = "failed"
 
 
@@ -36,7 +37,10 @@ _ALLOWED_TRANSITIONS: dict[MvpRunStatus, frozenset[MvpRunStatus]] = {
     MvpRunStatus.READY_TO_PUBLISH: frozenset(
         {MvpRunStatus.PUBLISHING, MvpRunStatus.FAILED}
     ),
-    MvpRunStatus.PUBLISHING: frozenset({MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
+    MvpRunStatus.PUBLISHING: frozenset(
+        {MvpRunStatus.COMPLETED, MvpRunStatus.PUBLICATION_FAILED}
+    ),
+    MvpRunStatus.PUBLICATION_FAILED: frozenset({MvpRunStatus.PUBLISHING}),
     MvpRunStatus.COMPLETED: frozenset(),
     MvpRunStatus.FAILED: frozenset(),
 }
@@ -146,6 +150,8 @@ class GitHubPublishResult:
     pull_request_url: str
     draft: bool = True
     existing: bool = False
+    commit_sha: str | None = None
+    pull_request_number: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "branch", _require_non_empty(self.branch, "branch"))
