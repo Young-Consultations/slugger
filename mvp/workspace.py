@@ -24,10 +24,24 @@ class MvpWorkspace:
     path: Path
 
 
+EXCLUDED_INVENTORY_PARTS = {
+    ".venv",
+    ".pytest_cache",
+    "__pycache__",
+    "test-deps",
+    "wheelhouse",
+    "dist",
+    "build",
+}
+EXCLUDED_INVENTORY_SUFFIXES = (".pyc",)
+
+
 class WorkspaceManager:
     """Create, validate, inventory, and clean MVP-generated project workspaces."""
 
-    def __init__(self, workspace_root: Path | str = Path(".slugger/workspaces")) -> None:
+    def __init__(
+        self, workspace_root: Path | str = Path(".slugger/workspaces")
+    ) -> None:
         raw_root = Path(workspace_root).expanduser()
         self.root = raw_root.resolve(strict=False)
         self._reject_repository_root(self.root)
@@ -51,7 +65,9 @@ class WorkspaceManager:
             return MvpWorkspace(run_id=normalized_run_id, path=candidate)
         raise WorkspaceSafetyError("Could not create a unique MVP workspace")
 
-    def resolve_generated_path(self, workspace: Path | MvpWorkspace, relative_path: str | Path) -> Path:
+    def resolve_generated_path(
+        self, workspace: Path | MvpWorkspace, relative_path: str | Path
+    ) -> Path:
         """Resolve a generated-project path and reject traversal or root escapes."""
 
         workspace_path = self._workspace_path(workspace)
@@ -66,13 +82,19 @@ class WorkspaceManager:
 
         workspace_path = self._workspace_path(workspace)
         files: list[GeneratedFile] = []
-        for path in sorted(p for p in workspace_path.rglob("*") if p.is_file() or p.is_symlink()):
+        for path in sorted(
+            p for p in workspace_path.rglob("*") if p.is_file() or p.is_symlink()
+        ):
             relative = path.relative_to(workspace_path)
             self._validate_relative_path(relative)
+            if _is_excluded_inventory_path(relative):
+                continue
             resolved = path.resolve(strict=True)
             self._require_below_workspace(workspace_path, resolved)
             if not resolved.is_file():
-                raise WorkspaceSafetyError(f"Generated path is not a regular file: {relative}")
+                raise WorkspaceSafetyError(
+                    f"Generated path is not a regular file: {relative}"
+                )
             data = resolved.read_bytes()
             files.append(
                 GeneratedFile(
@@ -86,9 +108,13 @@ class WorkspaceManager:
             raise WorkspaceSafetyError("Workspace inventory is empty")
         inventory_payload = [file.__dict__ for file in files]
         inventory_hash = hashlib.sha256(
-            json.dumps(inventory_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            json.dumps(inventory_payload, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
         ).hexdigest()
-        return GeneratedProjectInventory(files=tuple(files), inventory_hash=inventory_hash)
+        return GeneratedProjectInventory(
+            files=tuple(files), inventory_hash=inventory_hash
+        )
 
     def cleanup(self, workspace: Path | MvpWorkspace) -> None:
         """Explicitly remove a workspace after callers no longer need evidence."""
@@ -98,7 +124,9 @@ class WorkspaceManager:
         shutil.rmtree(workspace_path)
 
     def _workspace_path(self, workspace: Path | MvpWorkspace) -> Path:
-        path = workspace.path if isinstance(workspace, MvpWorkspace) else Path(workspace)
+        path = (
+            workspace.path if isinstance(workspace, MvpWorkspace) else Path(workspace)
+        )
         resolved = path.expanduser().resolve(strict=True)
         self._require_below_root(resolved)
         if resolved == self.root:
@@ -122,7 +150,9 @@ class WorkspaceManager:
         if path.is_absolute():
             raise WorkspaceSafetyError("Generated paths must be workspace-relative")
         if any(part == ".." for part in path.parts):
-            raise WorkspaceSafetyError("Generated paths must not contain parent traversal")
+            raise WorkspaceSafetyError(
+                "Generated paths must not contain parent traversal"
+            )
 
     @staticmethod
     def _normalize_run_id(run_id: str) -> str:
@@ -130,11 +160,26 @@ class WorkspaceManager:
         if not normalized:
             raise WorkspaceSafetyError("run_id is required")
         path = Path(normalized)
-        if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts) or len(path.parts) != 1:
+        if (
+            path.is_absolute()
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or len(path.parts) != 1
+        ):
             raise WorkspaceSafetyError("run_id must be a single safe path segment")
         return normalized
 
     @staticmethod
     def _reject_repository_root(path: Path) -> None:
         if (path / ".git").exists() and (path / "pyproject.toml").exists():
-            raise WorkspaceSafetyError("The Slugger repository root cannot be an MVP workspace root")
+            raise WorkspaceSafetyError(
+                "The Slugger repository root cannot be an MVP workspace root"
+            )
+
+
+def _is_excluded_inventory_path(path: Path) -> bool:
+    if any(
+        part in EXCLUDED_INVENTORY_PARTS or part.endswith(".egg-info")
+        for part in path.parts
+    ):
+        return True
+    return path.name.endswith(EXCLUDED_INVENTORY_SUFFIXES)

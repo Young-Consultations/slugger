@@ -95,6 +95,7 @@ def test_run_state_transitions_are_explicitly_modeled() -> None:
         MvpRunStatus.GENERATING,
         MvpRunStatus.VALIDATING,
         MvpRunStatus.TESTING,
+        MvpRunStatus.READY_TO_PUBLISH,
         MvpRunStatus.PUBLISHING,
         MvpRunStatus.COMPLETED,
     ):
@@ -103,7 +104,7 @@ def test_run_state_transitions_are_explicitly_modeled() -> None:
     assert run.status is MvpRunStatus.COMPLETED
 
 
-def test_run_can_complete_directly_from_testing_for_skip_publish() -> None:
+def test_run_can_reach_ready_to_publish_for_skip_publish() -> None:
     run = MvpRun(
         run_id="run-1",
         request=MvpProjectRequest(
@@ -118,11 +119,11 @@ def test_run_can_complete_directly_from_testing_for_skip_publish() -> None:
         MvpRunStatus.GENERATING,
         MvpRunStatus.VALIDATING,
         MvpRunStatus.TESTING,
-        MvpRunStatus.COMPLETED,
+        MvpRunStatus.READY_TO_PUBLISH,
     ):
         run.transition_to(status)
 
-    assert run.status is MvpRunStatus.COMPLETED
+    assert run.status is MvpRunStatus.READY_TO_PUBLISH
 
 
 def test_invalid_run_state_transition_is_rejected() -> None:

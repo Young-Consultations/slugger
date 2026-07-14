@@ -55,9 +55,13 @@ def test_mvp_does_not_import_prohibited_legacy_dependencies() -> None:
                 module == prohibited or module.startswith(f"{prohibited}.")
                 for prohibited in PROHIBITED_IMPORTS
             ):
-                violations.append(f"{path.relative_to(MVP_ROOT.parent)} imports {module}")
+                violations.append(
+                    f"{path.relative_to(MVP_ROOT.parent)} imports {module}"
+                )
                 continue
             if any(part in module.lower() for part in PROHIBITED_NAME_PARTS):
-                violations.append(f"{path.relative_to(MVP_ROOT.parent)} imports {module}")
+                violations.append(
+                    f"{path.relative_to(MVP_ROOT.parent)} imports {module}"
+                )
 
     assert violations == []

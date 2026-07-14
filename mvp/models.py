@@ -20,6 +20,7 @@ class MvpRunStatus(StrEnum):
     GENERATING = "generating"
     VALIDATING = "validating"
     TESTING = "testing"
+    READY_TO_PUBLISH = "ready_to_publish"
     PUBLISHING = "publishing"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -29,7 +30,12 @@ _ALLOWED_TRANSITIONS: dict[MvpRunStatus, frozenset[MvpRunStatus]] = {
     MvpRunStatus.CREATED: frozenset({MvpRunStatus.GENERATING, MvpRunStatus.FAILED}),
     MvpRunStatus.GENERATING: frozenset({MvpRunStatus.VALIDATING, MvpRunStatus.FAILED}),
     MvpRunStatus.VALIDATING: frozenset({MvpRunStatus.TESTING, MvpRunStatus.FAILED}),
-    MvpRunStatus.TESTING: frozenset({MvpRunStatus.PUBLISHING, MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
+    MvpRunStatus.TESTING: frozenset(
+        {MvpRunStatus.READY_TO_PUBLISH, MvpRunStatus.FAILED}
+    ),
+    MvpRunStatus.READY_TO_PUBLISH: frozenset(
+        {MvpRunStatus.PUBLISHING, MvpRunStatus.FAILED}
+    ),
     MvpRunStatus.PUBLISHING: frozenset({MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
     MvpRunStatus.COMPLETED: frozenset(),
     MvpRunStatus.FAILED: frozenset(),
@@ -47,7 +53,9 @@ def validate_run_transition(current: MvpRunStatus, next_status: MvpRunStatus) ->
     """Raise when a run status transition is not allowed by the MVP lifecycle."""
 
     if next_status not in _ALLOWED_TRANSITIONS[current]:
-        raise ValueError(f"Invalid MVP run transition: {current.value} -> {next_status.value}")
+        raise ValueError(
+            f"Invalid MVP run transition: {current.value} -> {next_status.value}"
+        )
 
 
 @dataclass(frozen=True)
@@ -64,7 +72,9 @@ class MvpProjectRequest:
         idea = _require_non_empty(self.idea, "idea")
         project_name = _require_non_empty(self.project_name, "project_name")
         template = _require_non_empty(self.template, "template")
-        github_repository = _require_non_empty(self.github_repository, "github_repository")
+        github_repository = _require_non_empty(
+            self.github_repository, "github_repository"
+        )
         base_branch = _require_non_empty(self.base_branch, "base_branch")
 
         if not _PROJECT_NAME_RE.fullmatch(project_name):
@@ -155,8 +165,14 @@ class MvpRun:
     status: MvpRunStatus = MvpRunStatus.CREATED
     workspace_path: str | None = None
     codex_session_id: str | None = None
+    slugger_correlation_id: str | None = None
     prompt_version: str | None = None
     prompt_hash: str | None = None
+    source_hash_before_codex: str | None = None
+    source_hash_after_codex: str | None = None
+    source_integrity_result: str | None = None
+    changed_source_paths: tuple[str, ...] = ()
+    publication_skipped: bool = False
     inventory: GeneratedProjectInventory | None = None
     validation_results: tuple[CheckResult, ...] = ()
     test_results: tuple[CheckResult, ...] = ()
@@ -170,6 +186,7 @@ class MvpRun:
         self.status = MvpRunStatus(self.status)
         self.validation_results = tuple(self.validation_results)
         self.test_results = tuple(self.test_results)
+        self.changed_source_paths = tuple(self.changed_source_paths)
 
     def transition_to(self, next_status: MvpRunStatus) -> None:
         next_status = MvpRunStatus(next_status)

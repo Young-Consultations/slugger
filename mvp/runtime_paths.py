@@ -24,7 +24,9 @@ def runtime_home() -> Path:
     override = os.environ.get("SLUGGER_HOME")
     if override:
         return _prepare_runtime_home(Path(override), source="SLUGGER_HOME")
-    return _prepare_runtime_home(_platform_user_data_dir(), source="user data directory")
+    return _prepare_runtime_home(
+        _platform_user_data_dir(), source="user data directory"
+    )
 
 
 def workspace_root(home: Path | None = None) -> Path:
@@ -77,7 +79,9 @@ def _platform_user_data_dir() -> Path:
 def _prepare_runtime_home(path: Path, *, source: str) -> Path:
     resolved = path.expanduser().resolve(strict=False)
     if resolved == Path(resolved.anchor):
-        raise RuntimePathError(f"Refusing to use filesystem root as Slugger runtime home from {source}")
+        raise RuntimePathError(
+            f"Refusing to use filesystem root as Slugger runtime home from {source}"
+        )
     _validate_runtime_path(resolved)
     return _prepare_dir(resolved)
 
@@ -97,9 +101,13 @@ def _validate_runtime_path(path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     try:
         if path.is_relative_to(repo_root):
-            raise RuntimePathError("Slugger MVP runtime state must not live inside the source repository")
+            raise RuntimePathError(
+                "Slugger MVP runtime state must not live inside the source repository"
+            )
     except RuntimeError:
         pass
     for parent in (path, *path.parents):
         if parent.name == "site-packages":
-            raise RuntimePathError("Slugger MVP runtime state must not live inside site-packages")
+            raise RuntimePathError(
+                "Slugger MVP runtime state must not live inside site-packages"
+            )

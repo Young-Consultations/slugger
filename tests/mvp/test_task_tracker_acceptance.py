@@ -15,7 +15,6 @@ from mvp.integrations.codex import (
     MvpCodexAdapter,
     MvpCodexGenerationResult,
     _minimal_build_backend,
-    _write_pytest_shim_wheel,
     _result_after_generation,
     package_name_for_project,
     render_prompt,
@@ -82,35 +81,42 @@ class TaskTrackerCodexAdapter(FakeMvpCodexAdapter):
         if self.invalid_python:
             files[f"src/{package_name}/main.py"] = "def broken(:\n"
         if self.failing_tests:
-            files["tests/test_main.py"] += "\ndef test_intentional_failure():\n    assert False\n"
+            files["tests/test_main.py"] += (
+                "\ndef test_intentional_failure():\n    assert False\n"
+            )
         for relative_path, content in files.items():
-            path = self.workspace_manager.resolve_generated_path(workspace, relative_path)
+            path = self.workspace_manager.resolve_generated_path(
+                workspace, relative_path
+            )
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
-        _write_pytest_shim_wheel(self.workspace_manager._workspace_path(workspace))
         prompt_hash = hashlib.sha256(render_prompt(request).encode("utf-8")).hexdigest()
         return _result_after_generation(
             request=request,
             workspace=workspace,
             workspace_manager=self.workspace_manager,
             prompt_hash=prompt_hash,
-            codex_session_id="fake-codex-task-tracker",
+            codex_session_id=None,
             commands=(),
         )
 
 
-def _task_tracker_files(request: MvpProjectRequest, package_name: str) -> dict[str, str]:
+def _task_tracker_files(
+    request: MvpProjectRequest, package_name: str
+) -> dict[str, str]:
     return {
         "README.md": f"# {request.project_name}\n\n{request.idea}\n",
         "pyproject.toml": (
             "[build-system]\nrequires = []\nbuild-backend = 'slugger_mvp_backend'\nbackend-path = ['.']\n\n"
             "[project]\n"
             f"name = '{request.project_name}'\nversion = '0.1.0'\nrequires-python = '>=3.11'\n"
-            "dependencies = []\n\n[project.optional-dependencies]\ntest = [\"pytest>=8,<10\"]\n"
+            'dependencies = []\n\n[project.optional-dependencies]\ntest = ["pytest>=8,<10"]\n'
         ),
-        "slugger_mvp_backend.py": _minimal_build_backend(request.project_name, include_pytest_extra=True),
+        "slugger_mvp_backend.py": _minimal_build_backend(
+            request.project_name, include_pytest_extra=True
+        ),
         f"src/{package_name}/__init__.py": "__all__ = ['main']\n",
-        f"src/{package_name}/main.py": '''from __future__ import annotations
+        f"src/{package_name}/main.py": """from __future__ import annotations
 
 import argparse
 
@@ -147,8 +153,8 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-''',
-        "tests/test_main.py": f'''from {package_name}.main import _TASKS, build_parser, main
+""",
+        "tests/test_main.py": f"""from {package_name}.main import _TASKS, build_parser, main
 
 
 def setup_function():
@@ -167,7 +173,7 @@ def test_task_tracker_add_list_and_done():
     assert main(["list"]) == 0
     assert main(["done", "1"]) == 0
     assert _TASKS[0]["done"] is True
-''',
+""",
     }
 
 
@@ -181,7 +187,9 @@ def _repo_status() -> str:
     ).stdout
 
 
-def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path: Path) -> None:
+def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(
+    tmp_path: Path,
+) -> None:
     before_status = _repo_status()
     service, _workspace_manager, publisher = _service(tmp_path)
 
@@ -201,7 +209,9 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path
         assert (workspace / relative_path).is_file()
     assert run.inventory is not None
     assert run.inventory.inventory_hash
-    install_check = next(check for check in run.test_results if check.name == "install_project")
+    install_check = next(
+        check for check in run.test_results if check.name == "install_project"
+    )
     test_check = next(check for check in run.test_results if check.name == "run_tests")
     smoke_check = next(check for check in run.test_results if check.name == "cli_smoke")
     assert install_check.passed
@@ -210,7 +220,9 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path
     assert smoke_check.passed
     assert run.github_publish_result is not None
     assert run.github_publish_result.draft is True
-    assert run.github_publish_result.branch.startswith("slugger/generated-task-tracker-")
+    assert run.github_publish_result.branch.startswith(
+        "slugger/generated-task-tracker-"
+    )
     assert run.github_publish_result.pull_request_url.startswith(
         "https://github.com/mightyjoe909/task-tracker/pull/"
     )
@@ -230,7 +242,11 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(tmp_path
     workspace_root = tmp_path / "workspaces"
     assert workspace.is_relative_to(workspace_root)
     for generated_file in run.inventory.files:
-        assert (workspace / generated_file.path).resolve().is_relative_to(workspace.resolve())
+        assert (
+            (workspace / generated_file.path)
+            .resolve()
+            .is_relative_to(workspace.resolve())
+        )
     assert _repo_status() == before_status
 
 
