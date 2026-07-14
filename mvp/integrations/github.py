@@ -104,13 +104,20 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         workspace_path = self.workspace_manager._workspace_path(workspace)
         branch = branch_name(run.request, run.run_id)
         existing_pr = self._find_pr(run.request.github_repository, branch)
-        if run.github_publish_result is not None and existing_pr is not None:
+        if existing_pr is not None:
+            commit_sha = (
+                run.github_publish_result.commit_sha
+                if run.github_publish_result is not None
+                else self._remote_branch_sha(
+                    run.request.github_repository, branch, workspace_path
+                )
+            )
             return GitHubPublishResult(
                 branch=branch,
                 pull_request_url=str(existing_pr["url"]),
                 draft=bool(existing_pr.get("isDraft", True)),
                 existing=True,
-                commit_sha=run.github_publish_result.commit_sha,
+                commit_sha=commit_sha,
                 pull_request_number=int(str(existing_pr["number"])),
             )
 

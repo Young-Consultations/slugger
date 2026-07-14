@@ -12,7 +12,13 @@ import uuid
 from mvp.basic_runner import BasicRunner, BasicRunnerResult
 from mvp.integrations.codex import MvpCodexAdapter
 from mvp.integrations.github import MvpGitHubPublisher
-from mvp.models import MvpBuildResult, MvpProjectRequest, MvpRun, MvpRunStatus
+from mvp.models import (
+    GeneratedProjectInventory,
+    MvpBuildResult,
+    MvpProjectRequest,
+    MvpRun,
+    MvpRunStatus,
+)
 from mvp.project_validator import ProjectValidator
 from mvp.run_repository import SQLiteMvpRunRepository
 from mvp.runtime_paths import runtime_home, sqlite_path, workspace_root
@@ -151,13 +157,13 @@ class DefaultMvpBuildService(MvpBuildService):
             workspace = self.workspace_manager.workspace_from_path(
                 Path(run.workspace_path)
             )
-            validation_results = self.project_validator.validate(
-                run.request, workspace, run.inventory
-            )
-            if validation_results != run.validation_results:
+            if not _inventory_matches_workspace(
+                run.inventory, workspace.path, self.workspace_manager
+            ):
                 raise MvpBuildPhaseError(
-                    "Cannot publish changed workspace without revalidation"
+                    "Cannot publish changed generated inventory without revalidation"
                 )
+            validation_results = run.validation_results
             runner_result = BasicRunnerResult(run.test_results)
             if run.status != MvpRunStatus.PUBLISHING:
                 run.status = MvpRunStatus.PUBLISHING
@@ -176,6 +182,26 @@ class DefaultMvpBuildService(MvpBuildService):
                 run.status = MvpRunStatus.FAILED
             self.run_repository.save(run)
             return MvpBuildResult(run=run)
+
+
+def _inventory_matches_workspace(
+    inventory: GeneratedProjectInventory,
+    workspace_path: Path,
+    workspace_manager: WorkspaceManager,
+) -> bool:
+    for generated_file in inventory.files:
+        path = workspace_manager.resolve_generated_path(
+            workspace_path, generated_file.path
+        )
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return False
+        if len(data) != generated_file.size_bytes:
+            return False
+        if hashlib.sha256(data).hexdigest() != generated_file.sha256:
+            return False
+    return True
 
 
 class MvpBuildPhaseError(RuntimeError):
