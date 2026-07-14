@@ -141,6 +141,41 @@ After a run:
 * Generated projects are opened as draft PRs and require human review before they should be merged.
 * The MVP validates and tests generated Python projects, but it is not a substitute for a full product security review.
 
+## MVP runtime home
+
+The focused MVP path stores runtime data under a single runtime home and never defaults to the source repository or an installed package directory. Resolution order is:
+
+1. `SLUGGER_HOME`, when set.
+2. A platform user-data directory (`$XDG_DATA_HOME/slugger` or `~/.local/share/slugger` on Linux, `~/Library/Application Support/Slugger` on macOS, and `%LOCALAPPDATA%\\Slugger` or `%APPDATA%\\Slugger` on Windows).
+3. A development fallback of `~/.slugger` only if a platform home cannot be resolved.
+
+The runtime home layout is:
+
+```text
+$SLUGGER_HOME/
+├── workspaces/
+├── state/
+│   └── mvp_runs.sqlite3
+└── logs/
+```
+
+The `slugger mvp build` diagnostic JSON includes `runtime`, `workspace_root`, and `sqlite_path` fields so operators can verify that generated workspaces and SQLite state are outside both the repository and `site-packages`.
+
+## Real Codex proof evidence
+
+The production adapter is fail-closed: when `codex` is unavailable or exits unsuccessfully, the MVP run is marked failed, the workspace is preserved, validation/testing/publication are skipped, and no static fallback project is generated. Real Codex execution must be run with `SLUGGER_MVP_SKIP_PUBLISH=1` when the proof is intended to stop after generated-project installation, pytest, and smoke testing.
+
+Required proof command shape:
+
+```bash
+SLUGGER_MVP_SKIP_PUBLISH=1 slugger mvp build \
+  "Create a CLI task tracker with add, list, and done commands" \
+  --name task-tracker \
+  --template cli \
+  --repo owner/task-tracker
+```
+
+Record the Codex version, Codex session ID, prompt hash, workspace path, generated inventory, installation result, pytest result, CLI smoke result, and source-tree change check from the run JSON and persisted SQLite state.
 
 ## Coding-agent lesson learned
 

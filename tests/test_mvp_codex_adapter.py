@@ -39,7 +39,8 @@ def test_fake_codex_adapter_implements_production_contract(tmp_path: Path) -> No
 
     assert result.prompt_version == PROMPT_VERSION
     assert len(result.prompt_hash) == 64
-    assert result.codex_session_id.startswith("fake-codex-")
+    assert result.codex_session_id is None
+    assert result.slugger_correlation_id == "run-004"
     paths = {file.path for file in result.inventory.files}
     assert {
         "README.md",
@@ -110,8 +111,12 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
         (package / "main.py").write_text("def main(): return 0\n", encoding="utf-8")
         tests = workspace.path / "tests"
         tests.mkdir()
-        (tests / "test_main.py").write_text("def test_ok(): assert True\n", encoding="utf-8")
-        return subprocess.CompletedProcess(command, 0, stdout="session id: abc123", stderr="")
+        (tests / "test_main.py").write_text(
+            "def test_ok(): assert True\n", encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(
+            command, 0, stdout="session id: abc123", stderr=""
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
@@ -157,3 +162,55 @@ def test_production_adapter_fails_on_codex_nonzero_exit(
 
     with pytest.raises(MvpCodexGenerationError, match="Codex exited with status 42"):
         adapter.generate_project(_request(), workspace)
+
+
+def test_production_adapter_preserves_prompt_hash_and_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-prompt")
+
+    def fake_run(command, **kwargs):
+        package = workspace.path / "src" / "task_tracker"
+        package.mkdir(parents=True)
+        (workspace.path / "README.md").write_text("# task-tracker\n", encoding="utf-8")
+        (workspace.path / "pyproject.toml").write_text(
+            "[project]\nname='task-tracker'\n", encoding="utf-8"
+        )
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "main.py").write_text("def main(): return 0\n", encoding="utf-8")
+        (workspace.path / "tests").mkdir()
+        (workspace.path / "tests" / "test_main.py").write_text(
+            "def test_ok(): assert True\n", encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(
+            command, 0, stdout="session: session-xyz", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
+
+    assert result.prompt_version == PROMPT_VERSION
+    assert (
+        result.prompt_hash
+        == __import__("hashlib")
+        .sha256(render_prompt(_request()).encode("utf-8"))
+        .hexdigest()
+    )
+    assert result.codex_session_id == "session-xyz"
+
+
+def test_production_adapter_fails_closed_when_codex_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-missing-codex")
+
+    def fake_run(*args, **kwargs):
+        raise FileNotFoundError("codex")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(MvpCodexGenerationError, match="Codex command failed"):
+        CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
+    assert list(workspace.path.rglob("*")) == []

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from mvp.models import CheckResult, GitHubPublishResult, MvpProjectRequest, MvpRun, MvpRunStatus
+from mvp.models import (
+    CheckResult,
+    GitHubPublishResult,
+    MvpProjectRequest,
+    MvpRun,
+    MvpRunStatus,
+)
 from mvp.run_repository import SQLiteMvpRunRepository
 
 
@@ -35,7 +41,9 @@ def test_state_transitions_and_error_details_are_persisted(tmp_path):
     repo.create(MvpRun("run-123", _request()))
 
     generating = repo.transition("run-123", MvpRunStatus.GENERATING)
-    failed = repo.transition("run-123", MvpRunStatus.FAILED, error_details="Codex failed")
+    failed = repo.transition(
+        "run-123", MvpRunStatus.FAILED, error_details="Codex failed"
+    )
 
     assert generating.status == MvpRunStatus.GENERATING
     assert failed.error_details == "Codex failed"
@@ -67,5 +75,7 @@ def test_completed_run_retains_github_information(tmp_path):
     loaded = repo.require("run-123")
 
     assert loaded.github_publish_result is not None
-    assert loaded.github_publish_result.branch == "slugger/generated-task-tracker-run-123"
+    assert (
+        loaded.github_publish_result.branch == "slugger/generated-task-tracker-run-123"
+    )
     assert loaded.github_publish_result.pull_request_url.endswith("/pull/1")

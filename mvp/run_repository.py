@@ -39,7 +39,12 @@ class SQLiteMvpRunRepository:
                 INSERT INTO mvp_runs (run_id, payload, status, updated_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (run.run_id, _run_to_json(run), run.status.value, _datetime_to_text(run.updated_at)),
+                (
+                    run.run_id,
+                    _run_to_json(run),
+                    run.status.value,
+                    _datetime_to_text(run.updated_at),
+                ),
             )
         return run
 
@@ -55,11 +60,18 @@ class SQLiteMvpRunRepository:
         with self._connect() as db:
             db.execute(
                 "UPDATE mvp_runs SET payload = ?, status = ?, updated_at = ? WHERE run_id = ?",
-                (_run_to_json(run), run.status.value, _datetime_to_text(run.updated_at), run.run_id),
+                (
+                    _run_to_json(run),
+                    run.status.value,
+                    _datetime_to_text(run.updated_at),
+                    run.run_id,
+                ),
             )
         return run
 
-    def transition(self, run_id: str, status: MvpRunStatus, *, error_details: str | None = None) -> MvpRun:
+    def transition(
+        self, run_id: str, status: MvpRunStatus, *, error_details: str | None = None
+    ) -> MvpRun:
         run = self.require(run_id)
         run.transition_to(status)
         if error_details is not None:
@@ -68,7 +80,9 @@ class SQLiteMvpRunRepository:
 
     def get(self, run_id: str) -> MvpRun | None:
         with self._connect() as db:
-            row = db.execute("SELECT payload FROM mvp_runs WHERE run_id = ?", (run_id,)).fetchone()
+            row = db.execute(
+                "SELECT payload FROM mvp_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
         if row is None:
             return None
         return _run_from_json(row[0])
@@ -103,12 +117,20 @@ def _run_to_json(run: MvpRun) -> str:
         "status": run.status.value,
         "workspace_path": run.workspace_path,
         "codex_session_id": run.codex_session_id,
+        "slugger_correlation_id": run.slugger_correlation_id,
         "prompt_version": run.prompt_version,
         "prompt_hash": run.prompt_hash,
+        "source_hash_before_codex": run.source_hash_before_codex,
+        "source_hash_after_codex": run.source_hash_after_codex,
+        "source_integrity_result": run.source_integrity_result,
+        "changed_source_paths": list(run.changed_source_paths),
+        "publication_skipped": run.publication_skipped,
         "inventory": _inventory_to_dict(run.inventory),
         "validation_results": [asdict(result) for result in run.validation_results],
         "test_results": [asdict(result) for result in run.test_results],
-        "github_publish_result": asdict(run.github_publish_result) if run.github_publish_result else None,
+        "github_publish_result": asdict(run.github_publish_result)
+        if run.github_publish_result
+        else None,
         "error_details": run.error_details,
         "created_at": _datetime_to_text(run.created_at),
         "updated_at": _datetime_to_text(run.updated_at),
@@ -126,11 +148,21 @@ def _run_from_json(raw: str) -> MvpRun:
         status=MvpRunStatus(data["status"]),
         workspace_path=data.get("workspace_path"),
         codex_session_id=data.get("codex_session_id"),
+        slugger_correlation_id=data.get("slugger_correlation_id"),
         prompt_version=data.get("prompt_version"),
         prompt_hash=data.get("prompt_hash"),
+        source_hash_before_codex=data.get("source_hash_before_codex"),
+        source_hash_after_codex=data.get("source_hash_after_codex"),
+        source_integrity_result=data.get("source_integrity_result"),
+        changed_source_paths=tuple(data.get("changed_source_paths", [])),
+        publication_skipped=bool(data.get("publication_skipped", False)),
         inventory=_inventory_from_dict(inventory) if inventory else None,
-        validation_results=tuple(CheckResult(**item) for item in data.get("validation_results", [])),
-        test_results=tuple(CheckResult(**item) for item in data.get("test_results", [])),
+        validation_results=tuple(
+            CheckResult(**item) for item in data.get("validation_results", [])
+        ),
+        test_results=tuple(
+            CheckResult(**item) for item in data.get("test_results", [])
+        ),
         github_publish_result=GitHubPublishResult(**github) if github else None,
         error_details=data.get("error_details"),
         created_at=_datetime_from_text(data["created_at"]),
@@ -138,10 +170,15 @@ def _run_from_json(raw: str) -> MvpRun:
     )
 
 
-def _inventory_to_dict(inventory: GeneratedProjectInventory | None) -> dict[str, Any] | None:
+def _inventory_to_dict(
+    inventory: GeneratedProjectInventory | None,
+) -> dict[str, Any] | None:
     if inventory is None:
         return None
-    return {"files": [asdict(file) for file in inventory.files], "inventory_hash": inventory.inventory_hash}
+    return {
+        "files": [asdict(file) for file in inventory.files],
+        "inventory_hash": inventory.inventory_hash,
+    }
 
 
 def _inventory_from_dict(data: dict[str, Any]) -> GeneratedProjectInventory:

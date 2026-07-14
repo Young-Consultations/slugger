@@ -31,7 +31,9 @@ def test_parallel_runs_receive_different_workspaces(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("bad_path", ["../outside.py", "nested/../../outside.py"])
-def test_parent_traversal_generated_paths_are_rejected(tmp_path: Path, bad_path: str) -> None:
+def test_parent_traversal_generated_paths_are_rejected(
+    tmp_path: Path, bad_path: str
+) -> None:
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-1")
 
@@ -65,12 +67,18 @@ def test_slugger_repository_cannot_be_selected_as_workspace_root() -> None:
         WorkspaceManager(repo_root)
 
 
-def test_inventory_paths_are_relative_and_hashes_are_deterministic(tmp_path: Path) -> None:
+def test_inventory_paths_are_relative_and_hashes_are_deterministic(
+    tmp_path: Path,
+) -> None:
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-1")
     manager.resolve_generated_path(workspace, "src/app.py").parent.mkdir(parents=True)
-    manager.resolve_generated_path(workspace, "src/app.py").write_text("print('hi')\n", encoding="utf-8")
-    manager.resolve_generated_path(workspace, "README.md").write_text("# Demo\n", encoding="utf-8")
+    manager.resolve_generated_path(workspace, "src/app.py").write_text(
+        "print('hi')\n", encoding="utf-8"
+    )
+    manager.resolve_generated_path(workspace, "README.md").write_text(
+        "# Demo\n", encoding="utf-8"
+    )
 
     first = manager.inventory(workspace)
     second = manager.inventory(workspace)
@@ -78,7 +86,9 @@ def test_inventory_paths_are_relative_and_hashes_are_deterministic(tmp_path: Pat
     assert [file.path for file in first.files] == ["README.md", "src/app.py"]
     assert all(not Path(file.path).is_absolute() for file in first.files)
     assert first.inventory_hash == second.inventory_hash
-    assert [file.sha256 for file in first.files] == [file.sha256 for file in second.files]
+    assert [file.sha256 for file in first.files] == [
+        file.sha256 for file in second.files
+    ]
 
 
 def test_cleanup_is_explicit_and_removes_workspace(tmp_path: Path) -> None:
@@ -88,3 +98,45 @@ def test_cleanup_is_explicit_and_removes_workspace(tmp_path: Path) -> None:
     manager.cleanup(MvpWorkspace(run_id=workspace.run_id, path=workspace.path))
 
     assert not workspace.path.exists()
+
+
+def test_slugger_home_override_resolves_runtime_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mvp.runtime_paths import diagnostics, runtime_home
+
+    home = tmp_path / "slugger-home"
+    monkeypatch.setenv("SLUGGER_HOME", str(home))
+
+    assert runtime_home() == home.resolve()
+    diag = diagnostics()
+    assert Path(diag["workspace_root"]).is_relative_to(home.resolve())
+    assert Path(diag["sqlite_path"]).is_relative_to(home.resolve() / "state")
+
+
+def test_runtime_home_default_is_outside_source_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from mvp.runtime_paths import runtime_home
+
+    monkeypatch.delenv("SLUGGER_HOME", raising=False)
+    home = runtime_home()
+    repo_root = Path(__file__).resolve().parents[1]
+
+    assert not home.is_relative_to(repo_root)
+
+
+def test_runtime_paths_reject_site_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mvp.runtime_paths import RuntimePathError, runtime_home
+
+    monkeypatch.setenv(
+        "SLUGGER_HOME",
+        str(
+            tmp_path / "venv" / "lib" / "python3.11" / "site-packages" / "slugger-state"
+        ),
+    )
+
+    with pytest.raises(RuntimePathError, match="site-packages"):
+        runtime_home()

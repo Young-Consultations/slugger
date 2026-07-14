@@ -95,12 +95,35 @@ def test_run_state_transitions_are_explicitly_modeled() -> None:
         MvpRunStatus.GENERATING,
         MvpRunStatus.VALIDATING,
         MvpRunStatus.TESTING,
+        MvpRunStatus.READY_TO_PUBLISH,
         MvpRunStatus.PUBLISHING,
         MvpRunStatus.COMPLETED,
     ):
         run.transition_to(status)
 
     assert run.status is MvpRunStatus.COMPLETED
+
+
+def test_run_can_reach_ready_to_publish_for_skip_publish() -> None:
+    run = MvpRun(
+        run_id="run-1",
+        request=MvpProjectRequest(
+            idea="Create a CLI task tracker",
+            project_name="task-tracker",
+            template="cli",
+            github_repository="owner/repo",
+        ),
+    )
+
+    for status in (
+        MvpRunStatus.GENERATING,
+        MvpRunStatus.VALIDATING,
+        MvpRunStatus.TESTING,
+        MvpRunStatus.READY_TO_PUBLISH,
+    ):
+        run.transition_to(status)
+
+    assert run.status is MvpRunStatus.READY_TO_PUBLISH
 
 
 def test_invalid_run_state_transition_is_rejected() -> None:

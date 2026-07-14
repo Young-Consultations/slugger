@@ -147,3 +147,7 @@ Contributions are welcome. MVP work should be delivered in focused pull requests
 ## License
 
 This project is licensed under the MIT License.
+
+### Slugger MVP runtime state
+
+The MVP path resolves runtime state through `mvp.runtime_paths` instead of writing beside package files. Set `SLUGGER_HOME` to choose an explicit runtime home; otherwise Slugger uses the current platform's user-data directory and falls back to `~/.slugger` for development-only environments. The layout is `workspaces/`, `state/mvp_runs.sqlite3`, and `logs/`. MVP CLI diagnostics print the resolved workspace root and SQLite path.
