@@ -140,3 +140,20 @@ After a run:
 * Canva, design generation, requirements agents, architecture agents, approval workflows, remediation agents, production-readiness scoring, deployment, releases, SBOM, and provenance are out of scope.
 * Generated projects are opened as draft PRs and require human review before they should be merged.
 * The MVP validates and tests generated Python projects, but it is not a substitute for a full product security review.
+
+
+## Coding-agent lesson learned
+
+Using GitHub Agents as the primary coding agent was not effective for this project. The agents often completed narrowly interpreted tasks without fully integrating the changes, validating the end-to-end execution path, or accurately identifying remaining work. This resulted in repeated cycles of implementation, review, defect discovery, and rework.
+
+Codex has proven more reliable for the current development approach. It has produced more focused changes, responded better to detailed acceptance criteria, and moved the MVP forward more quickly.
+
+For the remainder of the Slugger MVP:
+
+* Codex will be the preferred coding agent.
+* GitHub will remain the source-control, pull-request, issue-tracking, and CI platform.
+* Work will be divided into small, testable Codex tasks.
+* Completion will be based on executable acceptance evidence rather than agent-reported status.
+* Human and independent AI review will remain required before merging significant changes.
+
+This conclusion applies to the experience of developing Slugger and does not imply that GitHub Agents are unsuitable for every project or task.
