@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import site
+import tomllib
 
 from mvp.integrations.codex import package_name_for_project
 from mvp.models import CheckResult, MvpProjectRequest
@@ -61,9 +61,8 @@ class BasicRunner:
                         "-m",
                         "pip",
                         "install",
-                        "--no-build-isolation",
                         "-e",
-                        ".",
+                        _editable_install_target(workspace_path),
                     ],
                     workspace_path,
                 )
@@ -186,18 +185,24 @@ def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
     }
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env["PYTHONNOUSERSITE"] = "1"
-    env["PIP_NO_BUILD_ISOLATION"] = "1"
-    pytest_paths = [
-        path for path in site.getsitepackages() if (Path(path) / "pytest").exists()
-    ]
-    if pytest_paths:
-        env["PYTHONPATH"] = os.pathsep.join(pytest_paths)
     return env
+
+
+def _editable_install_target(workspace_path: Path) -> str:
+    if _declares_pytest_extra(workspace_path):
+        return ".[test]"
+    return "."
 
 
 def _declares_pytest_extra(workspace_path: Path) -> bool:
     pyproject = workspace_path / "pyproject.toml"
     if not pyproject.is_file():
         return False
-    text = pyproject.read_text(encoding="utf-8")
-    return "pytest" in text and "test = []" not in text
+    try:
+        parsed = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError:
+        return False
+    test_extra = (
+        parsed.get("project", {}).get("optional-dependencies", {}).get("test", [])
+    )
+    return bool(test_extra)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mvp.basic_runner import BasicRunner
+from mvp.basic_runner import BasicRunner, _minimal_environment
 from mvp.integrations.codex import FakeMvpCodexAdapter
 from mvp.models import MvpProjectRequest
 from mvp.workspace import WorkspaceManager
@@ -125,8 +125,23 @@ def test_generated_environment_does_not_inherit_ambient_pytest(tmp_path: Path) -
     )
     tests = next(check for check in result.checks if check.name == "run_tests")
     assert "--system-site-packages" not in create.details["command"]
-    assert pytest_check.passed
-    assert tests.passed
+    assert not pytest_check.passed
+    assert "No module named" in pytest_check.details.get("stderr", "")
+    assert not tests.passed
+    assert "pytest is not installed" in tests.message
+
+
+def test_minimal_environment_does_not_expose_host_site_packages(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", "/host/site-packages")
+    monkeypatch.setenv("PIP_NO_BUILD_ISOLATION", "1")
+
+    env = _minimal_environment(tmp_path)
+
+    assert "PYTHONPATH" not in env
+    assert "PIP_NO_BUILD_ISOLATION" not in env
+    assert env["PYTHONNOUSERSITE"] == "1"
 
 
 def test_standard_setuptools_backend_installs_in_isolated_venv(tmp_path: Path) -> None:
@@ -154,8 +169,10 @@ def test_standard_setuptools_backend_installs_in_isolated_venv(tmp_path: Path) -
     install_check = next(
         check for check in result.checks if check.name == "install_project"
     )
-    assert not result.passed
-    assert not install_check.passed
+    assert result.passed
+    assert install_check.passed
+    assert ".[test]" in install_check.details.get("command", [])
+    assert "--no-build-isolation" not in install_check.details.get("command", [])
 
 
 def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) -> None:
@@ -182,7 +199,7 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
 
     result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
 
-    assert result.passed
+    assert not result.passed
     assert [check.name for check in result.checks] == [
         "create_environment",
         "install_project",
@@ -190,15 +207,18 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
         "run_tests",
         "cli_smoke",
     ]
-    assert next(
+    install_check = next(
         check for check in result.checks if check.name == "install_project"
-    ).passed
-    assert next(
+    )
+    pytest_check = next(
         check for check in result.checks if check.name == "verify_pytest_available"
-    ).passed
-    assert next(check for check in result.checks if check.name == "run_tests").passed
+    )
+    assert install_check.passed
+    assert install_check.details.get("command", [])[-1] == "."
+    assert not pytest_check.passed
+    assert "No module named" in pytest_check.details.get("stderr", "")
     assert not next(
-        check for check in result.checks if check.name == "cli_smoke"
+        check for check in result.checks if check.name == "run_tests"
     ).passed
 
 
@@ -240,7 +260,7 @@ def test_every_generated_project_command_uses_venv_python(tmp_path: Path) -> Non
     assert commands["cli_smoke"][:2] == [venv_python, "-m"]
 
 
-def test_pytest_shim_fails_when_no_tests_are_collected(tmp_path: Path) -> None:
+def test_real_pytest_fails_when_no_tests_are_collected(tmp_path: Path) -> None:
     manager, workspace = _workspace(tmp_path)
     (workspace.path / "tests" / "test_main.py").write_text(
         "class Helper:\n    def test_hidden(self):\n        assert False\n",
@@ -254,7 +274,7 @@ def test_pytest_shim_fails_when_no_tests_are_collected(tmp_path: Path) -> None:
     assert "no tests ran" in tests.details.get("stdout", "")
 
 
-def test_pytest_shim_runs_class_based_tests(tmp_path: Path) -> None:
+def test_real_pytest_runs_class_based_tests(tmp_path: Path) -> None:
     manager, workspace = _workspace(tmp_path)
     (workspace.path / "tests" / "test_main.py").write_text(
         "class TestMain:\n    def test_bad(self):\n        assert False\n",
