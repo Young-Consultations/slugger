@@ -23,6 +23,7 @@ class MvpRunStatus(StrEnum):
     READY_TO_PUBLISH = "ready_to_publish"
     PUBLISHING = "publishing"
     COMPLETED = "completed"
+    PUBLICATION_FAILED = "publication_failed"
     FAILED = "failed"
 
 
@@ -36,9 +37,12 @@ _ALLOWED_TRANSITIONS: dict[MvpRunStatus, frozenset[MvpRunStatus]] = {
     MvpRunStatus.READY_TO_PUBLISH: frozenset(
         {MvpRunStatus.PUBLISHING, MvpRunStatus.FAILED}
     ),
-    MvpRunStatus.PUBLISHING: frozenset({MvpRunStatus.COMPLETED, MvpRunStatus.FAILED}),
+    MvpRunStatus.PUBLISHING: frozenset(
+        {MvpRunStatus.COMPLETED, MvpRunStatus.PUBLICATION_FAILED}
+    ),
+    MvpRunStatus.PUBLICATION_FAILED: frozenset({MvpRunStatus.PUBLISHING}),
     MvpRunStatus.COMPLETED: frozenset(),
-    MvpRunStatus.FAILED: frozenset({MvpRunStatus.PUBLISHING}),
+    MvpRunStatus.FAILED: frozenset(),
 }
 
 

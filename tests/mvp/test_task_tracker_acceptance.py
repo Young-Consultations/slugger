@@ -305,7 +305,7 @@ def test_github_failure_preserves_validated_workspace(tmp_path: Path) -> None:
 
     result = service.build(_request())
 
-    assert result.run.status is MvpRunStatus.FAILED
+    assert result.run.status is MvpRunStatus.PUBLICATION_FAILED
     assert publisher.publish_count == 0
     assert result.run.workspace_path is not None
     assert Path(result.run.workspace_path).is_dir()

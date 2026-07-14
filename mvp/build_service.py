@@ -127,10 +127,12 @@ class DefaultMvpBuildService(MvpBuildService):
             self.run_repository.save(run)
             return MvpBuildResult(run=run)
         except Exception as exc:
-            if run.status is not MvpRunStatus.FAILED:
-                run.error_details = str(exc)
+            run.error_details = str(exc)
+            if run.status is MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLICATION_FAILED)
+            elif run.status not in {MvpRunStatus.FAILED, MvpRunStatus.COMPLETED}:
                 run.transition_to(MvpRunStatus.FAILED)
-                self.run_repository.save(run)
+            self.run_repository.save(run)
             return MvpBuildResult(run=run)
 
     def publish(self, run_id: str) -> MvpBuildResult:
@@ -165,21 +167,35 @@ class DefaultMvpBuildService(MvpBuildService):
                 )
             validation_results = run.validation_results
             runner_result = BasicRunnerResult(run.test_results)
-            if run.status != MvpRunStatus.PUBLISHING:
-                run.status = MvpRunStatus.PUBLISHING
+            if (
+                run.status is MvpRunStatus.COMPLETED
+                and run.github_publish_result is not None
+            ):
+                run.error_details = None
+                return MvpBuildResult(run=run)
+            if run.status not in {
+                MvpRunStatus.READY_TO_PUBLISH,
+                MvpRunStatus.PUBLICATION_FAILED,
+                MvpRunStatus.PUBLISHING,
+            }:
+                raise MvpBuildPhaseError(
+                    f"Cannot publish run in status {run.status.value}"
+                )
+            if run.status is not MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLISHING)
                 self.run_repository.save(run)
             publish_result = self.github_publisher.publish(
                 run, workspace, validation_results, runner_result
             )
             run.github_publish_result = publish_result
-            run.status = MvpRunStatus.COMPLETED
             run.error_details = None
+            run.transition_to(MvpRunStatus.COMPLETED)
             self.run_repository.save(run)
             return MvpBuildResult(run=run)
         except Exception as exc:
             run.error_details = str(exc)
-            if run.status != MvpRunStatus.FAILED:
-                run.status = MvpRunStatus.FAILED
+            if run.status is MvpRunStatus.PUBLISHING:
+                run.transition_to(MvpRunStatus.PUBLICATION_FAILED)
             self.run_repository.save(run)
             return MvpBuildResult(run=run)
 

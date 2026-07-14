@@ -105,51 +105,64 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         branch = branch_name(run.request, run.run_id)
         existing_pr = self._find_pr(run.request.github_repository, branch)
         if existing_pr is not None:
-            commit_sha = (
-                run.github_publish_result.commit_sha
-                if run.github_publish_result is not None
-                else self._remote_branch_sha(
-                    run.request.github_repository, branch, workspace_path
-                )
-            )
-            return GitHubPublishResult(
-                branch=branch,
-                pull_request_url=str(existing_pr["url"]),
-                draft=bool(existing_pr.get("isDraft", True)),
-                existing=True,
-                commit_sha=commit_sha,
-                pull_request_number=int(str(existing_pr["number"])),
+            return self._result_from_existing_pr(
+                run, branch, existing_pr, workspace_path
             )
 
         self._verify_repo(run.request.github_repository, workspace_path)
         base_branch = self._resolve_base_branch(run, workspace_path)
         self._prepare_git(workspace_path, run.request.github_repository)
-        self._run(
-            ["git", "fetch", "origin", base_branch, "--depth", "1"], workspace_path
+        remote_sha = self._remote_branch_sha(
+            run.request.github_repository, branch, workspace_path
         )
-        self._validate_target_repository(workspace_path, run)
-        self._run(["git", "checkout", "-B", branch, "FETCH_HEAD"], workspace_path)
-        self._stage_inventory(workspace_path, run.inventory)
-        status = self._run(["git", "status", "--porcelain"], workspace_path).stdout
-        if not status.strip():
-            commit_sha = self._remote_branch_sha(
-                run.request.github_repository, branch, workspace_path
-            )
-        else:
+        commit_sha: str | None
+        if remote_sha is not None:
             self._run(
                 [
                     "git",
-                    "commit",
-                    "-m",
-                    f"Add generated {run.request.project_name} project",
+                    "fetch",
+                    "origin",
+                    f"refs/heads/{branch}:refs/remotes/origin/{branch}",
+                    "--depth",
+                    "1",
                 ],
                 workspace_path,
             )
-            commit_sha = self._run(
-                ["git", "rev-parse", "HEAD"], workspace_path
-            ).stdout.strip()
-        self._run(["git", "push", "-u", "origin", branch], workspace_path)
+            self._verify_remote_inventory_tree(workspace_path, run, f"origin/{branch}")
+            existing_pr = self._find_pr(run.request.github_repository, branch)
+            if existing_pr is not None:
+                return self._result_from_existing_pr(
+                    run, branch, existing_pr, workspace_path
+                )
+            commit_sha = remote_sha
+        else:
+            self._run(
+                ["git", "fetch", "origin", base_branch, "--depth", "1"], workspace_path
+            )
+            self._validate_target_repository(workspace_path, run)
+            self._run(["git", "checkout", "-B", branch, "FETCH_HEAD"], workspace_path)
+            self._stage_inventory(workspace_path, run.inventory)
+            status = self._run(["git", "status", "--porcelain"], workspace_path).stdout
+            if not status.strip():
+                commit_sha = self._remote_branch_sha(
+                    run.request.github_repository, branch, workspace_path
+                )
+            else:
+                self._run(
+                    [
+                        "git",
+                        "commit",
+                        "-m",
+                        f"Add generated {run.request.project_name} project",
+                    ],
+                    workspace_path,
+                )
+                commit_sha = self._run(
+                    ["git", "rev-parse", "HEAD"], workspace_path
+                ).stdout.strip()
+            self._run(["git", "push", "-u", "origin", branch], workspace_path)
         existing_pr = self._find_pr(run.request.github_repository, branch)
+        pr_existed_before_create = existing_pr is not None
         if existing_pr is None:
             body = pr_body(run, validation_results, runner_result)
             completed = self._run(
@@ -177,17 +190,62 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                 "number": 0,
                 "isDraft": True,
             }
+        if not bool(existing_pr.get("isDraft", True)):
+            raise GitHubPublishError("Published pull request is not draft")
         result = GitHubPublishResult(
             branch=branch,
             pull_request_url=str(existing_pr["url"]),
-            draft=bool(existing_pr.get("isDraft", True)),
-            existing=run.github_publish_result is not None
-            or int(str(existing_pr.get("number", 0))) > 0,
+            draft=True,
+            existing=pr_existed_before_create,
             commit_sha=commit_sha,
             pull_request_number=int(str(existing_pr.get("number", 0))) or None,
         )
         run.github_publish_result = result
         return result
+
+    def _result_from_existing_pr(
+        self, run: MvpRun, branch: str, existing_pr: dict[str, object], cwd: Path
+    ) -> GitHubPublishResult:
+        if not bool(existing_pr.get("isDraft", True)):
+            raise GitHubPublishError("Existing pull request is not draft")
+        commit_sha = (
+            run.github_publish_result.commit_sha
+            if run.github_publish_result is not None
+            else self._remote_branch_sha(run.request.github_repository, branch, cwd)
+        )
+        return GitHubPublishResult(
+            branch=branch,
+            pull_request_url=str(existing_pr["url"]),
+            draft=True,
+            existing=True,
+            commit_sha=commit_sha,
+            pull_request_number=int(str(existing_pr["number"])),
+        )
+
+    def _verify_remote_inventory_tree(
+        self, workspace_path: Path, run: MvpRun, treeish: str
+    ) -> None:
+        if run.inventory is None:
+            raise GitHubPublishError(
+                "Refusing to publish without a generated-file inventory"
+            )
+        for file in run.inventory.files:
+            completed = self._run(
+                ["git", "show", f"{treeish}:{file.path}"], workspace_path, check=False
+            )
+            if completed.returncode != 0:
+                raise GitHubPublishError(
+                    f"Remote generated branch is missing recorded file: {file.path}"
+                )
+            import hashlib
+
+            if (
+                hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest()
+                != file.sha256
+            ):
+                raise GitHubPublishError(
+                    "Remote generated branch tree does not match persisted inventory"
+                )
 
     def _verify_repo(self, repository: str, cwd: Path) -> None:
         self._run(
@@ -215,6 +273,12 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
     def _prepare_git(self, workspace_path: Path, repository: str) -> None:
         if not (workspace_path / ".git").exists():
             self._run(["git", "init"], workspace_path)
+        self._run(["git", "config", "user.name", "Slugger MVP"], workspace_path)
+        self._run(
+            ["git", "config", "user.email", "slugger-mvp@users.noreply.github.com"],
+            workspace_path,
+        )
+        self._run(["gh", "auth", "setup-git"], workspace_path)
         remotes = self._run(["git", "remote"], workspace_path).stdout.split()
         url = f"https://github.com/{repository}.git"
         if "origin" in remotes:

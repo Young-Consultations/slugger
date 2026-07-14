@@ -229,3 +229,39 @@ def test_installed_wheel_style_cli_runtime_path_outside_site_packages(
 
     assert Path(payload["workspace_root"]).is_relative_to(home.resolve())
     assert "site-packages" not in payload["sqlite_path"]
+
+
+def test_publish_completed_run_is_service_idempotent_after_restart(
+    tmp_path: Path,
+) -> None:
+    service, publisher = _service(tmp_path)
+    import os
+
+    old = os.environ.get("SLUGGER_MVP_SKIP_PUBLISH")
+    os.environ["SLUGGER_MVP_SKIP_PUBLISH"] = "1"
+    try:
+        built = service.build(_request()).run
+    finally:
+        if old is None:
+            os.environ.pop("SLUGGER_MVP_SKIP_PUBLISH", None)
+        else:
+            os.environ["SLUGGER_MVP_SKIP_PUBLISH"] = old
+
+    first = service.publish(built.run_id).run
+    assert first.status is MvpRunStatus.COMPLETED
+    assert first.error_details is None
+    assert first.github_publish_result is not None
+    persisted = first.github_publish_result
+
+    reloaded = service.run_repository.require(built.run_id)
+    assert reloaded.github_publish_result == persisted
+    second = service.publish(built.run_id).run
+    assert second.status is MvpRunStatus.COMPLETED
+    assert second.github_publish_result == persisted
+
+    restarted_service, _restarted_publisher = _service(tmp_path)
+    third = restarted_service.publish(built.run_id).run
+    assert third.status is MvpRunStatus.COMPLETED
+    assert third.error_details is None
+    assert third.github_publish_result == persisted
+    assert publisher.publish_count == 1
