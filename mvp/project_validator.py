@@ -17,6 +17,8 @@ SECRET_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db")
 ALLOWED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".whl"}
 MAX_FILE_BYTES = 1_000_000
 _PACKAGE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_ALLOWED_BUILD_REQUIREMENTS = {"setuptools", "wheel"}
+_REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
 class ProjectValidationError(ValueError):
@@ -234,8 +236,10 @@ class ProjectValidator:
             return CheckResult(
                 "packaging_policy", False, "build-system.requires must be a string list"
             )
-        allowed_prefixes = ("setuptools", "wheel")
-        if any(not r.startswith(allowed_prefixes) for r in reqs):
+        if any(
+            _normalized_requirement_name(r) not in _ALLOWED_BUILD_REQUIREMENTS
+            for r in reqs
+        ):
             return CheckResult(
                 "packaging_policy", False, "Unexpected build requirement"
             )
@@ -304,3 +308,10 @@ class ProjectValidator:
         return CheckResult(
             "pyproject", True, "pyproject.toml and package layout are valid"
         )
+
+
+def _normalized_requirement_name(requirement: str) -> str | None:
+    match = _REQUIREMENT_NAME_RE.match(requirement)
+    if match is None:
+        return None
+    return re.sub(r"[-_.]+", "-", match.group(1)).lower()

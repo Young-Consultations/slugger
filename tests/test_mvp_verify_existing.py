@@ -177,3 +177,30 @@ def test_verify_existing_rejects_unsafe_packaging_and_paths(tmp_path: Path):
         )
         == 1
     )
+
+
+def test_verify_existing_compares_exact_build_requirement_names(tmp_path: Path):
+    for requirement in ["setuptools-malicious", "wheelhouse"]:
+        project, root, name = _project(tmp_path / requirement)
+        txt = (
+            (project / "pyproject.toml")
+            .read_text(encoding="utf-8")
+            .replace("requires = []", f'requires = ["{requirement}"]')
+        )
+        (project / "pyproject.toml").write_text(txt, encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "mvp",
+                    "verify-existing",
+                    "--project-dir",
+                    str(project),
+                    "--project-name",
+                    name,
+                    "--workspace-root",
+                    str(root),
+                ]
+            )
+            == 1
+        )
