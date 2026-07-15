@@ -87,6 +87,11 @@ def test_fake_codex_adapter_implements_production_contract(tmp_path: Path) -> No
         "src/task_tracker/main.py",
         "tests/test_main.py",
     }.issubset(paths)
+    main_py = (workspace.path / "src" / "task_tracker" / "main.py").read_text(
+        encoding="utf-8"
+    )
+    assert "subparsers.add_parser('greet')" in main_py
+    assert "Hello, {args.name}!" in main_py
 
 
 def test_fake_codex_adapter_fails_without_required_files(tmp_path: Path) -> None:

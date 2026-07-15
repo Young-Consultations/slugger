@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v codex >/dev/null 2>&1; then
+if command -v codex >/dev/null 2>&1; then
+  CODEX_VERSION="$(codex --version)"
+  echo "Codex version: ${CODEX_VERSION}"
+  if [[ -n "${CODEX_API_KEY:-}" ]]; then
+    echo "Using scoped CODEX_API_KEY for codex exec; skipping codex login status."
+  elif ! codex login status >/dev/null; then
+    echo "Codex CLI authentication is not available." >&2
+    echo "Run:" >&2
+    echo "    codex login" >&2
+    echo "    codex login status" >&2
+    echo "Alternatively, authenticate with an OpenAI Platform API key by piping OPENAI_API_KEY to:" >&2
+    echo "    codex login --with-api-key" >&2
+    echo "Or scope CODEX_API_KEY to this script invocation for exec-only automation." >&2
+    echo "Do not store the API key in this repository." >&2
+    exit 1
+  fi
+elif [[ "${CODEX_CI:-}" == "1" ]]; then
+  echo "Codex CLI is not available in this Codex cloud environment; using the deterministic offline MVP adapter." >&2
+  export SLUGGER_MVP_CODEX_ADAPTER="${SLUGGER_MVP_CODEX_ADAPTER:-fake}"
+else
   echo "codex: command not found" >&2
   echo "Install Codex CLI, then run: codex login && codex login status" >&2
+  echo "In Codex cloud, rerun with CODEX_CI=1 to use the deterministic offline MVP adapter." >&2
   exit 127
-fi
-
-CODEX_VERSION="$(codex --version)"
-echo "Codex version: ${CODEX_VERSION}"
-if ! codex login status >/dev/null; then
-  echo "Codex CLI authentication is not available." >&2
-  echo "Run:" >&2
-  echo "    codex login" >&2
-  echo "    codex login status" >&2
-  echo "Alternatively, authenticate with an OpenAI Platform API key by piping OPENAI_API_KEY to:" >&2
-  echo "    codex login --with-api-key" >&2
-  echo "Do not store the API key in this repository." >&2
-  exit 1
 fi
 
 export SLUGGER_HOME="$(mktemp -d -t slugger-codex-demo-XXXXXX)"

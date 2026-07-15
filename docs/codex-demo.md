@@ -8,7 +8,7 @@ User idea → Slugger MVP CLI → isolated workspace → real Codex CLI → gene
 
 - Python 3.11 or newer, matching the repository's `requires-python` setting.
 - Codex CLI installed and available on `PATH`.
-- Codex CLI already authenticated.
+- Codex CLI already authenticated. In Codex cloud, where nested `codex` may not be installed, the demo script automatically uses Slugger's deterministic offline MVP adapter when `CODEX_CI=1` is present.
 - Slugger installed in editable mode:
 
 ```bash
@@ -58,7 +58,7 @@ The demo uses the provider and model already selected by the user's Codex instal
 ./scripts/run_codex_demo.sh
 ```
 
-The script sets `SLUGGER_MVP_SKIP_PUBLISH=1`, so a final `ready_to_publish` status means the local build completed successfully and GitHub publication was intentionally skipped.
+The script sets `SLUGGER_MVP_SKIP_PUBLISH=1`, so a final `ready_to_publish` status means the local build completed successfully and GitHub publication was intentionally skipped. When running in Codex cloud without a nested Codex CLI, it also sets `SLUGGER_MVP_CODEX_ADAPTER=fake` by default so the validation, install, pytest, and smoke-test path can still run deterministically.
 
 ## Expected result
 
@@ -82,8 +82,8 @@ Hello, Joseph!
 
 ## Troubleshooting
 
-- `codex: command not found`: install the Codex CLI and ensure it is on `PATH`.
-- `codex login status` failure: run `codex login` and then `codex login status`; alternatively use the API-key piping flow above without storing the key in the repository.
+- `codex: command not found`: install the Codex CLI and ensure it is on `PATH`. In Codex cloud, set `CODEX_CI=1` or rely on the existing Codex cloud environment variable so the script uses the deterministic offline MVP adapter.
+- `codex login status` failure: run `codex login` and then `codex login status`; alternatively use the API-key piping flow above without storing the key in the repository, or scope `CODEX_API_KEY` to this script invocation for exec-only automation.
 - Read-only sandbox or permission failure: ensure the generated workspace path is writable. Slugger invokes Codex with `--sandbox workspace-write` and does not grant additional writable directories.
 - Codex timeout: rerun after checking Codex connectivity and the prompt size. The adapter uses a bounded timeout and preserves the workspace for inspection.
 - No generated files: inspect the generated workspace printed by the script; validation will fail if required files are absent.

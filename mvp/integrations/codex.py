@@ -411,16 +411,26 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
             "from __future__ import annotations\nimport argparse\n\n"
             "def build_parser() -> argparse.ArgumentParser:\n"
             f"    parser = argparse.ArgumentParser(prog='{request.project_name}')\n"
-            "    parser.add_argument('--version', action='store_true')\n    return parser\n\n"
+            "    parser.add_argument('--version', action='store_true')\n"
+            "    subparsers = parser.add_subparsers(dest='command')\n"
+            "    greet = subparsers.add_parser('greet')\n"
+            "    greet.add_argument('name')\n"
+            "    return parser\n\n"
             "def main(argv: list[str] | None = None) -> int:\n"
-            "    parser = build_parser()\n    parser.parse_args(argv)\n    return 0\n\n"
+            "    parser = build_parser()\n    args = parser.parse_args(argv)\n"
+            "    if args.command == 'greet':\n"
+            "        print(f'Hello, {args.name}!')\n"
+            "    return 0\n\n"
             "if __name__ == '__main__':\n    raise SystemExit(main())\n"
         ),
         "tests/test_main.py": (
             f"from {package_name}.main import build_parser, main\n\n"
             "def test_help_parser_has_program_name():\n"
             f"    assert build_parser().prog == '{request.project_name}'\n\n"
-            "def test_main_exits_successfully():\n    assert main([]) == 0\n"
+            "def test_main_exits_successfully():\n    assert main([]) == 0\n\n"
+            "def test_greet_prints_name(capsys):\n"
+            "    assert main(['greet', 'Joseph']) == 0\n"
+            "    assert capsys.readouterr().out.strip() == 'Hello, Joseph!'\n"
         ),
     }
 

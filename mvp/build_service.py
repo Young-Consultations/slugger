@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 import hashlib
 import json
+import os
 import uuid
 
 from mvp.basic_runner import BasicRunner, BasicRunnerResult
@@ -227,7 +228,7 @@ class MvpBuildPhaseError(RuntimeError):
 def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     """Create production MVP dependencies without legacy workflow initialization."""
 
-    from mvp.integrations.codex import CodexCliMvpAdapter
+    from mvp.integrations.codex import CodexCliMvpAdapter, FakeMvpCodexAdapter
     from mvp.integrations.github import GitHubCliMvpPublisher
 
     home = runtime_home()
@@ -238,12 +239,23 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     return DefaultMvpBuildService(
         run_repository=run_repository,
         workspace_manager=workspace_manager,
-        codex_adapter=CodexCliMvpAdapter(workspace_manager),
+        codex_adapter=(
+            FakeMvpCodexAdapter(workspace_manager)
+            if _use_fake_codex_adapter()
+            else CodexCliMvpAdapter(workspace_manager)
+        ),
         project_validator=project_validator,
         basic_runner=basic_runner,
         github_publisher=GitHubCliMvpPublisher(workspace_manager),
         source_root=root_path.resolve(strict=False),
     )
+
+
+def _use_fake_codex_adapter() -> bool:
+    return os.environ.get("SLUGGER_MVP_CODEX_ADAPTER", "").lower() in {
+        "fake",
+        "offline",
+    }
 
 
 def _github_publish_disabled() -> bool:
