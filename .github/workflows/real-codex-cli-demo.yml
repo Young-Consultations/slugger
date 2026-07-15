@@ -60,7 +60,6 @@ jobs:
           permission-profile: ":workspace"
           prompt-file: prompts/mvp/github_actions_cli_demo_v1.md
           output-file: codex-final-message.txt
-          codex-args: '["--ask-for-approval", "never"]'
       - name: Validate generated directory and write manifest
         shell: bash
         run: |
