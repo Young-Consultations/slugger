@@ -31,6 +31,7 @@ _ALLOWED_ENV = (
     "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE",
 )
+_CODEX_EXEC_API_KEY_ENV = "CODEX_API_KEY"
 _CODEX_AUTH_HELP = """Codex CLI authentication is not available.
 Run:
     codex login
@@ -38,7 +39,10 @@ Run:
 Alternatively, authenticate with an OpenAI Platform API key by piping
 OPENAI_API_KEY to:
     codex login --with-api-key
-Do not store the API key in this repository."""
+Do not store the API key in this repository.
+For non-interactive exec-only automation, set CODEX_API_KEY only on the
+Slugger command invocation; Slugger passes it only to codex exec and skips
+the login-status preflight for that scoped environment variable."""
 
 
 class MvpCodexGenerationError(RuntimeError):
@@ -93,7 +97,11 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
     ) -> MvpCodexGenerationResult:
         workspace_path = self.workspace_manager._workspace_path(workspace)
         codex_executable = self.codex_command[0]
-        _preflight_codex(codex_executable, workspace_path)
+        _preflight_codex(
+            codex_executable,
+            workspace_path,
+            exec_api_key=os.environ.get("CODEX_API_KEY"),
+        )
         prompt = render_prompt(request, self.prompt_path)
         prompt_hash = _sha256_text(prompt)
         command = _codex_exec_command(self.codex_command)
@@ -101,7 +109,7 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
             completed = subprocess.run(
                 command,
                 cwd=workspace_path,
-                env=_minimal_environment(),
+                env=_minimal_environment(include_codex_api_key=True),
                 input=prompt,
                 text=True,
                 capture_output=True,
@@ -225,8 +233,11 @@ def _result_after_generation(
     )
 
 
-def _minimal_environment() -> dict[str, str]:
-    return {key: os.environ[key] for key in _ALLOWED_ENV if key in os.environ}
+def _minimal_environment(*, include_codex_api_key: bool = False) -> dict[str, str]:
+    environment = {key: os.environ[key] for key in _ALLOWED_ENV if key in os.environ}
+    if include_codex_api_key and _CODEX_EXEC_API_KEY_ENV in os.environ:
+        environment[_CODEX_EXEC_API_KEY_ENV] = os.environ[_CODEX_EXEC_API_KEY_ENV]
+    return environment
 
 
 def _sha256_text(value: str) -> str:
@@ -252,7 +263,9 @@ def _codex_exec_command(codex_command: tuple[str, ...]) -> tuple[str, ...]:
     )
 
 
-def _preflight_codex(codex_executable: str, workspace_path: Path) -> None:
+def _preflight_codex(
+    codex_executable: str, workspace_path: Path, *, exec_api_key: str | None = None
+) -> None:
     if not workspace_path.is_dir():
         raise MvpCodexGenerationError(f"Workspace does not exist: {workspace_path}")
     if not os.access(workspace_path, os.W_OK):
@@ -262,6 +275,8 @@ def _preflight_codex(codex_executable: str, workspace_path: Path) -> None:
         missing_message=_missing_codex_message(codex_executable),
         failure_message=f"Codex CLI version check failed for {codex_executable!r}.",
     )
+    if exec_api_key:
+        return
     _run_preflight_command(
         [codex_executable, "login", "status"],
         missing_message=_missing_codex_message(codex_executable),

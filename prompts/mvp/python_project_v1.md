@@ -8,6 +8,7 @@ Requirements:
 - Include `pyproject.toml` with a conventional supported build backend such as `setuptools.build_meta`.
 - Keep runtime dependencies empty unless strictly necessary for the user's requested demo behavior.
 - Include pytest tests that run without network access.
+- Declare pytest as an installable test dependency, preferably with `[project.optional-dependencies]` and `test = ["pytest>=8,<10"]`, so `pip install .[test]` makes `python -m pytest` available in a fresh virtual environment.
 - Include a package entry point that can be executed with `python -m <package_name>.main`.
 - Use `argparse` for the demo CLI.
 - Ensure `python -m <package_name>.main --help` exits with status zero.

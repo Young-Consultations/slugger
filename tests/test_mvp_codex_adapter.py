@@ -116,6 +116,8 @@ def test_prompt_is_versioned_and_contains_constraints() -> None:
     assert "Do not run Git commands" in prompt
     assert "Do not modify anything outside" in prompt
     assert "task_tracker" in prompt
+    assert "[project.optional-dependencies]" in prompt
+    assert ".[test]" in prompt
 
 
 def test_package_name_for_project_normalizes_kebab_case() -> None:
@@ -133,6 +135,7 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
         subprocess, "run", _fake_successful_subprocess(workspace.path, captured)
     )
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
     monkeypatch.setenv("PYTHONPATH", "must-not-leak")
     monkeypatch.setenv("UNRELATED_SECRET", "must-not-leak")
 
@@ -174,9 +177,51 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
         if key in os.environ
     }
     assert "OPENAI_API_KEY" not in generation["env"]
+    assert "CODEX_API_KEY" not in generation["env"]
     assert "PYTHONPATH" not in generation["env"]
     assert "UNRELATED_SECRET" not in generation["env"]
     assert result.codex_session_id == "session-jsonl-123"
+
+
+def test_production_adapter_accepts_scoped_exec_api_key_without_login_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-exec-key")
+    captured: list[dict[str, Any]] = []
+
+    def fake_run(command, **kwargs):
+        captured.append({"command": command, **kwargs})
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            raise AssertionError("login status must be skipped for CODEX_API_KEY auth")
+        assert kwargs["env"]["CODEX_API_KEY"] == "exec-only-secret"
+        _write_required_project(workspace.path)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {"type": "session.started", "session_id": "session-with-key"}
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setenv("CODEX_API_KEY", "exec-only-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+
+    result = CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
+
+    assert [tuple(call["command"]) for call in captured] == [
+        ("codex", "--version"),
+        result.commands[0],
+    ]
+    assert result.codex_session_id == "session-with-key"
+    assert "exec-only-secret" not in result.commands[0]
+    assert "OPENAI_API_KEY" not in captured[-1]["env"]
 
 
 def test_production_adapter_fails_on_codex_nonzero_exit(
