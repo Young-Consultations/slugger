@@ -1,0 +1,76 @@
+name: Real Slugger Codex Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: Generated demo project name
+        required: true
+        default: hello-codex
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-slugger-codex-demo
+  cancel-in-progress: false
+
+jobs:
+  demo:
+    name: Run real Codex demo
+    environment: codex-demo
+    runs-on: [self-hosted, linux, x64, slugger-codex]
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Slugger
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Verify Codex installation
+        run: codex --version
+
+      - name: Authenticate Codex
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          test -n "$OPENAI_API_KEY"
+          printenv OPENAI_API_KEY | codex login --with-api-key
+          codex login status
+
+      - name: Run focused local demo
+        env:
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          SLUGGER_MVP_SKIP_PUBLISH: "1"
+        run: |
+          slugger mvp build \
+            "Create a Python command-line application named hello-codex. Provide a greet NAME command that prints exactly Hello, NAME! Use argparse, include pytest tests, use no runtime dependencies, and do not access the network." \
+            --name "${{ inputs.project_name }}" \
+            --repo "local/${{ inputs.project_name }}" \
+            --base main
+
+      - name: Show non-sensitive evidence
+        if: always()
+        env:
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+        run: |
+          find "$SLUGGER_HOME" -maxdepth 3 -type f \
+            ! -name "*.db" \
+            ! -name "auth.json" \
+            -print || true
+
+      - name: Remove Codex authentication
+        if: always()
+        run: codex logout || true
