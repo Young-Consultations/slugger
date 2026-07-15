@@ -84,6 +84,37 @@ def test_install_failure_blocks_later_phases(tmp_path: Path) -> None:
     )
 
 
+def test_normal_build_preserves_broken_backend_install_failure(tmp_path: Path) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "pyproject.toml").write_text(
+        (
+            "[build-system]\n"
+            "requires = []\n"
+            'build-backend = "does.not.exist"\n\n'
+            "[project]\n"
+            'name = "task-tracker"\n'
+            'version = "0.1.0"\n'
+            'requires-python = ">=3.11"\n'
+            "dependencies = []\n"
+        ),
+        encoding="utf-8",
+    )
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    install_check = next(
+        check for check in result.checks if check.name == "install_project"
+    )
+    assert not result.passed
+    assert not install_check.passed
+    assert install_check.details.get("manual_source_install") is None
+    assert "manual_source_install_error" not in install_check.details
+    assert "does.not.exist" in (
+        install_check.details.get("stderr", "")
+        + install_check.details.get("stdout", "")
+    )
+
+
 def _all_commands(result):
     return [
         check.details.get("command", [])

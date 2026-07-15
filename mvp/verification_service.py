@@ -63,6 +63,7 @@ class ExistingProjectVerifier:
             self.workspace_manager,
             timeout_seconds=timeout_seconds,
             system_site_packages=True,
+            allow_manual_source_install=True,
         )
 
     def verify_existing(
@@ -108,6 +109,7 @@ class ExistingProjectVerifier:
                         exec_manager,
                         timeout_seconds=self.runner.timeout_seconds,
                         system_site_packages=True,
+                        allow_manual_source_install=True,
                     ).run(request, exec_ws)
                     runner_checks = runner_result.checks
                     if not runner_result.passed:

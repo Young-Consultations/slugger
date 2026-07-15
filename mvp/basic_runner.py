@@ -37,10 +37,12 @@ class BasicRunner:
         *,
         timeout_seconds: int = 120,
         system_site_packages: bool = False,
+        allow_manual_source_install: bool = False,
     ) -> None:
         self.workspace_manager = workspace_manager
         self.timeout_seconds = timeout_seconds
         self.system_site_packages = system_site_packages
+        self.allow_manual_source_install = allow_manual_source_install
 
     def run(
         self, request: MvpProjectRequest, workspace: MvpWorkspace | Path
@@ -160,7 +162,7 @@ class BasicRunner:
             "stderr": completed.stderr[:_OUTPUT_LIMIT],
         }
         if completed.returncode != 0:
-            if name == "install_project":
+            if name == "install_project" and self.allow_manual_source_install:
                 manual = _manual_source_install(command[0], workspace_path)
                 if manual is True:
                     details["manual_source_install"] = True
