@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
+from typing import Any
 
 import pytest
 
@@ -30,6 +32,42 @@ def _request() -> MvpProjectRequest:
     )
 
 
+def _write_required_project(workspace: Path) -> None:
+    package = workspace / "src" / "task_tracker"
+    package.mkdir(parents=True)
+    (workspace / "README.md").write_text("# task-tracker\n", encoding="utf-8")
+    (workspace / "pyproject.toml").write_text(
+        "[project]\nname='task-tracker'\n", encoding="utf-8"
+    )
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "main.py").write_text("def main(): return 0\n", encoding="utf-8")
+    tests = workspace / "tests"
+    tests.mkdir()
+    (tests / "test_main.py").write_text(
+        "def test_ok(): assert True\n", encoding="utf-8"
+    )
+
+
+def _fake_successful_subprocess(workspace: Path, captured: list[dict[str, Any]]):
+    def fake_run(command, **kwargs):
+        captured.append({"command": command, **kwargs})
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="authenticated\n", stderr=""
+            )
+        _write_required_project(workspace)
+        stdout = "diagnostic line\n" + json.dumps(
+            {"type": "session.started", "session_id": "session-jsonl-123"}
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+    return fake_run
+
+
 def test_fake_codex_adapter_implements_production_contract(tmp_path: Path) -> None:
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-004")
@@ -49,6 +87,11 @@ def test_fake_codex_adapter_implements_production_contract(tmp_path: Path) -> No
         "src/task_tracker/main.py",
         "tests/test_main.py",
     }.issubset(paths)
+    main_py = (workspace.path / "src" / "task_tracker" / "main.py").read_text(
+        encoding="utf-8"
+    )
+    assert "subparsers.add_parser('greet')" in main_py
+    assert "Hello, {args.name}!" in main_py
 
 
 def test_fake_codex_adapter_fails_without_required_files(tmp_path: Path) -> None:
@@ -78,6 +121,8 @@ def test_prompt_is_versioned_and_contains_constraints() -> None:
     assert "Do not run Git commands" in prompt
     assert "Do not modify anything outside" in prompt
     assert "task_tracker" in prompt
+    assert "[project.optional-dependencies]" in prompt
+    assert ".[test]" in prompt
 
 
 def test_package_name_for_project_normalizes_kebab_case() -> None:
@@ -89,63 +134,99 @@ def test_production_adapter_runs_inside_workspace_with_minimal_environment(
 ) -> None:
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-prod")
-    captured: dict[str, object] = {}
+    captured: list[dict[str, Any]] = []
 
-    def fake_run(command, *, cwd, env, text, capture_output, timeout, check):
-        captured.update(
-            command=command,
-            cwd=cwd,
-            env=env,
-            text=text,
-            capture_output=capture_output,
-            timeout=timeout,
-            check=check,
-        )
-        package = workspace.path / "src" / "task_tracker"
-        package.mkdir(parents=True)
-        (workspace.path / "README.md").write_text("# task-tracker\n", encoding="utf-8")
-        (workspace.path / "pyproject.toml").write_text(
-            "[project]\nname='task-tracker'\n", encoding="utf-8"
-        )
-        (package / "__init__.py").write_text("", encoding="utf-8")
-        (package / "main.py").write_text("def main(): return 0\n", encoding="utf-8")
-        tests = workspace.path / "tests"
-        tests.mkdir()
-        (tests / "test_main.py").write_text(
-            "def test_ok(): assert True\n", encoding="utf-8"
-        )
-        return subprocess.CompletedProcess(
-            command, 0, stdout="session id: abc123", stderr=""
-        )
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        subprocess, "run", _fake_successful_subprocess(workspace.path, captured)
+    )
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
     monkeypatch.setenv("PYTHONPATH", "must-not-leak")
     monkeypatch.setenv("UNRELATED_SECRET", "must-not-leak")
 
     adapter = CodexCliMvpAdapter(manager, timeout_seconds=12)
     result = adapter.generate_project(_request(), workspace)
 
-    assert captured["cwd"] == workspace.path
-    assert captured["text"] is True
-    assert captured["capture_output"] is True
-    assert captured["timeout"] == 12
-    assert captured["check"] is False
-    assert captured["env"] == {
+    generation = captured[-1]
+    command = generation["command"]
+    assert tuple(command) == (
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "--skip-git-repo-check",
+        "--json",
+        "-",
+    )
+    assert "--dangerously-bypass-approvals-and-sandbox" not in command
+    assert "--yolo" not in command
+    assert "danger-full-access" not in command
+    assert "secret" not in command
+    assert generation["cwd"] == workspace.path
+    assert generation["input"] == render_prompt(_request())
+    assert generation["text"] is True
+    assert generation["capture_output"] is True
+    assert generation["timeout"] == 12
+    assert generation["check"] is False
+    assert "shell" not in generation
+    assert generation["env"] == {
         key: os.environ[key]
         for key in (
             "HOME",
             "PATH",
-            "OPENAI_API_KEY",
             "SSL_CERT_FILE",
             "REQUESTS_CA_BUNDLE",
         )
         if key in os.environ
     }
-    assert "PYTHONPATH" not in captured["env"]
-    assert "UNRELATED_SECRET" not in captured["env"]
-    assert result.codex_session_id == "abc123"
-    assert result.commands[0][0:3] == ("codex", "exec", "--skip-git-repo-check")
+    assert "OPENAI_API_KEY" not in generation["env"]
+    assert "CODEX_API_KEY" not in generation["env"]
+    assert "PYTHONPATH" not in generation["env"]
+    assert "UNRELATED_SECRET" not in generation["env"]
+    assert result.codex_session_id == "session-jsonl-123"
+
+
+def test_production_adapter_accepts_scoped_exec_api_key_without_login_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-exec-key")
+    captured: list[dict[str, Any]] = []
+
+    def fake_run(command, **kwargs):
+        captured.append({"command": command, **kwargs})
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            raise AssertionError("login status must be skipped for CODEX_API_KEY auth")
+        assert kwargs["env"]["CODEX_API_KEY"] == "exec-only-secret"
+        _write_required_project(workspace.path)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {"type": "session.started", "session_id": "session-with-key"}
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setenv("CODEX_API_KEY", "exec-only-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+
+    result = CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
+
+    assert [tuple(call["command"]) for call in captured] == [
+        ("codex", "--version"),
+        result.commands[0],
+    ]
+    assert result.codex_session_id == "session-with-key"
+    assert "exec-only-secret" not in result.commands[0]
+    assert "OPENAI_API_KEY" not in captured[-1]["env"]
 
 
 def test_production_adapter_fails_on_codex_nonzero_exit(
@@ -154,8 +235,18 @@ def test_production_adapter_fails_on_codex_nonzero_exit(
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-nonzero")
 
-    def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args[0], 42, stdout="", stderr="boom")
+    def fake_run(command, **kwargs):
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="authenticated\n", stderr=""
+            )
+        return subprocess.CompletedProcess(
+            command, 42, stdout='{"type": "error", "message": "bad"}\n', stderr="boom"
+        )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     adapter = CodexCliMvpAdapter(manager)
@@ -170,24 +261,10 @@ def test_production_adapter_preserves_prompt_hash_and_version(
     manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = manager.create_workspace("run-prompt")
 
-    def fake_run(command, **kwargs):
-        package = workspace.path / "src" / "task_tracker"
-        package.mkdir(parents=True)
-        (workspace.path / "README.md").write_text("# task-tracker\n", encoding="utf-8")
-        (workspace.path / "pyproject.toml").write_text(
-            "[project]\nname='task-tracker'\n", encoding="utf-8"
-        )
-        (package / "__init__.py").write_text("", encoding="utf-8")
-        (package / "main.py").write_text("def main(): return 0\n", encoding="utf-8")
-        (workspace.path / "tests").mkdir()
-        (workspace.path / "tests" / "test_main.py").write_text(
-            "def test_ok(): assert True\n", encoding="utf-8"
-        )
-        return subprocess.CompletedProcess(
-            command, 0, stdout="session: session-xyz", stderr=""
-        )
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    captured: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        subprocess, "run", _fake_successful_subprocess(workspace.path, captured)
+    )
     result = CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
 
     assert result.prompt_version == PROMPT_VERSION
@@ -197,7 +274,7 @@ def test_production_adapter_preserves_prompt_hash_and_version(
         .sha256(render_prompt(_request()).encode("utf-8"))
         .hexdigest()
     )
-    assert result.codex_session_id == "session-xyz"
+    assert result.codex_session_id == "session-jsonl-123"
 
 
 def test_production_adapter_fails_closed_when_codex_unavailable(
@@ -211,6 +288,60 @@ def test_production_adapter_fails_closed_when_codex_unavailable(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    with pytest.raises(MvpCodexGenerationError, match="Codex command failed"):
+    with pytest.raises(
+        MvpCodexGenerationError, match="Codex CLI executable is not available"
+    ):
         CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
     assert list(workspace.path.rglob("*")) == []
+
+
+def test_production_adapter_fails_when_codex_unauthenticated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-unauth")
+
+    def fake_run(command, **kwargs):
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            return subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="not logged in"
+            )
+        raise AssertionError("generation must not run when auth preflight fails")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(MvpCodexGenerationError, match="Codex CLI authentication"):
+        CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
+    assert list(workspace.path.rglob("*")) == []
+
+
+def test_production_adapter_fails_when_codex_generates_no_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-empty")
+
+    def fake_run(command, **kwargs):
+        if command == ["codex", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="codex 1.0\n", stderr=""
+            )
+        if command == ["codex", "login", "status"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="authenticated\n", stderr=""
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps({"type": "session.started", "session_id": "empty"}),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(MvpCodexGenerationError, match="missing required files"):
+        CodexCliMvpAdapter(manager).generate_project(_request(), workspace)

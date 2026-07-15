@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import subprocess
+from typing import Any
 
 from mvp.models import GeneratedProjectInventory, MvpProjectRequest
 from mvp.workspace import MvpWorkspace, WorkspaceManager
@@ -26,11 +28,21 @@ REQUIRED_FILES = (
 _ALLOWED_ENV = (
     "HOME",
     "PATH",
-    "OPENAI_API_KEY",
-    "CODEX_API_KEY",
     "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE",
 )
+_CODEX_EXEC_API_KEY_ENV = "CODEX_API_KEY"
+_CODEX_AUTH_HELP = """Codex CLI authentication is not available.
+Run:
+    codex login
+    codex login status
+Alternatively, authenticate with an OpenAI Platform API key by piping
+OPENAI_API_KEY to:
+    codex login --with-api-key
+Do not store the API key in this repository.
+For non-interactive exec-only automation, set CODEX_API_KEY only on the
+Slugger command invocation; Slugger passes it only to codex exec and skips
+the login-status preflight for that scoped environment variable."""
 
 
 class MvpCodexGenerationError(RuntimeError):
@@ -69,7 +81,7 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
         self,
         workspace_manager: WorkspaceManager,
         *,
-        codex_command: tuple[str, ...] = ("codex", "exec", "--skip-git-repo-check"),
+        codex_command: tuple[str, ...] = ("codex",),
         timeout_seconds: int = 900,
         prompt_path: Path = PROMPT_PATH,
     ) -> None:
@@ -84,23 +96,39 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
         workspace: MvpWorkspace,
     ) -> MvpCodexGenerationResult:
         workspace_path = self.workspace_manager._workspace_path(workspace)
+        codex_executable = self.codex_command[0]
+        _preflight_codex(
+            codex_executable,
+            workspace_path,
+            exec_api_key=os.environ.get("CODEX_API_KEY"),
+        )
         prompt = render_prompt(request, self.prompt_path)
         prompt_hash = _sha256_text(prompt)
-        command = (*self.codex_command, prompt)
+        command = _codex_exec_command(self.codex_command)
         try:
             completed = subprocess.run(
                 command,
                 cwd=workspace_path,
-                env=_minimal_environment(),
+                env=_minimal_environment(include_codex_api_key=True),
+                input=prompt,
                 text=True,
                 capture_output=True,
                 timeout=self.timeout_seconds,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        except FileNotFoundError as exc:
+            raise MvpCodexGenerationError(
+                _missing_codex_message(codex_executable)
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise MvpCodexGenerationError(
+                f"Codex timed out after {self.timeout_seconds} seconds"
+            ) from exc
+        except OSError as exc:
             raise MvpCodexGenerationError(f"Codex command failed: {exc}") from exc
+        parsed_output = _parse_codex_jsonl(completed.stdout)
         if completed.returncode != 0:
-            output = _bounded(completed.stderr or completed.stdout)
+            output = _bounded(_codex_failure_details(parsed_output, completed.stderr))
             raise MvpCodexGenerationError(
                 f"Codex exited with status {completed.returncode}: {output}"
             )
@@ -109,9 +137,8 @@ class CodexCliMvpAdapter(MvpCodexAdapter):
             workspace=workspace,
             workspace_manager=self.workspace_manager,
             prompt_hash=prompt_hash,
-            codex_session_id=_session_id_from_output(
-                completed.stdout, completed.stderr
-            ),
+            codex_session_id=parsed_output.session_id
+            or _session_id_from_output(completed.stdout, completed.stderr),
             commands=(command,),
         )
 
@@ -206,8 +233,11 @@ def _result_after_generation(
     )
 
 
-def _minimal_environment() -> dict[str, str]:
-    return {key: os.environ[key] for key in _ALLOWED_ENV if key in os.environ}
+def _minimal_environment(*, include_codex_api_key: bool = False) -> dict[str, str]:
+    environment = {key: os.environ[key] for key in _ALLOWED_ENV if key in os.environ}
+    if include_codex_api_key and _CODEX_EXEC_API_KEY_ENV in os.environ:
+        environment[_CODEX_EXEC_API_KEY_ENV] = os.environ[_CODEX_EXEC_API_KEY_ENV]
+    return environment
 
 
 def _sha256_text(value: str) -> str:
@@ -216,6 +246,140 @@ def _sha256_text(value: str) -> str:
 
 def _bounded(value: str, limit: int = 1000) -> str:
     return value[:limit]
+
+
+def _codex_exec_command(codex_command: tuple[str, ...]) -> tuple[str, ...]:
+    executable = codex_command[0]
+    return (
+        executable,
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "--skip-git-repo-check",
+        "--json",
+        "-",
+    )
+
+
+def _preflight_codex(
+    codex_executable: str, workspace_path: Path, *, exec_api_key: str | None = None
+) -> None:
+    if not workspace_path.is_dir():
+        raise MvpCodexGenerationError(f"Workspace does not exist: {workspace_path}")
+    if not os.access(workspace_path, os.W_OK):
+        raise MvpCodexGenerationError(f"Workspace is not writable: {workspace_path}")
+    _run_preflight_command(
+        [codex_executable, "--version"],
+        missing_message=_missing_codex_message(codex_executable),
+        failure_message=f"Codex CLI version check failed for {codex_executable!r}.",
+    )
+    if exec_api_key:
+        return
+    _run_preflight_command(
+        [codex_executable, "login", "status"],
+        missing_message=_missing_codex_message(codex_executable),
+        failure_message=_CODEX_AUTH_HELP,
+    )
+
+
+def _run_preflight_command(
+    command: list[str], *, missing_message: str, failure_message: str
+) -> None:
+    try:
+        completed = subprocess.run(
+            command,
+            env=_minimal_environment(),
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise MvpCodexGenerationError(missing_message) from exc
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MvpCodexGenerationError(f"{failure_message} {exc}") from exc
+    if completed.returncode != 0:
+        details = _bounded(completed.stderr or completed.stdout)
+        raise MvpCodexGenerationError(f"{failure_message}\n{details}")
+
+
+def _missing_codex_message(codex_executable: str) -> str:
+    return (
+        f"Codex CLI executable is not available: {codex_executable!r}.\n"
+        "Install Codex CLI, then run:\n"
+        "    codex --version\n"
+        "    codex login\n"
+        "    codex login status"
+    )
+
+
+@dataclass(frozen=True)
+class _CodexJsonlParseResult:
+    session_id: str | None
+    error_details: tuple[str, ...] = ()
+
+
+def _parse_codex_jsonl(output: str) -> _CodexJsonlParseResult:
+    session_id: str | None = None
+    errors: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        session_id = session_id or _session_id_from_event(event)
+        if _event_looks_like_error(event):
+            errors.append(_bounded(json.dumps(event, sort_keys=True), 500))
+    return _CodexJsonlParseResult(session_id=session_id, error_details=tuple(errors))
+
+
+def _session_id_from_event(event: dict[str, Any]) -> str | None:
+    direct = _first_string_value(
+        event,
+        (
+            "session_id",
+            "sessionId",
+            "thread_id",
+            "threadId",
+            "conversation_id",
+            "conversationId",
+            "id",
+        ),
+    )
+    event_type = str(event.get("type", "")).lower()
+    if direct and any(token in event_type for token in ("session", "thread")):
+        return direct
+    nested = event.get("session") or event.get("thread")
+    if isinstance(nested, dict):
+        return _first_string_value(nested, ("id", "session_id", "thread_id"))
+    return None
+
+
+def _first_string_value(mapping: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _event_looks_like_error(event: dict[str, Any]) -> bool:
+    event_type = str(event.get("type", "")).lower()
+    return "error" in event_type or event.get("level") == "error"
+
+
+def _codex_failure_details(parsed: _CodexJsonlParseResult, stderr: str) -> str:
+    parts = [*parsed.error_details]
+    if stderr.strip():
+        parts.append(stderr.strip())
+    return "\n".join(parts) or "No error details emitted by Codex"
 
 
 def _session_id_from_output(*chunks: str) -> str | None:
@@ -247,16 +411,26 @@ def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, s
             "from __future__ import annotations\nimport argparse\n\n"
             "def build_parser() -> argparse.ArgumentParser:\n"
             f"    parser = argparse.ArgumentParser(prog='{request.project_name}')\n"
-            "    parser.add_argument('--version', action='store_true')\n    return parser\n\n"
+            "    parser.add_argument('--version', action='store_true')\n"
+            "    subparsers = parser.add_subparsers(dest='command')\n"
+            "    greet = subparsers.add_parser('greet')\n"
+            "    greet.add_argument('name')\n"
+            "    return parser\n\n"
             "def main(argv: list[str] | None = None) -> int:\n"
-            "    parser = build_parser()\n    parser.parse_args(argv)\n    return 0\n\n"
+            "    parser = build_parser()\n    args = parser.parse_args(argv)\n"
+            "    if args.command == 'greet':\n"
+            "        print(f'Hello, {args.name}!')\n"
+            "    return 0\n\n"
             "if __name__ == '__main__':\n    raise SystemExit(main())\n"
         ),
         "tests/test_main.py": (
             f"from {package_name}.main import build_parser, main\n\n"
             "def test_help_parser_has_program_name():\n"
             f"    assert build_parser().prog == '{request.project_name}'\n\n"
-            "def test_main_exits_successfully():\n    assert main([]) == 0\n"
+            "def test_main_exits_successfully():\n    assert main([]) == 0\n\n"
+            "def test_greet_prints_name(capsys):\n"
+            "    assert main(['greet', 'Joseph']) == 0\n"
+            "    assert capsys.readouterr().out.strip() == 'Hello, Joseph!'\n"
         ),
     }
 

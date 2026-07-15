@@ -43,8 +43,7 @@ def test_real_runner_installs_tests_and_smokes_valid_cli_project(
         "cli_smoke",
     ]
     assert any(
-        "1 passed" in check.details.get("stdout", "")
-        or "2 passed" in check.details.get("stdout", "")
+        check.name == "run_tests" and " passed" in check.details.get("stdout", "")
         for check in result.checks
     )
 
