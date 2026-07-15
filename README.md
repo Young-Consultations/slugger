@@ -160,3 +160,29 @@ This project is licensed under the MIT License.
 ### Slugger MVP runtime state
 
 The MVP path resolves runtime state through `mvp.runtime_paths` instead of writing beside package files. Set `SLUGGER_HOME` to choose an explicit runtime home; otherwise Slugger uses the current platform's user-data directory and falls back to `~/.slugger` for development-only environments. The layout is `workspaces/`, `state/mvp_runs.sqlite3`, and `logs/`. MVP CLI diagnostics print the resolved workspace root and SQLite path.
+
+## Real Codex CLI demo workflow
+
+The repository includes a manually triggered workflow, `.github/workflows/real-codex-cli-demo.yml`, that demonstrates a real `openai/codex-action@v1` generation followed by a separate credential-free verification job. The generated demo is a Python CLI application only; the workflow does not publish, push, or open a pull request for generated application code by default.
+
+Required setup:
+1. Add the repository or protected-environment secret `OPENAI_API_KEY`.
+2. Prefer a protected GitHub environment for manual runs so maintainers approve access to the OpenAI key.
+3. Start **Actions → Real Codex CLI Demo → Run workflow**, provide a lowercase kebab-case project name, and optionally provide a bounded description.
+
+Expected artifacts:
+- `generated-demo-<run_id>`: generated project plus `generated-project-manifest.json`.
+- `generation-summary-<run_id>`: sanitized Codex final-message excerpt.
+- `verification-evidence-<run_id>`: bounded JSON evidence from `slugger mvp verify-existing`.
+
+Security boundaries: only the generation job receives `OPENAI_API_KEY`, passed directly to the Codex action as `openai-api-key`. The verification job checks out with `persist-credentials: false`, downloads the artifact, verifies the SHA-256 JSON manifest before installation or execution, validates packaging policy, runs the existing Slugger validator and runner on a disposable copy, and uploads evidence with bounded stdout/stderr excerpts. Outbound dependency installation is intentionally constrained by requiring a dependency-minimal project and rejecting unsafe package metadata. A Python virtual environment is not a sandbox; the workflow separates credential-bearing generation from generated-code execution and the verification service uses a disposable execution copy for mutation detection.
+
+Troubleshooting:
+- Missing secret: configure `OPENAI_API_KEY` in repository or protected-environment Actions secrets.
+- Codex-action failure: inspect the generation summary and the Codex action logs; no generated project artifact is trusted unless a manifest is produced.
+- Artifact-integrity failure: the verification job rejects missing, extra, modified, symlinked, or mode-changed files before execution.
+- Validation failure: review `validator_results` in `verification-evidence.json`.
+- Packaging failure: ensure `pyproject.toml` uses `setuptools.build_meta` with no custom backend, path, URL, Git, or index configuration.
+- Test failure: review the bounded `run_tests` excerpts in evidence.
+- Smoke-test failure: confirm `python -m <package>.main --help` prints help including usage and the project name.
+- Container or Docker failure: the current local verifier uses a disposable execution copy; if the GitHub runner Docker service is unavailable, keep verification credential-free and inspect evidence.

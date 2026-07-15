@@ -17,6 +17,8 @@ SECRET_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db")
 ALLOWED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".whl"}
 MAX_FILE_BYTES = 1_000_000
 _PACKAGE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_ALLOWED_BUILD_REQUIREMENTS = {"setuptools", "wheel"}
+_REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
 class ProjectValidationError(ValueError):
@@ -31,9 +33,11 @@ class ProjectValidator:
         workspace_manager: WorkspaceManager,
         *,
         max_file_bytes: int = MAX_FILE_BYTES,
+        strict_packaging: bool = False,
     ) -> None:
         self.workspace_manager = workspace_manager
         self.max_file_bytes = max_file_bytes
+        self.strict_packaging = strict_packaging
 
     def validate(
         self,
@@ -48,6 +52,11 @@ class ProjectValidator:
             self._check_required_files(request, workspace_path, inventory),
             self._check_python_syntax(workspace_path),
             self._check_pyproject(request, workspace_path),
+            *(
+                [self._check_packaging_policy(workspace_path)]
+                if self.strict_packaging
+                else []
+            ),
         ]
         return tuple(results)
 
@@ -174,6 +183,84 @@ class ProjectValidator:
             {"file_count": len(paths)},
         )
 
+    def _check_packaging_policy(self, workspace_path: Path) -> CheckResult:
+        prohibited_dirs = [".git", ".github"]
+        for name in prohibited_dirs:
+            if (workspace_path / name).exists():
+                return CheckResult(
+                    "packaging_policy", False, f"Prohibited generated path: {name}"
+                )
+        prohibited_files = [
+            "pip.conf",
+            "pip.ini",
+            "pytest.ini",
+            "sitecustomize.py",
+            "usercustomize.py",
+        ]
+        for path in workspace_path.rglob("*"):
+            if path.is_symlink():
+                return CheckResult(
+                    "packaging_policy",
+                    False,
+                    f"Generated symlink is prohibited: {path.relative_to(workspace_path)}",
+                )
+            if path.name in prohibited_files:
+                return CheckResult(
+                    "packaging_policy",
+                    False,
+                    f"Prohibited package/runtime configuration: {path.relative_to(workspace_path)}",
+                )
+        try:
+            data = tomllib.loads(
+                (workspace_path / "pyproject.toml").read_text(encoding="utf-8")
+            )
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            return CheckResult(
+                "packaging_policy", False, f"Invalid pyproject.toml: {exc}"
+            )
+        build = data.get("build-system")
+        if not isinstance(build, dict):
+            return CheckResult("packaging_policy", False, "Missing [build-system]")
+        if build.get("build-backend") != "setuptools.build_meta":
+            return CheckResult(
+                "packaging_policy",
+                False,
+                "Only setuptools.build_meta build backend is allowed",
+            )
+        if "backend-path" in build:
+            return CheckResult(
+                "packaging_policy", False, "In-tree build backend paths are not allowed"
+            )
+        reqs = build.get("requires")
+        if not isinstance(reqs, list) or not all(isinstance(r, str) for r in reqs):
+            return CheckResult(
+                "packaging_policy", False, "build-system.requires must be a string list"
+            )
+        if any(
+            _normalized_requirement_name(r) not in _ALLOWED_BUILD_REQUIREMENTS
+            for r in reqs
+        ):
+            return CheckResult(
+                "packaging_policy", False, "Unexpected build requirement"
+            )
+        project = data.get("project", {})
+        deps = list(project.get("dependencies", []) or [])
+        optional = project.get("optional-dependencies", {}) or {}
+        if isinstance(optional, dict):
+            for values in optional.values():
+                deps.extend(values or [])
+        unsafe_tokens = ("://", " git+", "git+", "file:", "../", "./")
+        for dep in deps:
+            if (
+                not isinstance(dep, str)
+                or any(tok in dep for tok in unsafe_tokens)
+                or " @ " in dep
+            ):
+                return CheckResult(
+                    "packaging_policy", False, f"Unsafe dependency reference: {dep}"
+                )
+        return CheckResult("packaging_policy", True, "Packaging policy is satisfied")
+
     def _check_python_syntax(self, workspace_path: Path) -> CheckResult:
         for path in sorted(workspace_path.rglob("*.py")):
             if path.is_symlink():
@@ -221,3 +308,10 @@ class ProjectValidator:
         return CheckResult(
             "pyproject", True, "pyproject.toml and package layout are valid"
         )
+
+
+def _normalized_requirement_name(requirement: str) -> str | None:
+    match = _REQUIREMENT_NAME_RE.match(requirement)
+    if match is None:
+        return None
+    return re.sub(r"[-_.]+", "-", match.group(1)).lower()

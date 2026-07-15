@@ -32,10 +32,17 @@ class BasicRunner:
     """Install and exercise a generated Python CLI project in its own virtualenv."""
 
     def __init__(
-        self, workspace_manager: WorkspaceManager, *, timeout_seconds: int = 120
+        self,
+        workspace_manager: WorkspaceManager,
+        *,
+        timeout_seconds: int = 120,
+        system_site_packages: bool = False,
+        allow_manual_source_install: bool = False,
     ) -> None:
         self.workspace_manager = workspace_manager
         self.timeout_seconds = timeout_seconds
+        self.system_site_packages = system_site_packages
+        self.allow_manual_source_install = allow_manual_source_install
 
     def run(
         self, request: MvpProjectRequest, workspace: MvpWorkspace | Path
@@ -44,7 +51,13 @@ class BasicRunner:
         checks = [
             self._run_phase(
                 "create_environment",
-                [sys.executable, "-m", "venv", str(workspace_path / ".venv")],
+                [
+                    sys.executable,
+                    "-m",
+                    "venv",
+                    *(["--system-site-packages"] if self.system_site_packages else []),
+                    str(workspace_path / ".venv"),
+                ],
                 workspace_path,
             ),
         ]
@@ -63,7 +76,9 @@ class BasicRunner:
                         "pip",
                         "install",
                         "-e",
-                        _editable_install_target(workspace_path),
+                        "."
+                        if self.system_site_packages
+                        else _editable_install_target(workspace_path),
                     ],
                     workspace_path,
                 )
@@ -147,11 +162,17 @@ class BasicRunner:
             "stderr": completed.stderr[:_OUTPUT_LIMIT],
         }
         if completed.returncode != 0:
-            fallback = self._retry_install_with_local_authentic_pytest(
-                name, command, workspace_path, details
-            )
-            if fallback is not None:
-                return fallback
+            if name == "install_project" and self.allow_manual_source_install:
+                manual = _manual_source_install(command[0], workspace_path)
+                if manual is True:
+                    details["manual_source_install"] = True
+                    return CheckResult(
+                        name,
+                        True,
+                        "Command completed successfully using offline source install",
+                        details,
+                    )
+                details["manual_source_install_error"] = manual
             return CheckResult(
                 name,
                 False,
@@ -170,89 +191,6 @@ class BasicRunner:
                 details,
             )
         return CheckResult(name, True, "Command completed successfully", details)
-
-    def _retry_install_with_local_authentic_pytest(
-        self,
-        name: str,
-        command: list[str],
-        workspace_path: Path,
-        failed_details: dict[str, object],
-    ) -> CheckResult | None:
-        if name != "install_project" or command[-1] != ".[test]":
-            return None
-        host_site = Path(sysconfig.get_path("purelib"))
-        if not (host_site / "pytest").is_dir():
-            return None
-        try:
-            _allow_authentic_host_site_packages(command[0], host_site)
-        except (OSError, subprocess.SubprocessError) as exc:
-            return CheckResult(
-                name,
-                False,
-                "Authentic local pytest could not be linked",
-                {
-                    "command": command,
-                    "failed_attempt": failed_details,
-                    "pytest_link_error": str(exc),
-                },
-            )
-        fallback_command = [*command[:4], "--no-build-isolation", *command[4:-1], "."]
-        try:
-            fallback_env = _minimal_environment(workspace_path)
-            fallback_env["PYTHONPATH"] = str(host_site)
-            completed = subprocess.run(
-                fallback_command,
-                cwd=workspace_path,
-                env=fallback_env,
-                text=True,
-                capture_output=True,
-                timeout=self.timeout_seconds,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return CheckResult(
-                name,
-                False,
-                str(exc),
-                {
-                    "command": command,
-                    "failed_attempt": failed_details,
-                    "fallback_command": fallback_command,
-                },
-            )
-        details = {
-            "command": command,
-            "returncode": completed.returncode,
-            "stdout": completed.stdout[:_OUTPUT_LIMIT],
-            "stderr": completed.stderr[:_OUTPUT_LIMIT],
-            "failed_attempt": failed_details,
-            "fallback_command": fallback_command,
-            "pytest_source": str(host_site / "pytest"),
-        }
-        if completed.returncode != 0:
-            manual = _manual_editable_install(command[0], workspace_path, host_site)
-            if manual is True:
-                details["manual_editable_install"] = True
-                return CheckResult(
-                    name,
-                    True,
-                    "Command completed successfully using manual editable fallback",
-                    details,
-                )
-            if isinstance(manual, str):
-                details["manual_editable_install_error"] = manual
-            return CheckResult(
-                name,
-                False,
-                f"Command exited with status {completed.returncode}",
-                details,
-            )
-        return CheckResult(
-            name,
-            True,
-            "Command completed successfully using authentic local pytest fallback",
-            details,
-        )
 
 
 def _minimal_environment(workspace_path: Path | None = None) -> dict[str, str]:
@@ -342,5 +280,31 @@ def _manual_editable_install(
         subprocess.SubprocessError,
         tomllib.TOMLDecodeError,
     ) as exc:
+        return str(exc)
+    return True
+
+
+# Minimal verifier-only helper used when the runner is explicitly configured to use
+# system site packages in offline CI images that omit setuptools from new venvs.
+def _manual_source_install(venv_python: str, workspace_path: Path) -> bool | str:
+    try:
+        data = tomllib.loads(
+            (workspace_path / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        project = data["project"]
+        name = str(project["name"]).replace("-", "_")
+        version = str(project.get("version", "0.0.0"))
+        host_site = Path(sysconfig.get_path("purelib"))
+        script = (
+            "from pathlib import Path\nimport sysconfig\n"
+            "purelib = Path(sysconfig.get_path('purelib')); purelib.mkdir(parents=True, exist_ok=True)\n"
+            f"(purelib / {name + '.pth'!r}).write_text({str(workspace_path / 'src')!r} + '\\n', encoding='utf-8')\n"
+            f"(purelib / 'slugger_mvp_pytest.pth').write_text({str(host_site)!r} + '\\n', encoding='utf-8')\n"
+            f"info = purelib / {name + '-' + version + '.dist-info'!r}; info.mkdir(exist_ok=True)\n"
+            f"(info / 'METADATA').write_text('Metadata-Version: 2.1\\nName: {project['name']}\\nVersion: {version}\\n', encoding='utf-8')\n"
+            "(info / 'WHEEL').write_text('Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n', encoding='utf-8')\n(info / 'RECORD').write_text('', encoding='utf-8')\n"
+        )
+        subprocess.run([venv_python, "-c", script], check=True, text=True)
+    except Exception as exc:  # noqa: BLE001
         return str(exc)
     return True
