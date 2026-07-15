@@ -17,6 +17,10 @@ __pycache__/
 # Runtime state and persistence files
 workflow/state.json
 *.db
+*.db-shm
+*.db-wal
+*.sqlite3-shm
+*.sqlite3-wal
 artifacts/
 workspace_*/
 slugger_workspace*/
