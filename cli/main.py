@@ -121,6 +121,24 @@ def build_parser() -> argparse.ArgumentParser:
     mvp_publish.add_argument("run_id", help="Persisted MVP run ID")
     mvp_resume = mvp_subparsers.add_parser("resume", help="Alias for mvp publish")
     mvp_resume.add_argument("run_id", help="Persisted MVP run ID")
+    mvp_verify = mvp_subparsers.add_parser(
+        "verify-existing", help="Verify an existing generated MVP project"
+    )
+    mvp_verify.add_argument(
+        "--project-dir",
+        required=True,
+        type=Path,
+        help="Generated project directory under the verification root",
+    )
+    mvp_verify.add_argument(
+        "--project-name", required=True, help="Lowercase kebab-case project name"
+    )
+    mvp_verify.add_argument(
+        "--workspace-root",
+        type=Path,
+        default=None,
+        help="Approved verification workspace root (defaults to project parent)",
+    )
 
     # lineage — show artifact traceability (WP-020)
     lineage_parser = subparsers.add_parser(
@@ -175,6 +193,34 @@ def main(argv: list[str] | None = None) -> int:
         if slugger is None:
             slugger = Slugger(Bootstrap(root_path).build())
         return slugger
+
+    if args.command == "mvp" and args.mvp_command == "verify-existing":
+        from mvp.verification_service import ExistingProjectVerifier
+
+        workspace_root = (
+            args.workspace_root or args.project_dir.resolve(strict=False).parent
+        )
+        result = ExistingProjectVerifier(workspace_root).verify_existing(
+            project_dir=args.project_dir, project_name=args.project_name
+        )
+        print(
+            json.dumps(
+                {
+                    "status": result.status.value,
+                    "project_name": result.project_name,
+                    "project_path": str(result.project_path),
+                    "initial_inventory_digest": result.initial_inventory_digest,
+                    "final_inventory_digest": result.final_inventory_digest,
+                    "failure_phase": result.failure_phase.value
+                    if result.failure_phase
+                    else None,
+                    "failure_message": result.failure_message,
+                    "generated_source_changed": result.generated_source_changed,
+                    "evidence_file": str(result.evidence_file),
+                }
+            )
+        )
+        return 0 if result.status.value == "passed" else 1
 
     if args.command == "mvp" and args.mvp_command in {"publish", "resume"}:
         from mvp.build_service import production_mvp_build_service
@@ -258,19 +304,23 @@ def main(argv: list[str] | None = None) -> int:
             platform=Platform(args.platform),
             coding_agent=CodingAgent(args.coding_agent),
         )
-        result = slugger.build(project_input, workflow=args.workflow)
-        outcome = result.outcome.value if result.outcome is not None else "unknown"
+        workflow_result = slugger.build(project_input, workflow=args.workflow)
+        outcome = (
+            workflow_result.outcome.value
+            if workflow_result.outcome is not None
+            else "unknown"
+        )
         print(
             json.dumps(
                 {
-                    "run_id": result.run_id,
+                    "run_id": workflow_result.run_id,
                     "idea": project_input.idea,
                     "platform": project_input.platform.value,
                     "coding_agent": project_input.coding_agent.value,
-                    "workflow": result.definition.name,
-                    "status": result.status,
+                    "workflow": workflow_result.definition.name,
+                    "status": workflow_result.status,
                     "outcome": outcome,
-                    "artifacts": len(result.artifacts),
+                    "artifacts": len(workflow_result.artifacts),
                 }
             )
         )
@@ -286,16 +336,20 @@ def main(argv: list[str] | None = None) -> int:
                 if args.coding_agent
                 else CodingAgent.CODEX,
             )
-        result = slugger.resume(args.run_id, project_input=resume_input)
-        outcome = result.outcome.value if result.outcome is not None else "unknown"
+        resume_result = slugger.resume(args.run_id, project_input=resume_input)
+        outcome = (
+            resume_result.outcome.value
+            if resume_result.outcome is not None
+            else "unknown"
+        )
         print(
             json.dumps(
                 {
-                    "run_id": result.run_id,
-                    "workflow": result.definition.name,
-                    "status": result.status,
+                    "run_id": resume_result.run_id,
+                    "workflow": resume_result.definition.name,
+                    "status": resume_result.status,
                     "outcome": outcome,
-                    "artifacts": len(result.artifacts),
+                    "artifacts": len(resume_result.artifacts),
                 }
             )
         )

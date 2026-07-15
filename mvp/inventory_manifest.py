@@ -1,0 +1,146 @@
+"""Deterministic generated-project manifest creation and verification."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+import hashlib
+import json
+from pathlib import Path
+import stat
+from typing import Any
+
+MANIFEST_VERSION = 1
+
+
+class ManifestError(ValueError):
+    """Raised when a generated-project manifest is invalid or mismatched."""
+
+
+class FileType(StrEnum):
+    FILE = "file"
+
+
+@dataclass(frozen=True, order=True)
+class ManifestEntry:
+    path: str
+    sha256: str
+    size_bytes: int
+    file_type: FileType = FileType.FILE
+    executable: bool = False
+
+
+def create_manifest(root: Path) -> dict[str, Any]:
+    root = root.resolve(strict=True)
+    entries: list[ManifestEntry] = []
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        _validate_relative(rel)
+        st = path.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            raise ManifestError(f"Symlink is not allowed: {rel}")
+        if path.is_dir():
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            raise ManifestError(f"Unsupported file type: {rel}")
+        data = path.read_bytes()
+        entries.append(
+            ManifestEntry(
+                path=rel,
+                sha256=hashlib.sha256(data).hexdigest(),
+                size_bytes=len(data),
+                executable=bool(st.st_mode & stat.S_IXUSR),
+            )
+        )
+    if not entries:
+        raise ManifestError("Generated project is empty")
+    json_entries = [entry_to_json(e) for e in sorted(entries)]
+    payload: dict[str, Any] = {
+        "manifest_version": MANIFEST_VERSION,
+        "entries": json_entries,
+    }
+    payload["artifact_digest"] = manifest_entries_digest(json_entries)
+    return payload
+
+
+def write_manifest(root: Path, output: Path) -> None:
+    output.write_text(
+        json.dumps(create_manifest(root), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ManifestError(f"Malformed manifest: {exc}") from exc
+    if not isinstance(data, dict) or data.get("manifest_version") != MANIFEST_VERSION:
+        raise ManifestError("Unsupported or missing manifest_version")
+    entries = data.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ManifestError("Manifest entries must be a non-empty list")
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ManifestError("Manifest entry must be an object")
+        rel = entry.get("path")
+        if not isinstance(rel, str):
+            raise ManifestError("Manifest entry path must be a string")
+        _validate_relative(rel)
+        if rel in seen:
+            raise ManifestError(f"Duplicate manifest path: {rel}")
+        seen.add(rel)
+        if entry.get("file_type") != FileType.FILE.value:
+            raise ManifestError(f"Unsupported manifest file_type for {rel}")
+        if not isinstance(entry.get("sha256"), str) or len(entry["sha256"]) != 64:
+            raise ManifestError(f"Invalid sha256 for {rel}")
+        if not isinstance(entry.get("size_bytes"), int) or entry["size_bytes"] < 0:
+            raise ManifestError(f"Invalid size_bytes for {rel}")
+        if not isinstance(entry.get("executable"), bool):
+            raise ManifestError(f"Invalid executable flag for {rel}")
+    if [e["path"] for e in entries] != sorted(e["path"] for e in entries):
+        raise ManifestError("Manifest entries must be sorted by path")
+    return data
+
+
+def verify_manifest(root: Path, manifest_path: Path) -> dict[str, Any]:
+    expected = load_manifest(manifest_path)
+    actual = create_manifest(root)
+    exp = {e["path"]: e for e in expected["entries"]}
+    act = {e["path"]: e for e in actual["entries"]}
+    missing = sorted(set(exp) - set(act))
+    extra = sorted(set(act) - set(exp))
+    mismatched = sorted(path for path in set(exp) & set(act) if exp[path] != act[path])
+    if missing or extra or mismatched:
+        raise ManifestError(
+            f"Manifest mismatch missing={missing} extra={extra} mismatched={mismatched}"
+        )
+    return {"passed": True, "artifact_digest": expected.get("artifact_digest")}
+
+
+def manifest_entries_digest(entries: list[dict[str, Any]]) -> str:
+    return hashlib.sha256(
+        json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def entry_to_json(entry: ManifestEntry) -> dict[str, Any]:
+    return {
+        "path": entry.path,
+        "sha256": entry.sha256,
+        "size_bytes": entry.size_bytes,
+        "file_type": entry.file_type.value,
+        "executable": entry.executable,
+    }
+
+
+def _validate_relative(path: str) -> None:
+    p = Path(path)
+    if (
+        not path
+        or "\x00" in path
+        or p.is_absolute()
+        or any(part in {"", ".", ".."} for part in p.parts)
+    ):
+        raise ManifestError(f"Unsafe manifest path: {path!r}")

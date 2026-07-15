@@ -1,0 +1,143 @@
+name: Real Codex CLI Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: Lowercase kebab-case demo project name
+        required: true
+        default: codex-cli-demo
+      demo_description:
+        description: Optional bounded CLI demo description
+        required: false
+        default: Small dependency-minimal Python CLI demo
+      retain_diagnostics:
+        description: Retain diagnostic artifacts for 14 days
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: real-codex-cli-demo-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  generate-with-codex:
+    name: Generate with Codex
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out Slugger
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Validate manual inputs
+        shell: bash
+        env:
+          PROJECT_NAME: ${{ inputs.project_name }}
+          DEMO_DESCRIPTION: ${{ inputs.demo_description }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, re, sys
+          name = os.environ["PROJECT_NAME"]
+          desc = os.environ["DEMO_DESCRIPTION"]
+          if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", name):
+              sys.exit("project_name must be lowercase kebab-case")
+          if len(desc) > 500 or any(ch in desc for ch in "\x00\r"):
+              sys.exit("demo_description is too long or unsafe")
+          PY
+      - name: Run Codex generation
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt-file: prompts/mvp/github_actions_cli_demo_v1.md
+          output-file: codex-final-message.txt
+          codex-args: '["--ask-for-approval", "never"]'
+      - name: Validate generated directory and write manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "generated-demo"
+          python - <<'PY'
+          from pathlib import Path
+          from mvp.inventory_manifest import write_manifest
+          write_manifest(Path("generated-demo"), Path("generated-project-manifest.json"))
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          final = Path("codex-final-message.txt")
+          summary = {
+              "workflow_run_id": "${{ github.run_id }}",
+              "project_name": "${{ inputs.project_name }}",
+              "generated_dir": "generated-demo",
+              "codex_summary_excerpt": final.read_text(encoding="utf-8")[:2000] if final.exists() else "",
+          }
+          Path("generation-summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          PY
+      - name: Upload generated project artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-demo-${{ github.run_id }}
+          path: |
+            generated-demo/**
+            generated-project-manifest.json
+          if-no-files-found: error
+          retention-days: 3
+      - name: Upload generation summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-summary-${{ github.run_id }}
+          path: generation-summary.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
+
+  verify-generated-demo:
+    name: Verify generated demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: generate-with-codex
+    permissions:
+      contents: read
+    steps:
+      - name: Check out Slugger without credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Download generated project artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: generated-demo-${{ github.run_id }}
+          path: downloaded-artifact
+      - name: Verify manifest before execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_manifest
+          verify_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
+          PY
+      - name: Verify generated project with Slugger
+        shell: bash
+        env:
+          PROJECT_NAME: ${{ inputs.project_name }}
+        run: |
+          set -euo pipefail
+          python -m cli.main mvp verify-existing --project-dir "downloaded-artifact/generated-demo" --project-name "$PROJECT_NAME" --workspace-root "downloaded-artifact"
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence-${{ github.run_id }}
+          path: downloaded-artifact/generated-demo/verification-evidence.json
+          if-no-files-found: warn
+          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}

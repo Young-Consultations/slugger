@@ -78,3 +78,15 @@ Before closing issue #24, record one protected run proving:
 - MVP publication intentionally rejects non-empty repositories unless they are Slugger-managed for the same run.
 - Real Codex and real GitHub sandbox evidence are credential-dependent and must run from protected CI or an administrator workstation.
 - Branch protection and approval requirements may require repository administrator configuration outside the codebase.
+
+## Real Codex CLI demo verification controls
+
+Slugger now includes a manually triggered real-Codex demo workflow definition and local verification command. The implementation has unit coverage for deterministic generated-project manifests and `slugger mvp verify-existing`; it does not claim that a real OpenAI service run has occurred in this repository checkout.
+
+Established by code and tests:
+- `openai/codex-action@v1` is used only in the generation job of `.github/workflows/real-codex-cli-demo.yml`.
+- The verification job is separate, depends on generation, checks out with persisted credentials disabled, verifies a JSON SHA-256 manifest before execution, and invokes `slugger mvp verify-existing`.
+- The verifier delegates to the shared MVP `ProjectValidator` and `BasicRunner`, writes bounded JSON evidence, and detects protected-file mutation by comparing pre/post inventories of the approved artifact snapshot.
+- Strict verification rejects custom PEP 517 build backends, in-tree backend paths, unsafe dependency references, nested `.git`, `.github`, generated symlinks, and package/runtime configuration files that could redirect execution.
+
+A real Codex service execution requires a valid `OPENAI_API_KEY` GitHub Actions secret and a manual workflow dispatch in GitHub Actions.
