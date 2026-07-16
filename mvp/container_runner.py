@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import shlex
 import subprocess
+import tempfile
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,8 @@ class ContainerPolicy:
 class ContainerCommand:
     argv: tuple[str, ...]
     summary: dict[str, object]
+    evidence_dir: Path
+    evidence_file: Path
 
 
 class ContainerizedVerifierRunner:
@@ -58,6 +63,8 @@ class ContainerizedVerifierRunner:
         workspace_root = workspace_root.resolve(strict=True)
         container_workspace_root = Path("/verification")
         container_project_dir = container_workspace_root / approved_project.name
+        host_evidence_dir = Path(tempfile.mkdtemp(prefix="slugger-container-evidence-"))
+        host_evidence_file = host_evidence_dir / "verification-evidence.json"
         container_evidence_file = Path("/evidence/verification-evidence.json")
         argv = (
             "docker",
@@ -80,14 +87,12 @@ class ContainerizedVerifierRunner:
             self.policy.user,
             "--tmpfs",
             "/tmp:rw,nosuid,nodev,size=256m",
-            "--tmpfs",
-            "/evidence:rw,nosuid,nodev,size=16m",
             "--mount",
             f"type=bind,src={repo_root},dst=/slugger,ro",
             "--mount",
-            f"type=bind,src={approved_project},dst={container_project_dir},ro",
-            "--mount",
             f"type=bind,src={workspace_root},dst=/verification,ro",
+            "--mount",
+            f"type=bind,src={host_evidence_dir},dst=/evidence,rw",
             "--workdir",
             "/slugger",
             "--env",
@@ -97,9 +102,7 @@ class ContainerizedVerifierRunner:
             self.policy.image,
             "python",
             "-m",
-            "cli.main",
-            "mvp",
-            "verify-existing",
+            "mvp.verify_cli",
             "--project-dir",
             str(container_project_dir),
             "--project-name",
@@ -123,7 +126,7 @@ class ContainerizedVerifierRunner:
                 "approved_project:/verification/<project>:ro",
                 "verification_root:ro",
                 "tmpfs:/tmp:exec",
-                "tmpfs:/evidence:writable",
+                "evidence_dir:/evidence:rw",
             ],
             "prohibited_mounts_absent": [
                 "/var/run/docker.sock",
@@ -133,7 +136,12 @@ class ContainerizedVerifierRunner:
             ],
             "command": " ".join(shlex.quote(part) for part in argv[:38]) + " ...",
         }
-        return ContainerCommand(argv=argv, summary=summary)
+        return ContainerCommand(
+            argv=argv,
+            summary=summary,
+            evidence_dir=host_evidence_dir,
+            evidence_file=host_evidence_file,
+        )
 
     def run(self, command: ContainerCommand) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -143,3 +151,42 @@ class ContainerizedVerifierRunner:
             timeout=self.policy.timeout_seconds,
             check=False,
         )
+
+
+MAX_EVIDENCE_BYTES = 256_000
+
+
+def load_inner_evidence(
+    command: ContainerCommand,
+    *,
+    expected_project_name: str,
+    expected_manifest_digest: str,
+) -> dict[str, Any]:
+    evidence_dir = command.evidence_dir.resolve(strict=True)
+    evidence_file = command.evidence_file
+    if evidence_file.name != "verification-evidence.json":
+        raise ValueError("Unsupported evidence filename")
+    if evidence_file.parent.resolve(strict=True) != evidence_dir:
+        raise ValueError("Evidence path escapes evidence directory")
+    if evidence_file.is_symlink():
+        raise ValueError("Evidence file must not be a symlink")
+    if not evidence_file.exists():
+        raise ValueError("Inner evidence file was not exported")
+    if not evidence_file.is_file():
+        raise ValueError("Inner evidence path is not a regular file")
+    size = evidence_file.stat().st_size
+    if size > MAX_EVIDENCE_BYTES:
+        raise ValueError("Inner evidence exceeds maximum size")
+    try:
+        data = json.loads(evidence_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Malformed inner evidence: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("Inner evidence must be an object")
+    if data.get("schema_version") != 1:
+        raise ValueError("Unsupported inner evidence schema_version")
+    if data.get("project_name") != expected_project_name:
+        raise ValueError("Inner evidence project_name mismatch")
+    if data.get("initial_inventory_digest") != expected_manifest_digest:
+        raise ValueError("Inner evidence manifest digest mismatch")
+    return data

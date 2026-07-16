@@ -188,10 +188,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker pull python:3.11-slim
-          docker run --name slugger-mvp-verifier-build python:3.11-slim python -m pip install 'pytest>=8,<10'
-          docker commit slugger-mvp-verifier-build slugger-mvp-verifier:python3.11-pytest
-          docker rm slugger-mvp-verifier-build
+          docker build -f docker/mvp-verifier.Dockerfile -t slugger-mvp-verifier:python3.11-pytest .
       - name: Download generated project artifact
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
         with:
