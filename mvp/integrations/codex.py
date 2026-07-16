@@ -8,9 +8,17 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import stat
 import subprocess
 from typing import Any
 
+from mvp.inventory_manifest import (
+    ManifestError,
+    load_manifest,
+    manifest_entries_digest,
+    verify_manifest,
+)
 from mvp.models import GeneratedProjectInventory, MvpProjectRequest
 from mvp.workspace import MvpWorkspace, WorkspaceManager
 
@@ -59,6 +67,8 @@ class MvpCodexGenerationResult:
     prompt_version: str
     prompt_hash: str
     commands: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
+    external_generation_id: str | None = None
+    artifact_manifest_digest: str | None = None
 
 
 class MvpCodexAdapter:
@@ -231,6 +241,112 @@ def _result_after_generation(
         prompt_hash=prompt_hash,
         commands=commands,
     )
+
+
+class ArtifactMvpCodexAdapter(MvpCodexAdapter):
+    """Import a pre-approved manifested Codex artifact into a Slugger workspace."""
+
+    def __init__(
+        self,
+        workspace_manager: WorkspaceManager,
+        *,
+        artifact_dir: Path,
+        manifest_path: Path,
+        external_generation_id: str,
+        prompt_path: Path = PROMPT_PATH,
+    ) -> None:
+        self.workspace_manager = workspace_manager
+        self.artifact_dir = artifact_dir
+        self.manifest_path = manifest_path
+        self.external_generation_id = external_generation_id.strip()
+        self.prompt_path = prompt_path
+        if not self.external_generation_id:
+            raise MvpCodexGenerationError("external_generation_id is required")
+
+    def generate_project(
+        self,
+        request: MvpProjectRequest,
+        workspace: MvpWorkspace,
+    ) -> MvpCodexGenerationResult:
+        artifact_dir = self.artifact_dir.resolve(strict=True)
+        manifest_path = self.manifest_path.resolve(strict=True)
+        workspace_path = self.workspace_manager._workspace_path(workspace)
+        if not artifact_dir.is_dir():
+            raise MvpCodexGenerationError(
+                f"Artifact directory is not a directory: {artifact_dir}"
+            )
+        if not workspace_path.is_dir():
+            raise MvpCodexGenerationError(f"Workspace does not exist: {workspace_path}")
+        try:
+            manifest = load_manifest(manifest_path)
+            verify_manifest(artifact_dir, manifest_path)
+            self._reject_unmanifested_specials(artifact_dir, manifest)
+            self._copy_manifested_files(artifact_dir, workspace, manifest)
+            inventory = self.workspace_manager.inventory(workspace)
+            recomputed_entries = [
+                {
+                    "path": file.path,
+                    "sha256": file.sha256,
+                    "size_bytes": file.size_bytes,
+                    "file_type": "file",
+                    "executable": bool(
+                        (workspace_path / file.path).stat().st_mode & stat.S_IXUSR
+                    ),
+                }
+                for file in inventory.files
+            ]
+            supplied_digest = str(manifest["artifact_digest"])
+            recomputed_digest = manifest_entries_digest(recomputed_entries)
+            if recomputed_digest != supplied_digest:
+                raise MvpCodexGenerationError("Imported artifact digest mismatch")
+        except (ManifestError, OSError, ValueError) as exc:
+            raise MvpCodexGenerationError(f"Artifact import failed: {exc}") from exc
+        prompt = render_prompt(request, self.prompt_path)
+        return MvpCodexGenerationResult(
+            inventory=inventory,
+            codex_session_id=None,
+            slugger_correlation_id=workspace.run_id,
+            prompt_version=PROMPT_VERSION,
+            prompt_hash=_sha256_text(prompt),
+            commands=(),
+            external_generation_id=self.external_generation_id,
+            artifact_manifest_digest=supplied_digest,
+        )
+
+    def _copy_manifested_files(
+        self, artifact_dir: Path, workspace: MvpWorkspace, manifest: dict[str, Any]
+    ) -> None:
+        for entry in manifest["entries"]:
+            rel = str(entry["path"])
+            source = (artifact_dir / rel).resolve(strict=True)
+            try:
+                source.relative_to(artifact_dir)
+            except ValueError as exc:
+                raise MvpCodexGenerationError(
+                    f"Manifest path escapes artifact: {rel}"
+                ) from exc
+            if source.is_symlink() or not source.is_file():
+                raise MvpCodexGenerationError(
+                    f"Manifest path is not a regular file: {rel}"
+                )
+            target = self.workspace_manager.resolve_generated_path(workspace, rel)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
+    @staticmethod
+    def _reject_unmanifested_specials(
+        artifact_dir: Path, manifest: dict[str, Any]
+    ) -> None:
+        manifested = {str(entry["path"]) for entry in manifest["entries"]}
+        for path in sorted(artifact_dir.rglob("*")):
+            rel = path.relative_to(artifact_dir).as_posix()
+            st = path.lstat()
+            if path.is_dir():
+                continue
+            if rel not in manifested:
+                raise MvpCodexGenerationError(f"Unmanifested artifact path: {rel}")
+            if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+                raise MvpCodexGenerationError(f"Unsupported artifact file type: {rel}")
 
 
 def _minimal_environment(*, include_codex_api_key: bool = False) -> dict[str, str]:

@@ -171,6 +171,8 @@ class MvpRun:
     status: MvpRunStatus = MvpRunStatus.CREATED
     workspace_path: str | None = None
     codex_session_id: str | None = None
+    external_generation_id: str | None = None
+    artifact_manifest_digest: str | None = None
     slugger_correlation_id: str | None = None
     prompt_version: str | None = None
     prompt_hash: str | None = None

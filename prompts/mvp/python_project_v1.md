@@ -7,13 +7,18 @@ Requirements:
 - Create these files: `README.md`, `pyproject.toml`, `src/<package_name>/__init__.py`, `src/<package_name>/main.py`, and `tests/test_main.py`.
 - Include `pyproject.toml` with a conventional supported build backend such as `setuptools.build_meta`.
 - Keep runtime dependencies empty unless strictly necessary for the user's requested demo behavior.
-- Include pytest tests that run without network access.
+- Include at least three pytest tests that run without network access.
+- Include one pytest test that proves `python -m {package_name}.main greet Joseph` emits exactly `Hello, Joseph!`.
 - Declare pytest as an installable test dependency, preferably with `[project.optional-dependencies]` and `test = ["pytest>=8,<10"]`, so `pip install .[test]` makes `python -m pytest` available in a fresh virtual environment.
 - Include a package entry point that can be executed with `python -m <package_name>.main`.
 - Use `argparse` for the demo CLI.
 - Ensure `python -m <package_name>.main --help` exits with status zero.
 - Display conventional usage output for `--help`.
 - Include the project name in the help output.
+- Implement a `greet NAME` command using argparse that prints exactly `Hello, NAME!` followed by one newline.
+- Keep conventional `--help` behavior.
+- Use no runtime dependencies.
+- Do not use external services, network calls, Git operations, or files outside the assigned output directory.
 - For command-line ideas, implement only the smallest deterministic behavior necessary to satisfy the request.
 - Finish by ensuring the generated tests pass.
 

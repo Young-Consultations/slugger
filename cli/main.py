@@ -289,6 +289,10 @@ def main(argv: list[str] | None = None) -> int:
                     "workspace_root": runtime["workspace_root"],
                     "sqlite_path": runtime["sqlite_path"],
                     "generated_files": len(run.inventory.files) if run.inventory else 0,
+                    "generated_inventory_digest": run.inventory.inventory_hash
+                    if run.inventory
+                    else None,
+                    "artifact_manifest_digest": run.artifact_manifest_digest,
                     "validation_passed": bool(run.validation_results)
                     and all(check.passed for check in run.validation_results),
                     "test_passed": bool(run.test_results)
@@ -297,10 +301,15 @@ def main(argv: list[str] | None = None) -> int:
                         check.name == "cli_smoke" and check.passed
                         for check in run.test_results
                     ),
+                    "functional_passed": any(
+                        check.name == "functional_greet_joseph" and check.passed
+                        for check in run.test_results
+                    ),
                     "github_branch": run.github_publish_result.branch
                     if run.github_publish_result
                     else None,
                     "codex_session_id": run.codex_session_id,
+                    "external_generation_id": run.external_generation_id,
                     "slugger_correlation_id": run.slugger_correlation_id,
                     "prompt_version": run.prompt_version,
                     "prompt_hash": run.prompt_hash,
