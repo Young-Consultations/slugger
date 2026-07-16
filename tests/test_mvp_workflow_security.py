@@ -71,3 +71,13 @@ def test_slugger_artifact_adapter_and_exact_function_are_required() -> None:
     assert "python -m hello_codex.main greet Joseph" in text
     assert "Hello, Joseph!" in text
     assert "slugger-codex-certification-${{ github.run_id }}" in text
+
+
+def test_container_verifier_uses_imported_workspace_root() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    verify_step = text.split("- name: Verify generated project with restricted container", 1)[1]
+    verify_step = verify_step.split("- name: Produce sanitized certification evidence", 1)[0]
+
+    assert "json.load(open('slugger-build-summary.json'))['workspace_path']" in verify_step
+    assert "Path(json.load(open('slugger-build-summary.json'))['workspace_path']).parent" in verify_step
+    assert '--workspace-root "downloaded-artifact"' not in verify_step

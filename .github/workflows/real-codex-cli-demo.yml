@@ -218,7 +218,12 @@ jobs:
           print(json.load(open('slugger-build-summary.json'))['workspace_path'])
           PY
           )" \
-            --project-name hello-codex --workspace-root "downloaded-artifact"
+            --project-name hello-codex --workspace-root "$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(Path(json.load(open('slugger-build-summary.json'))['workspace_path']).parent)
+          PY
+          )"
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash
