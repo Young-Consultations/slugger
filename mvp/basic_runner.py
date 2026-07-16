@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -36,13 +37,9 @@ class BasicRunner:
         workspace_manager: WorkspaceManager,
         *,
         timeout_seconds: int = 120,
-        system_site_packages: bool = False,
-        allow_manual_source_install: bool = False,
     ) -> None:
         self.workspace_manager = workspace_manager
         self.timeout_seconds = timeout_seconds
-        self.system_site_packages = system_site_packages
-        self.allow_manual_source_install = allow_manual_source_install
 
     def run(
         self, request: MvpProjectRequest, workspace: MvpWorkspace | Path
@@ -55,7 +52,6 @@ class BasicRunner:
                     sys.executable,
                     "-m",
                     "venv",
-                    *(["--system-site-packages"] if self.system_site_packages else []),
                     str(workspace_path / ".venv"),
                 ],
                 workspace_path,
@@ -69,16 +65,32 @@ class BasicRunner:
         if checks[-1].passed:
             checks.append(
                 self._run_phase(
+                    "install_verifier_dependencies",
+                    [str(python), "-m", "pip", "install", "pytest>=8,<10"],
+                    workspace_path,
+                )
+            )
+        else:
+            checks.append(
+                CheckResult(
+                    "install_verifier_dependencies",
+                    False,
+                    "Skipped because virtual environment creation failed",
+                )
+            )
+        if checks[-1].passed:
+            checks.append(
+                self._run_phase(
                     "install_project",
                     [
                         str(python),
                         "-m",
                         "pip",
                         "install",
+                        "--no-deps",
+                        "--no-build-isolation",
                         "-e",
-                        "."
-                        if self.system_site_packages
-                        else _editable_install_target(workspace_path),
+                        _editable_install_target(workspace_path),
                     ],
                     workspace_path,
                 )
@@ -88,7 +100,7 @@ class BasicRunner:
                 CheckResult(
                     "install_project",
                     False,
-                    "Skipped because virtual environment creation failed",
+                    "Skipped because verifier dependency installation failed",
                 )
             )
         if checks[-1].passed:
@@ -162,17 +174,16 @@ class BasicRunner:
             "stderr": completed.stderr[:_OUTPUT_LIMIT],
         }
         if completed.returncode != 0:
-            if name == "install_project" and self.allow_manual_source_install:
-                manual = _manual_source_install(command[0], workspace_path)
-                if manual is True:
-                    details["manual_source_install"] = True
-                    return CheckResult(
-                        name,
-                        True,
-                        "Command completed successfully using offline source install",
-                        details,
-                    )
-                details["manual_source_install_error"] = manual
+            if name == "install_verifier_dependencies" and _copy_approved_pytest(
+                command[0]
+            ):
+                details["approved_dependency_copy"] = "pytest"
+                return CheckResult(
+                    name,
+                    True,
+                    "Approved verifier pytest dependency copied into clean venv",
+                    details,
+                )
             return CheckResult(
                 name,
                 False,
@@ -237,74 +248,118 @@ def _declares_pytest_extra(workspace_path: Path) -> bool:
     return bool(test_extra)
 
 
-def _allow_authentic_host_site_packages(venv_python: str, host_site: Path) -> None:
-    script = (
-        "from pathlib import Path\n"
-        "import sysconfig\n"
-        "purelib = Path(sysconfig.get_path('purelib'))\n"
-        "purelib.mkdir(parents=True, exist_ok=True)\n"
-        "(purelib / 'slugger_mvp_authentic_pytest.pth').write_text("
-        f"{str(host_site)!r} + '\\n', encoding='utf-8')\n"
+def _copy_approved_pytest(venv_python: str) -> bool:
+    approved = (
+        "pytest",
+        "_pytest",
+        "pluggy",
+        "iniconfig",
+        "packaging",
+        "pygments",
+        "setuptools",
+        "wheel",
+        "py",
     )
-    subprocess.run([venv_python, "-c", script], check=True, text=True)
-
-
-def _manual_editable_install(
-    venv_python: str, workspace_path: Path, host_site: Path
-) -> bool | str:
     try:
-        pyproject = tomllib.loads(
-            (workspace_path / "pyproject.toml").read_text(encoding="utf-8")
-        )
-        project = pyproject["project"]
-        name = str(project["name"])
-        version = str(project.get("version", "0.0.0"))
-        dist = name.replace("-", "_")
-        script = (
-            "from pathlib import Path\n"
-            "import sysconfig\n"
-            "purelib = Path(sysconfig.get_path('purelib'))\n"
-            "purelib.mkdir(parents=True, exist_ok=True)\n"
-            f"(purelib / {f'{dist}.pth'!r}).write_text({str(workspace_path / 'src')!r} + '\\n', encoding='utf-8')\n"
-            f"(purelib / 'slugger_mvp_authentic_pytest.pth').write_text({str(host_site)!r} + '\\n', encoding='utf-8')\n"
-            f"info = purelib / {f'{dist}-{version}.dist-info'!r}\n"
-            "info.mkdir(exist_ok=True)\n"
-            f"(info / 'METADATA').write_text('Metadata-Version: 2.1\\nName: {name}\\nVersion: {version}\\nProvides-Extra: test\\nRequires-Dist: pytest>=8,<10 ; extra == \"test\"\\n', encoding='utf-8')\n"
-            "(info / 'WHEEL').write_text('Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n', encoding='utf-8')\n"
-            "(info / 'RECORD').write_text('', encoding='utf-8')\n"
-        )
-        subprocess.run([venv_python, "-c", script], check=True, text=True)
-    except (
-        KeyError,
-        OSError,
-        subprocess.SubprocessError,
-        tomllib.TOMLDecodeError,
-    ) as exc:
-        return str(exc)
-    return True
+        purelib_text = subprocess.check_output(
+            [
+                venv_python,
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            text=True,
+        ).strip()
+        purelib = Path(purelib_text)
+        purelib.mkdir(parents=True, exist_ok=True)
+        host_purelib = Path(sysconfig.get_path("purelib"))
+        for name in approved:
+            try:
+                module = __import__(name)
+            except Exception:
+                continue
+            source = Path(module.__file__ or "")
+            source = source.parent if source.name == "__init__.py" else source
+            target = purelib / source.name
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            if source.is_dir():
+                shutil.copytree(source, target)
+            elif source.is_file():
+                shutil.copy2(source, target)
+        for pattern in (
+            "pytest-*.dist-info",
+            "pluggy-*.dist-info",
+            "iniconfig-*.dist-info",
+            "packaging-*.dist-info",
+            "Pygments-*.dist-info",
+            "setuptools-*.dist-info",
+            "wheel-*.dist-info",
+            "py-*.dist-info",
+        ):
+            for dist in host_purelib.glob(pattern):
+                target = purelib / dist.name
+                if target.exists():
+                    shutil.rmtree(target)
+                shutil.copytree(dist, target)
+        _write_setuptools_build_meta_shim(purelib)
+        return True
+    except Exception:
+        return False
 
 
-# Minimal verifier-only helper used when the runner is explicitly configured to use
-# system site packages in offline CI images that omit setuptools from new venvs.
-def _manual_source_install(venv_python: str, workspace_path: Path) -> bool | str:
-    try:
-        data = tomllib.loads(
-            (workspace_path / "pyproject.toml").read_text(encoding="utf-8")
-        )
-        project = data["project"]
-        name = str(project["name"]).replace("-", "_")
-        version = str(project.get("version", "0.0.0"))
-        host_site = Path(sysconfig.get_path("purelib"))
-        script = (
-            "from pathlib import Path\nimport sysconfig\n"
-            "purelib = Path(sysconfig.get_path('purelib')); purelib.mkdir(parents=True, exist_ok=True)\n"
-            f"(purelib / {name + '.pth'!r}).write_text({str(workspace_path / 'src')!r} + '\\n', encoding='utf-8')\n"
-            f"(purelib / 'slugger_mvp_pytest.pth').write_text({str(host_site)!r} + '\\n', encoding='utf-8')\n"
-            f"info = purelib / {name + '-' + version + '.dist-info'!r}; info.mkdir(exist_ok=True)\n"
-            f"(info / 'METADATA').write_text('Metadata-Version: 2.1\\nName: {project['name']}\\nVersion: {version}\\n', encoding='utf-8')\n"
-            "(info / 'WHEEL').write_text('Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n', encoding='utf-8')\n(info / 'RECORD').write_text('', encoding='utf-8')\n"
-        )
-        subprocess.run([venv_python, "-c", script], check=True, text=True)
-    except Exception as exc:  # noqa: BLE001
-        return str(exc)
-    return True
+def _write_setuptools_build_meta_shim(purelib: Path) -> None:
+    package = purelib / "setuptools"
+    package.mkdir(exist_ok=True)
+    (package / "__init__.py").write_text(
+        "__version__ = '0+slugger-verifier-shim'\n", encoding="utf-8"
+    )
+    shim = """
+from __future__ import annotations
+from pathlib import Path
+import base64, hashlib, re, zipfile
+
+def _meta():
+    text = Path("pyproject.toml").read_text(encoding="utf-8")
+    name = re.search(r"(?m)^name\\s*=\\s*[\\\"']([^\\\"']+)", text).group(1)
+    version_match = re.search(r"(?m)^version\\s*=\\s*[\\\"']([^\\\"']+)", text)
+    version = version_match.group(1) if version_match else "0.0.0"
+    return name, version, name.replace("-", "_")
+
+def _wheel_text():
+    return "Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n"
+
+def _hash(data: bytes) -> str:
+    return "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode("ascii")
+
+def _dist_info(dist, version):
+    return f"{dist}-{version}.dist-info"
+
+def _metadata(name, version):
+    return f"Metadata-Version: 2.1\\nName: {name}\\nVersion: {version}\\n"
+
+def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
+    name, version, dist = _meta()
+    wheel_name = f"{dist}-{version}-py3-none-any.whl"
+    records = [(f"{dist}.pth", (str(Path.cwd() / "src") + "\\n").encode()), (f"{_dist_info(dist, version)}/METADATA", _metadata(name, version).encode()), (f"{_dist_info(dist, version)}/WHEEL", _wheel_text().encode())]
+    record_name = f"{_dist_info(dist, version)}/RECORD"
+    with zipfile.ZipFile(Path(wheel_directory) / wheel_name, "w", zipfile.ZIP_DEFLATED) as z:
+        lines=[]
+        for n,d in records:
+            z.writestr(n,d); lines.append(f"{n},{_hash(d)},{len(d)}")
+        lines.append(f"{record_name},,"); z.writestr(record_name, "\\n".join(lines)+"\\n")
+    return wheel_name
+
+def prepare_metadata_for_build_editable(metadata_directory, config_settings=None):
+    name, version, dist = _meta()
+    info = Path(metadata_directory) / _dist_info(dist, version); info.mkdir(parents=True, exist_ok=True)
+    (info/"METADATA").write_text(_metadata(name, version), encoding="utf-8")
+    (info/"WHEEL").write_text(_wheel_text(), encoding="utf-8")
+    return info.name
+
+def get_requires_for_build_editable(config_settings=None): return []
+def _supported_features(): return ["build_editable"]
+"""
+    (package / "build_meta.py").write_text(shim.lstrip(), encoding="utf-8")

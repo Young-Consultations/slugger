@@ -144,3 +144,54 @@ def _validate_relative(path: str) -> None:
         or any(part in {"", ".", ".."} for part in p.parts)
     ):
         raise ManifestError(f"Unsafe manifest path: {path!r}")
+
+
+_RUNTIME_DIRS = {".venv", "__pycache__", ".pytest_cache", "build", "dist", "htmlcov"}
+_RUNTIME_SUFFIXES = {".pyc"}
+_RUNTIME_FILES = {".coverage"}
+_RUNTIME_SUFFIX_PATTERNS = (".egg-info",)
+
+
+def create_protected_manifest(root: Path) -> dict[str, Any]:
+    """Create a manifest for protected generated source/configuration files only."""
+    root = root.resolve(strict=True)
+    entries: list[ManifestEntry] = []
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        if _is_runtime_artifact(path.relative_to(root)):
+            continue
+        _validate_relative(rel)
+        st = path.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            raise ManifestError(f"Symlink is not allowed: {rel}")
+        if path.is_dir():
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            raise ManifestError(f"Unsupported file type: {rel}")
+        data = path.read_bytes()
+        entries.append(
+            ManifestEntry(
+                path=rel,
+                sha256=hashlib.sha256(data).hexdigest(),
+                size_bytes=len(data),
+                executable=bool(st.st_mode & stat.S_IXUSR),
+            )
+        )
+    if not entries:
+        raise ManifestError("Generated project is empty")
+    json_entries = [entry_to_json(e) for e in sorted(entries)]
+    return {
+        "manifest_version": MANIFEST_VERSION,
+        "entries": json_entries,
+        "artifact_digest": manifest_entries_digest(json_entries),
+    }
+
+
+def _is_runtime_artifact(relative: Path) -> bool:
+    parts = relative.parts
+    if any(
+        part in _RUNTIME_DIRS or part.endswith(_RUNTIME_SUFFIX_PATTERNS)
+        for part in parts
+    ):
+        return True
+    return relative.name in _RUNTIME_FILES or relative.suffix in _RUNTIME_SUFFIXES

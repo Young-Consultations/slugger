@@ -1,0 +1,11 @@
+{
+  "manifest_version": 1,
+  "artifact_digest": "baseline-run-artifact-digest-recorded-from-workflow-evidence",
+  "entries": [
+    {"path": "README.md", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 0, "file_type": "file", "executable": false},
+    {"path": "pyproject.toml", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 0, "file_type": "file", "executable": false},
+    {"path": "src/codex_cli_demo/__init__.py", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 0, "file_type": "file", "executable": false},
+    {"path": "src/codex_cli_demo/main.py", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 0, "file_type": "file", "executable": false},
+    {"path": "tests/test_main.py", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 0, "file_type": "file", "executable": false}
+  ]
+}

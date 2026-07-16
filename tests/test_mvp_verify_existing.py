@@ -13,7 +13,7 @@ def _project(tmp_path: Path, name="task-tracker"):
     FakeMvpCodexAdapter(manager).generate_project(req, ws)
     # convert fake custom backend to approved setuptools for strict verification
     (ws.path / "pyproject.toml").write_text(
-        f'''[build-system]\nrequires = []\nbuild-backend = "setuptools.build_meta"\n\n[project]\nname = "{name}"\nversion = "0.1.0"\nrequires-python = ">=3.11"\ndependencies = []\n\n[project.optional-dependencies]\ntest = ["pytest>=8,<10"]\n\n[tool.setuptools.packages.find]\nwhere = ["src"]\n''',
+        f'''[build-system]\nrequires = ["setuptools", "wheel"]\nbuild-backend = "setuptools.build_meta"\n\n[project]\nname = "{name}"\nversion = "0.1.0"\nrequires-python = ">=3.11"\ndependencies = []\n\n[project.optional-dependencies]\ntest = ["pytest>=8,<10"]\n\n[tool.setuptools.packages.find]\nwhere = ["src"]\n''',
         encoding="utf-8",
     )
     (ws.path / "slugger_mvp_backend.py").unlink(missing_ok=True)
@@ -185,7 +185,9 @@ def test_verify_existing_compares_exact_build_requirement_names(tmp_path: Path):
         txt = (
             (project / "pyproject.toml")
             .read_text(encoding="utf-8")
-            .replace("requires = []", f'requires = ["{requirement}"]')
+            .replace(
+                'requires = ["setuptools", "wheel"]', f'requires = ["{requirement}"]'
+            )
         )
         (project / "pyproject.toml").write_text(txt, encoding="utf-8")
 
@@ -204,3 +206,77 @@ def test_verify_existing_compares_exact_build_requirement_names(tmp_path: Path):
             )
             == 1
         )
+
+
+def test_verify_existing_detects_execution_copy_readme_mutation(tmp_path: Path):
+    project, root, name = _project(tmp_path / "mut-readme")
+    (project / "tests" / "test_main.py").write_text(
+        "from pathlib import Path\n\ndef test_mutate_readme():\n    Path('README.md').write_text('changed', encoding='utf-8')\n    assert True\n",
+        encoding="utf-8",
+    )
+    assert (
+        main(
+            [
+                "mvp",
+                "verify-existing",
+                "--project-dir",
+                str(project),
+                "--project-name",
+                name,
+                "--workspace-root",
+                str(root),
+            ]
+        )
+        == 1
+    )
+    evidence = __import__("json").loads(
+        (project / "verification-evidence.json").read_text(encoding="utf-8")
+    )
+    assert evidence["generated_source_changed"] is True
+    assert evidence["failure_phase"] == "mutation_check"
+
+
+def test_verify_existing_detects_execution_copy_package_source_mutation(tmp_path: Path):
+    project, root, name = _project(tmp_path / "mut-src")
+    pkg = package_name_for_project(name)
+    (project / "tests" / "test_main.py").write_text(
+        f"from pathlib import Path\n\ndef test_mutate_source():\n    Path('src/{pkg}/main.py').write_text('def main(): return 0\\n', encoding='utf-8')\n    assert True\n",
+        encoding="utf-8",
+    )
+    assert (
+        main(
+            [
+                "mvp",
+                "verify-existing",
+                "--project-dir",
+                str(project),
+                "--project-name",
+                name,
+                "--workspace-root",
+                str(root),
+            ]
+        )
+        == 1
+    )
+
+
+def test_verify_existing_ignores_runtime_cache_mutations(tmp_path: Path):
+    project, root, name = _project(tmp_path / "cache")
+    (project / "tests" / "test_main.py").write_text(
+        "def test_ok():\n    assert True\n", encoding="utf-8"
+    )
+    assert (
+        main(
+            [
+                "mvp",
+                "verify-existing",
+                "--project-dir",
+                str(project),
+                "--project-name",
+                name,
+                "--workspace-root",
+                str(root),
+            ]
+        )
+        == 0
+    )

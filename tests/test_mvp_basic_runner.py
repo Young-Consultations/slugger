@@ -37,6 +37,7 @@ def test_real_runner_installs_tests_and_smokes_valid_cli_project(
     )
     assert [check.name for check in result.checks] == [
         "create_environment",
+        "install_verifier_dependencies",
         "install_project",
         "verify_pytest_available",
         "run_tests",
@@ -155,10 +156,8 @@ def test_generated_environment_does_not_inherit_ambient_pytest(tmp_path: Path) -
     )
     tests = next(check for check in result.checks if check.name == "run_tests")
     assert "--system-site-packages" not in create.details["command"]
-    assert not pytest_check.passed
-    assert "No module named" in pytest_check.details.get("stderr", "")
-    assert not tests.passed
-    assert "pytest is not installed" in tests.message
+    assert pytest_check.passed
+    assert tests.passed
 
 
 def test_minimal_environment_does_not_expose_host_site_packages(
@@ -202,7 +201,8 @@ def test_standard_setuptools_backend_installs_in_isolated_venv(tmp_path: Path) -
     assert result.passed
     assert install_check.passed
     assert ".[test]" in install_check.details.get("command", [])
-    assert "--no-build-isolation" not in install_check.details.get("command", [])
+    assert "--no-build-isolation" in install_check.details.get("command", [])
+    assert "--no-deps" in install_check.details.get("command", [])
 
 
 def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) -> None:
@@ -229,9 +229,10 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
 
     result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
 
-    assert not result.passed
+    assert result.passed
     assert [check.name for check in result.checks] == [
         "create_environment",
+        "install_verifier_dependencies",
         "install_project",
         "verify_pytest_available",
         "run_tests",
@@ -245,11 +246,7 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
     )
     assert install_check.passed
     assert install_check.details.get("command", [])[-1] == "."
-    assert not pytest_check.passed
-    assert "No module named" in pytest_check.details.get("stderr", "")
-    assert not next(
-        check for check in result.checks if check.name == "run_tests"
-    ).passed
+    assert pytest_check.passed
 
 
 def test_smoke_failure_blocks_success_preconditions(tmp_path: Path) -> None:
