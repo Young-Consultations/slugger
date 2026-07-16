@@ -139,6 +139,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Approved verification workspace root (defaults to project parent)",
     )
+    mvp_verify.add_argument(
+        "--container",
+        action="store_true",
+        help="Run generated-code verification inside the restricted Docker verifier",
+    )
+    mvp_verify.add_argument(
+        "--no-container",
+        action="store_false",
+        dest="container",
+        help="Run verification directly in the current execution environment",
+    )
+    mvp_verify.set_defaults(container=False)
 
     # lineage — show artifact traceability (WP-020)
     lineage_parser = subparsers.add_parser(
@@ -200,9 +212,9 @@ def main(argv: list[str] | None = None) -> int:
         workspace_root = (
             args.workspace_root or args.project_dir.resolve(strict=False).parent
         )
-        result = ExistingProjectVerifier(workspace_root).verify_existing(
-            project_dir=args.project_dir, project_name=args.project_name
-        )
+        result = ExistingProjectVerifier(
+            workspace_root, use_container=args.container
+        ).verify_existing(project_dir=args.project_dir, project_name=args.project_name)
         print(
             json.dumps(
                 {

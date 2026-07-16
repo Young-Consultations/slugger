@@ -90,3 +90,50 @@ Established by code and tests:
 - Strict verification rejects custom PEP 517 build backends, in-tree backend paths, unsafe dependency references, nested `.git`, `.github`, generated symlinks, and package/runtime configuration files that could redirect execution.
 
 A real Codex service execution requires a valid `OPENAI_API_KEY` GitHub Actions secret and a manual workflow dispatch in GitHub Actions.
+
+## Baseline real-Codex run: 29460251536
+
+The manual workflow run `29460251536` for `.github/workflows/real-codex-cli-demo.yml` at commit `a1c14bff01a0e81c67ab5bd5fb613a1e6cec4918` is recorded as durable sanitized evidence under `docs/certification/runs/29460251536/`.
+
+That baseline run proved:
+
+- Real Codex invocation through the GitHub Actions workflow.
+- Generated project creation for `codex-cli-demo` / `codex_cli_demo`.
+- Generated artifact upload.
+- Deterministic manifest verification.
+- Normal editable package installation.
+- Three passing generated tests.
+- Successful CLI smoke execution.
+- Separate credential-free verification job.
+- Machine-readable verification evidence upload.
+
+That baseline run did **not** prove:
+
+- OS-level sandboxing.
+- Disabled outbound networking during generated-code execution.
+- Hermetic dependency installation.
+- Correct mutation detection against the actual execution copy.
+- Full production certification.
+
+Current classification for that baseline remains:
+
+- Functional MVP: Passed
+- Security Hardening: Partial
+- Production Certification: Not Yet Approved
+
+## Future certification record process
+
+After a successful manual workflow dispatch, download the `verification-evidence-*` and `generated-demo-*` artifacts, then create a sanitized durable record with:
+
+```bash
+python scripts/create_certification_record.py \
+  --run-id <workflow-run-id> \
+  --evidence <path-to-verification-evidence.json> \
+  --manifest <path-to-generated-project-manifest.json>
+```
+
+Review the generated files before committing. Do not commit API keys, GitHub tokens, authorization headers, raw process environments, unbounded logs, or the complete generated application unless repository policy explicitly changes.
+
+## Action pin update process
+
+All third-party actions in `.github/workflows/real-codex-cli-demo.yml` are pinned to immutable commit SHAs with release comments. To update an action, resolve the desired release tag to a commit SHA, review the upstream release notes and diff, update the `uses:` SHA plus the human-readable comment, run workflow tests and `actionlint`, and record the reviewed SHA in the next certification summary.

@@ -18,6 +18,7 @@ ALLOWED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".whl"}
 MAX_FILE_BYTES = 1_000_000
 _PACKAGE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _ALLOWED_BUILD_REQUIREMENTS = {"setuptools", "wheel"}
+_ALLOWED_TEST_REQUIREMENTS = {"pytest"}
 _REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
@@ -244,21 +245,39 @@ class ProjectValidator:
                 "packaging_policy", False, "Unexpected build requirement"
             )
         project = data.get("project", {})
-        deps = list(project.get("dependencies", []) or [])
+        if not isinstance(project, dict):
+            return CheckResult("packaging_policy", False, "Missing [project]")
+        dependencies = project.get("dependencies", [])
+        if dependencies != []:
+            return CheckResult(
+                "packaging_policy", False, "[project].dependencies must be empty"
+            )
         optional = project.get("optional-dependencies", {}) or {}
-        if isinstance(optional, dict):
-            for values in optional.values():
-                deps.extend(values or [])
-        unsafe_tokens = ("://", " git+", "git+", "file:", "../", "./")
-        for dep in deps:
-            if (
-                not isinstance(dep, str)
-                or any(tok in dep for tok in unsafe_tokens)
-                or " @ " in dep
-            ):
+        if not isinstance(optional, dict):
+            return CheckResult(
+                "packaging_policy", False, "optional-dependencies must be a table"
+            )
+        for extra, values in optional.items():
+            if extra != "test":
                 return CheckResult(
-                    "packaging_policy", False, f"Unsafe dependency reference: {dep}"
+                    "packaging_policy",
+                    False,
+                    f"Unexpected optional dependency group: {extra}",
                 )
+            if values != ["pytest>=8,<10"]:
+                return CheckResult(
+                    "packaging_policy",
+                    False,
+                    "test extra must be exactly pytest>=8,<10",
+                )
+            for dep in values:
+                dep_name = _normalized_requirement_name(dep)
+                if dep_name not in _ALLOWED_TEST_REQUIREMENTS or _is_unsafe_requirement(
+                    dep
+                ):
+                    return CheckResult(
+                        "packaging_policy", False, f"Unsafe dependency reference: {dep}"
+                    )
         return CheckResult("packaging_policy", True, "Packaging policy is satisfied")
 
     def _check_python_syntax(self, workspace_path: Path) -> CheckResult:
@@ -311,7 +330,14 @@ class ProjectValidator:
 
 
 def _normalized_requirement_name(requirement: str) -> str | None:
+    if _is_unsafe_requirement(requirement):
+        return None
     match = _REQUIREMENT_NAME_RE.match(requirement)
     if match is None:
         return None
     return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+
+def _is_unsafe_requirement(requirement: str) -> bool:
+    unsafe_tokens = ("://", " git+", "git+", "file:", "../", "./", " @ ")
+    return any(tok in requirement for tok in unsafe_tokens)

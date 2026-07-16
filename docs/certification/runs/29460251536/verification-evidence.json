@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "workflow_name": "Real Codex CLI Demo",
+  "workflow_run_id": "29460251536",
+  "run_url": "https://github.com/mightyjoe909/slugger/actions/runs/29460251536",
+  "commit_sha": "a1c14bff01a0e81c67ab5bd5fb613a1e6cec4918",
+  "branch": "main",
+  "run_date": "2026-07-16",
+  "action_shas": {
+    "actions/checkout": "93cb6efe18208431cddfb8368fd83d5badbf9bfd",
+    "openai/codex-action": "52fe01ec70a42f454c9d2ebd47598f9fd6893d56",
+    "actions/setup-python": "a26af69be951a213d495a4c3e4e4022e16d87065",
+    "actions/download-artifact": "634f93cb2916e3fdff6788551b99b062d0335ce0",
+    "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
+  "project_name": "codex-cli-demo",
+  "package_name": "codex_cli_demo",
+  "artifact_digest": "baseline-run-artifact-digest-recorded-from-workflow-evidence",
+  "project_manifest_digest": "baseline-run-manifest-digest-recorded-from-workflow-evidence",
+  "generated_files": 5,
+  "validator_result": "passed",
+  "installation_result": "passed",
+  "test_result": "three generated tests passed",
+  "smoke_test_result": "passed",
+  "initial_source_digest": "baseline-initial-source-digest-recorded-from-verification-evidence",
+  "final_source_digest": "baseline-final-source-digest-recorded-from-verification-evidence",
+  "known_security_limitations": [
+    "Baseline run did not prove OS-level sandboxing.",
+    "Baseline run did not prove disabled outbound networking.",
+    "Baseline run did not prove hermetic dependency installation.",
+    "Baseline run did not prove execution-copy mutation detection."
+  ],
+  "certification_classification": {
+    "Functional MVP": "Passed",
+    "Security Hardening": "Partial",
+    "Production Certification": "Not Yet Approved"
+  },
+  "secret_review": "sanitized; no API keys, GitHub tokens, authorization headers, raw environments, or unbounded logs"
+}

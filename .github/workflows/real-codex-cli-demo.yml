@@ -25,18 +25,22 @@ permissions:
   contents: read
 
 jobs:
-  generate-with-codex:
-    name: Generate with Codex
+  prepare-codex-input:
+    name: Prepare Codex input
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      project_name: ${{ steps.render.outputs.project_name }}
+      package_name: ${{ steps.render.outputs.package_name }}
     steps:
       - name: Check out Slugger
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
         with:
           persist-credentials: false
-      - name: Validate manual inputs
+      - name: Render deterministic Codex prompt
+        id: render
         shell: bash
         env:
           PROJECT_NAME: ${{ inputs.project_name }}
@@ -44,46 +48,105 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os, re, sys
-          name = os.environ["PROJECT_NAME"]
-          desc = os.environ["DEMO_DESCRIPTION"]
-          if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", name):
-              sys.exit("project_name must be lowercase kebab-case")
-          if len(desc) > 500 or any(ch in desc for ch in "\x00\r"):
-              sys.exit("demo_description is too long or unsafe")
+          import os
+          from pathlib import Path
+          from mvp.prompt_renderer import prompt_inputs, render_demo_prompt
+          inputs = prompt_inputs(os.environ["PROJECT_NAME"], os.environ["DEMO_DESCRIPTION"])
+          Path("rendered-codex-prompt.md").write_text(
+              render_demo_prompt(project_name=inputs.project_name, demo_description=inputs.demo_description),
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"project_name={inputs.project_name}\n")
+              handle.write(f"package_name={inputs.package_name}\n")
           PY
+      - name: Upload rendered prompt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
+        with:
+          name: rendered-codex-prompt-${{ github.run_id }}
+          path: rendered-codex-prompt.md
+          if-no-files-found: error
+          retention-days: 3
+
+  generate-with-codex:
+    name: Generate with Codex
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: prepare-codex-input
+    permissions:
+      contents: read
+    steps:
+      - name: Check out Slugger
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        with:
+          persist-credentials: false
+      - name: Download rendered prompt
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
+        with:
+          name: rendered-codex-prompt-${{ github.run_id }}
+          path: codex-input
       - name: Run Codex generation
         id: run_codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1 resolved from baseline run
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
-          prompt-file: prompts/mvp/github_actions_cli_demo_v1.md
+          prompt-file: codex-input/rendered-codex-prompt.md
           output-file: codex-final-message.txt
+      - name: Transfer raw Codex output
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
+        with:
+          name: raw-codex-output-${{ github.run_id }}
+          path: generated-demo/**
+          if-no-files-found: error
+          retention-days: 1
+
+  prepare-generated-artifact:
+    name: Prepare generated artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [prepare-codex-input, generate-with-codex]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out clean Slugger
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 resolved from baseline run
+        with:
+          python-version: "3.11"
+      - name: Download raw Codex output
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
+        with:
+          name: raw-codex-output-${{ github.run_id }}
+          path: generated-demo
       - name: Validate generated directory and write manifest
         shell: bash
         run: |
           set -euo pipefail
           test -d "generated-demo"
-          python - <<'PY'
-          from pathlib import Path
-          from mvp.inventory_manifest import write_manifest
-          write_manifest(Path("generated-demo"), Path("generated-project-manifest.json"))
-          PY
+          find generated-demo -path '*/.git/*' -o -path '*/.github/*' | (! grep .)
           python - <<'PY'
           import json
           from pathlib import Path
-          final = Path("codex-final-message.txt")
+          from mvp.inventory_manifest import write_manifest, create_manifest
+          manifest_path = Path("generated-project-manifest.json")
+          write_manifest(Path("generated-demo"), manifest_path)
+          manifest = create_manifest(Path("generated-demo"))
           summary = {
               "workflow_run_id": "${{ github.run_id }}",
-              "project_name": "${{ inputs.project_name }}",
+              "project_name": "${{ needs.prepare-codex-input.outputs.project_name }}",
+              "package_name": "${{ needs.prepare-codex-input.outputs.package_name }}",
               "generated_dir": "generated-demo",
-              "codex_summary_excerpt": final.read_text(encoding="utf-8")[:2000] if final.exists() else "",
+              "generated_files": len(manifest["entries"]),
+              "artifact_digest": manifest["artifact_digest"],
           }
-          Path("generation-summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          Path("generation-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
       - name: Upload generated project artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
           name: generated-demo-${{ github.run_id }}
           path: |
@@ -92,7 +155,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Upload generation summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
           name: generation-summary-${{ github.run_id }}
           path: generation-summary.json
@@ -103,16 +166,16 @@ jobs:
     name: Verify generated demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: generate-with-codex
+    needs: [prepare-codex-input, prepare-generated-artifact]
     permissions:
       contents: read
     steps:
       - name: Check out Slugger without credentials
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 resolved from baseline run
         with:
           python-version: "3.11"
       - name: Install Slugger verifier dependencies
@@ -120,9 +183,17 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
+          python -m pip install -e "[test]"
+      - name: Build offline verifier image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull python:3.11-slim
+          docker run --name slugger-mvp-verifier-build python:3.11-slim python -m pip install 'pytest>=8,<10'
+          docker commit slugger-mvp-verifier-build slugger-mvp-verifier:python3.11-pytest
+          docker rm slugger-mvp-verifier-build
       - name: Download generated project artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
         with:
           name: generated-demo-${{ github.run_id }}
           path: downloaded-artifact
@@ -135,16 +206,16 @@ jobs:
           from mvp.inventory_manifest import verify_manifest
           verify_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
           PY
-      - name: Verify generated project with Slugger
+      - name: Verify generated project with restricted container
         shell: bash
         env:
-          PROJECT_NAME: ${{ inputs.project_name }}
+          PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}
         run: |
           set -euo pipefail
-          python -m cli.main mvp verify-existing --project-dir "downloaded-artifact/generated-demo" --project-name "$PROJECT_NAME" --workspace-root "downloaded-artifact"
+          python -m cli.main mvp verify-existing --container --project-dir "downloaded-artifact/generated-demo" --project-name "$PROJECT_NAME" --workspace-root "downloaded-artifact"
       - name: Upload verification evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
           name: verification-evidence-${{ github.run_id }}
           path: downloaded-artifact/generated-demo/verification-evidence.json
