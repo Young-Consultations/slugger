@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -64,6 +65,7 @@ class ContainerizedVerifierRunner:
         container_workspace_root = Path("/verification")
         container_project_dir = container_workspace_root / approved_project.name
         host_evidence_dir = Path(tempfile.mkdtemp(prefix="slugger-container-evidence-"))
+        _prepare_evidence_dir(host_evidence_dir, self.policy.user)
         host_evidence_file = host_evidence_dir / "verification-evidence.json"
         container_evidence_file = Path("/evidence/verification-evidence.json")
         argv = (
@@ -92,7 +94,7 @@ class ContainerizedVerifierRunner:
             "--mount",
             f"type=bind,src={workspace_root},dst=/verification,ro",
             "--mount",
-            f"type=bind,src={host_evidence_dir},dst=/evidence,rw",
+            f"type=bind,src={host_evidence_dir},dst=/evidence",
             "--workdir",
             "/slugger",
             "--env",
@@ -190,3 +192,20 @@ def load_inner_evidence(
     if data.get("initial_inventory_digest") != expected_manifest_digest:
         raise ValueError("Inner evidence manifest digest mismatch")
     return data
+
+
+def _prepare_evidence_dir(path: Path, user: str) -> None:
+    """Allow the configured non-root verifier UID to write only its evidence dir."""
+
+    uid_text, _, gid_text = user.partition(":")
+    uid = int(uid_text)
+    gid = int(gid_text or uid_text)
+    try:
+        os.chown(path, uid, gid)
+        path.chmod(0o700)
+    except PermissionError:
+        # Non-root hosts cannot chown to the container UID. Keep this fallback
+        # narrowly scoped to the freshly-created evidence directory: UID 1000
+        # receives write access via the other permission bits, while the repo and
+        # verification workspace remain read-only bind mounts.
+        path.chmod(0o733)
