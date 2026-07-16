@@ -56,6 +56,9 @@ class ContainerizedVerifierRunner:
         repo_root = repo_root.resolve(strict=True)
         approved_project = approved_project.resolve(strict=True)
         workspace_root = workspace_root.resolve(strict=True)
+        container_workspace_root = Path("/verification")
+        container_project_dir = container_workspace_root / approved_project.name
+        container_evidence_file = Path("/evidence/verification-evidence.json")
         argv = (
             "docker",
             "run",
@@ -76,11 +79,13 @@ class ContainerizedVerifierRunner:
             "--user",
             self.policy.user,
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=128m",
+            "/tmp:rw,nosuid,nodev,size=256m",
+            "--tmpfs",
+            "/evidence:rw,nosuid,nodev,size=16m",
             "--mount",
             f"type=bind,src={repo_root},dst=/slugger,ro",
             "--mount",
-            f"type=bind,src={approved_project},dst=/approved-project,ro",
+            f"type=bind,src={approved_project},dst={container_project_dir},ro",
             "--mount",
             f"type=bind,src={workspace_root},dst=/verification,ro",
             "--workdir",
@@ -96,11 +101,13 @@ class ContainerizedVerifierRunner:
             "mvp",
             "verify-existing",
             "--project-dir",
-            "/approved-project",
+            str(container_project_dir),
             "--project-name",
             project_name,
             "--workspace-root",
-            "/verification",
+            str(container_workspace_root),
+            "--evidence-file",
+            str(container_evidence_file),
             "--no-container",
         )
         summary = {
@@ -113,9 +120,10 @@ class ContainerizedVerifierRunner:
             "resource_limits": self.policy.resource_limits(),
             "mounts": [
                 "repo:ro",
-                "approved_project:ro",
+                "approved_project:/verification/<project>:ro",
                 "verification_root:ro",
-                "tmpfs:/tmp",
+                "tmpfs:/tmp:exec",
+                "tmpfs:/evidence:writable",
             ],
             "prohibited_mounts_absent": [
                 "/var/run/docker.sock",

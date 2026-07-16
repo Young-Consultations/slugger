@@ -67,6 +67,7 @@ class ExistingProjectVerifier:
         *,
         timeout_seconds: int = 120,
         use_container: bool = False,
+        evidence_file: Path | None = None,
     ) -> None:
         self.workspace_manager = WorkspaceManager(workspace_root)
         self.validator = ProjectValidator(self.workspace_manager, strict_packaging=True)
@@ -75,14 +76,17 @@ class ExistingProjectVerifier:
             timeout_seconds=timeout_seconds,
         )
         self.use_container = use_container
+        self.evidence_file = evidence_file
 
     def verify_existing(
         self, *, project_dir: Path, project_name: str
     ) -> VerificationResult:
         started = datetime.now(UTC)
         evidence = (
-            project_dir if project_dir.exists() else self.workspace_manager.root
-        ) / "verification-evidence.json"
+            self.evidence_file
+            or (project_dir if project_dir.exists() else self.workspace_manager.root)
+            / "verification-evidence.json"
+        )
         validator_results: tuple[CheckResult, ...] = ()
         runner_checks: tuple[CheckResult, ...] = ()
         initial_digest = ""
@@ -231,6 +235,7 @@ def _write_evidence(result: VerificationResult) -> None:
         (c for c in data["validator_results"] if c["name"] == "packaging_policy"),
         None,
     )
+    result.evidence_file.parent.mkdir(parents=True, exist_ok=True)
     result.evidence_file.write_text(
         json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

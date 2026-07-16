@@ -150,6 +150,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="container",
         help="Run verification directly in the current execution environment",
     )
+    mvp_verify.add_argument(
+        "--evidence-file",
+        type=Path,
+        default=None,
+        help="Optional path for verification evidence output",
+    )
     mvp_verify.set_defaults(container=False)
 
     # lineage — show artifact traceability (WP-020)
@@ -213,7 +219,9 @@ def main(argv: list[str] | None = None) -> int:
             args.workspace_root or args.project_dir.resolve(strict=False).parent
         )
         result = ExistingProjectVerifier(
-            workspace_root, use_container=args.container
+            workspace_root,
+            use_container=args.container,
+            evidence_file=args.evidence_file,
         ).verify_existing(project_dir=args.project_dir, project_name=args.project_name)
         print(
             json.dumps(

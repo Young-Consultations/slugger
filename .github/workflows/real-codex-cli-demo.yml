@@ -183,7 +183,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e "[test]"
+          python -m pip install -e ".[test]"
       - name: Build offline verifier image
         shell: bash
         run: |
