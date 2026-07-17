@@ -20,6 +20,7 @@ def test_mvp_workflow_has_single_manual_trigger_and_real_codex_path() -> None:
         "generate-with-codex",
         "prepare-generated-artifact",
         "verify-generated-demo",
+        "publish-certification-diagnostics",
     ]
     generation_steps = jobs["generate-with-codex"]["steps"]
     assert any(
@@ -45,9 +46,12 @@ def test_mvp_success_artifact_keeps_generated_demo_manifest_clean() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
 
     assert "rm -f mvp-artifact/generated-demo/verification-evidence.json" in text
-    assert "cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json" in text
+    assert (
+        "cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json"
+        in text
+    )
     assert "verify_protected_manifest(" in text
-    assert "Path(\"mvp-artifact/generated-demo\")" in text
+    assert 'Path("mvp-artifact/generated-demo")' in text
 
 
 def test_mvp_release_documentation_names_supported_path_and_limitations() -> None:

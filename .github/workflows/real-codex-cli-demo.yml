@@ -79,8 +79,6 @@ jobs:
     needs: prepare-codex-input
     permissions:
       contents: read
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: Check out Slugger
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -93,6 +91,8 @@ jobs:
           path: codex-input
       - name: Validate required Codex secret
         shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${OPENAI_API_KEY:-}" ]; then
@@ -104,7 +104,7 @@ jobs:
         id: run_codex
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56
         with:
-          openai-api-key: ${{ env.OPENAI_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
           prompt-file: codex-input/rendered-codex-prompt.md
           output-file: codex-final-message.txt
@@ -309,12 +309,54 @@ jobs:
           path: mvp-artifact/**
           if-no-files-found: error
           retention-days: 14
+      - name: Upload verifier diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verifier-diagnostics-${{ github.run_id }}
+          path: |
+            slugger-build-summary.json
+            slugger-build-error.log
+            downloaded-artifact/generated-demo/verification-evidence.json
+            downloaded-artifact/generated-project-manifest.json
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
+
+  publish-certification-diagnostics:
+    name: Publish MVP certification diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+    needs:
+      - prepare-codex-input
+      - generate-with-codex
+      - prepare-generated-artifact
+      - verify-generated-demo
+    permissions:
+      contents: read
+    steps:
+      - name: Download generated artifact diagnostics
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: generated-demo-${{ github.run_id }}
+          path: certification-input/generated-artifact
+      - name: Download verifier diagnostics
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: verifier-diagnostics-${{ github.run_id }}
+          path: certification-input/verifier-diagnostics
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash
         env:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           REPOSITORY_COMMIT_SHA: ${{ github.sha }}
+          PREPARE_CODEX_INPUT_RESULT: ${{ needs.prepare-codex-input.result }}
+          GENERATE_WITH_CODEX_RESULT: ${{ needs.generate-with-codex.result }}
+          PREPARE_GENERATED_ARTIFACT_RESULT: ${{ needs.prepare-generated-artifact.result }}
+          VERIFY_GENERATED_DEMO_RESULT: ${{ needs.verify-generated-demo.result }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -323,19 +365,32 @@ jobs:
           from pathlib import Path
           cert = Path("certification")
           cert.mkdir(exist_ok=True)
-          build = Path("slugger-build-summary.json")
-          verification = Path("downloaded-artifact/generated-demo/verification-evidence.json")
-          manifest = Path("downloaded-artifact/generated-project-manifest.json")
-          result = "passed" if build.is_file() and verification.is_file() else "failed"
-          failed_phase = None if result == "passed" else "verification"
-          error_summary = ""
+          job_results = {
+              "prepare-codex-input": "${{ needs.prepare-codex-input.result }}",
+              "generate-with-codex": "${{ needs.generate-with-codex.result }}",
+              "prepare-generated-artifact": "${{ needs.prepare-generated-artifact.result }}",
+              "verify-generated-demo": "${{ needs.verify-generated-demo.result }}",
+          }
+          result = "passed" if all(value == "success" for value in job_results.values()) else "failed"
+          failed_phase = None
+          for name, value in job_results.items():
+              if value != "success":
+                  failed_phase = name
+                  break
+          error_summary = "" if result == "passed" else f"Job {failed_phase} concluded with {job_results[failed_phase]}"
           slugger_run_id = None
           manifest_digest = None
+          build = Path("certification-input/verifier-diagnostics/slugger-build-summary.json")
+          verification = Path("certification-input/verifier-diagnostics/verification-evidence.json")
+          manifest_candidates = [
+              Path("certification-input/verifier-diagnostics/generated-project-manifest.json"),
+              Path("certification-input/generated-artifact/generated-project-manifest.json"),
+          ]
           if build.is_file():
               try:
                   data = json.loads(build.read_text(encoding="utf-8"))
                   slugger_run_id = data.get("run_id")
-                  if data.get("status") not in {"ready_to_publish", "completed"}:
+                  if data.get("status") not in {"ready_to_publish", "completed"} and result == "passed":
                       result = "failed"
                       failed_phase = "slugger_build"
                       error_summary = str(data.get("error_details") or "Slugger build did not pass")[:500]
@@ -343,22 +398,25 @@ jobs:
                   result = "failed"
                   failed_phase = "slugger_build"
                   error_summary = f"Could not parse slugger build summary: {exc}"[:500]
-          if manifest.is_file():
-              try:
-                  manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
-              except Exception:
-                  manifest_digest = None
+          for manifest in manifest_candidates:
+              if manifest.is_file():
+                  try:
+                      manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
+                  except Exception:
+                      manifest_digest = None
+                  break
           summary = {
               "workflow_run_id": "${{ github.run_id }}",
               "repository_commit_sha": "${{ github.sha }}",
               "result": result,
               "failed_phase": failed_phase,
               "error_summary": error_summary,
+              "job_results": job_results,
               "slugger_run_id": slugger_run_id,
               "manifest_digest": manifest_digest,
           }
           (cert / "certification-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          for src in [build, verification, manifest]:
+          for src in [build, verification, *manifest_candidates]:
               if src.is_file():
                   shutil.copy2(src, cert / src.name)
           PY
