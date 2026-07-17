@@ -8,8 +8,9 @@ from pathlib import Path
 from cli import main as cli_main
 from mvp.basic_runner import BasicRunner
 from mvp.build_service import DefaultMvpBuildService
-from mvp.integrations.codex import FakeMvpCodexAdapter
+from mvp.integrations.codex import ArtifactMvpCodexAdapter, FakeMvpCodexAdapter
 from mvp.integrations.github import FakeMvpGitHubPublisher
+from mvp.inventory_manifest import write_protected_manifest
 from mvp.models import MvpProjectRequest, MvpRunStatus
 from mvp.project_validator import ProjectValidator
 from mvp.run_repository import SQLiteMvpRunRepository
@@ -265,3 +266,47 @@ def test_publish_completed_run_is_service_idempotent_after_restart(
     assert third.error_details is None
     assert third.github_publish_result == persisted
     assert publisher.publish_count == 1
+
+
+def test_artifact_adapter_build_persists_run_evidence(
+    monkeypatch, tmp_path: Path
+) -> None:
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    from tests.test_mvp_codex_adapter import _artifact_project
+
+    _artifact_project(artifact)
+    manifest = tmp_path / "manifest.json"
+    write_protected_manifest(artifact, manifest)
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    repo = SQLiteMvpRunRepository(tmp_path / "runs.sqlite3")
+    service = DefaultMvpBuildService(
+        run_repository=repo,
+        workspace_manager=workspace_manager,
+        codex_adapter=ArtifactMvpCodexAdapter(
+            workspace_manager,
+            artifact,
+            manifest,
+        ),
+        project_validator=ProjectValidator(workspace_manager),
+        basic_runner=BasicRunner(workspace_manager),
+        github_publisher=FakeMvpGitHubPublisher(),
+    )
+    monkeypatch.setenv("SLUGGER_MVP_SKIP_PUBLISH", "1")
+
+    run = service.build(
+        MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo")
+    ).run
+    reloaded = repo.require(run.run_id)
+
+    assert reloaded.run_id == run.run_id
+    assert reloaded.status is MvpRunStatus.READY_TO_PUBLISH
+    assert reloaded.external_generation_id is None
+    assert reloaded.codex_session_id is None
+    assert reloaded.artifact_manifest_digest is None
+    assert reloaded.inventory is not None
+    assert reloaded.validation_results
+    assert any(
+        c.name == "functional_greet_joseph" and c.passed for c in reloaded.test_results
+    )
+    assert reloaded.publication_skipped is True

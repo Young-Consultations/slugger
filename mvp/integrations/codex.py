@@ -59,6 +59,8 @@ class MvpCodexGenerationResult:
     prompt_version: str
     prompt_hash: str
     commands: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
+    external_generation_id: str | None = None
+    artifact_manifest_digest: str | None = None
 
 
 class MvpCodexAdapter:
@@ -185,6 +187,80 @@ class FakeMvpCodexAdapter(MvpCodexAdapter):
             codex_session_id=None,
             commands=(),
         )
+
+
+class ArtifactMvpCodexAdapter(MvpCodexAdapter):
+    """Import a pre-generated protected artifact through the Codex adapter contract."""
+
+    def __init__(
+        self,
+        workspace_manager: WorkspaceManager,
+        artifact_dir: Path,
+        manifest_path: Path,
+        *,
+        prompt_path: Path = PROMPT_PATH,
+    ) -> None:
+        self.workspace_manager = workspace_manager
+        self.artifact_dir = Path(artifact_dir)
+        self.manifest_path = Path(manifest_path)
+        self.prompt_path = prompt_path
+
+    def generate_project(
+        self,
+        request: MvpProjectRequest,
+        workspace: MvpWorkspace,
+    ) -> MvpCodexGenerationResult:
+        from mvp.inventory_manifest import (
+            ManifestError,
+            create_protected_manifest,
+            load_manifest,
+            verify_protected_manifest,
+        )
+
+        workspace_path = self.workspace_manager._workspace_path(workspace)
+        try:
+            supplied = load_manifest(self.manifest_path)
+            verify_protected_manifest(self.artifact_dir, self.manifest_path)
+            expected_paths = {entry["path"] for entry in supplied["entries"]}
+            protected = create_protected_manifest(self.artifact_dir)
+            protected_paths = {entry["path"] for entry in protected["entries"]}
+            if protected_paths != expected_paths:
+                raise MvpCodexGenerationError("Artifact manifest path mismatch")
+            if protected["artifact_digest"] != supplied.get("artifact_digest"):
+                raise MvpCodexGenerationError("Artifact manifest digest mismatch")
+            for entry in supplied["entries"]:
+                rel = entry["path"]
+                source = (self.artifact_dir / rel).resolve(strict=True)
+                if not source.is_relative_to(self.artifact_dir.resolve(strict=True)):
+                    raise MvpCodexGenerationError(f"Artifact path escapes root: {rel}")
+                target = self.workspace_manager.resolve_generated_path(workspace, rel)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read_bytes())
+                mode = 0o755 if entry.get("executable") else 0o644
+                target.chmod(mode)
+            workspace_manifest = create_protected_manifest(workspace_path)
+            if workspace_manifest["artifact_digest"] != supplied.get("artifact_digest"):
+                raise MvpCodexGenerationError("Imported artifact digest mismatch")
+            result = _result_after_generation(
+                request=request,
+                workspace=workspace,
+                workspace_manager=self.workspace_manager,
+                prompt_hash=_sha256_text(render_prompt(request, self.prompt_path)),
+                codex_session_id=None,
+                commands=(),
+            )
+            return result
+        except (OSError, ManifestError, MvpCodexGenerationError) as exc:
+            for child in workspace_path.iterdir():
+                if child.is_dir():
+                    import shutil
+
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            if isinstance(exc, MvpCodexGenerationError):
+                raise
+            raise MvpCodexGenerationError(f"Imported artifact rejected: {exc}") from exc
 
 
 def render_prompt(request: MvpProjectRequest, prompt_path: Path = PROMPT_PATH) -> str:

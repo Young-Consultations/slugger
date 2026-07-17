@@ -89,6 +89,8 @@ class DefaultMvpBuildService(MvpBuildService):
             assert generation is not None
             run.inventory = generation.inventory
             run.codex_session_id = generation.codex_session_id
+            run.external_generation_id = generation.external_generation_id
+            run.artifact_manifest_digest = generation.artifact_manifest_digest
             run.slugger_correlation_id = generation.slugger_correlation_id
             run.prompt_version = generation.prompt_version
             run.prompt_hash = generation.prompt_hash
@@ -228,7 +230,6 @@ class MvpBuildPhaseError(RuntimeError):
 def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     """Create production MVP dependencies without legacy workflow initialization."""
 
-    from mvp.integrations.codex import CodexCliMvpAdapter, FakeMvpCodexAdapter
     from mvp.integrations.github import GitHubCliMvpPublisher
 
     home = runtime_home()
@@ -239,23 +240,12 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     return DefaultMvpBuildService(
         run_repository=run_repository,
         workspace_manager=workspace_manager,
-        codex_adapter=(
-            FakeMvpCodexAdapter(workspace_manager)
-            if _use_fake_codex_adapter()
-            else CodexCliMvpAdapter(workspace_manager)
-        ),
+        codex_adapter=_production_codex_adapter(workspace_manager),
         project_validator=project_validator,
         basic_runner=basic_runner,
         github_publisher=GitHubCliMvpPublisher(workspace_manager),
         source_root=root_path.resolve(strict=False),
     )
-
-
-def _use_fake_codex_adapter() -> bool:
-    return os.environ.get("SLUGGER_MVP_CODEX_ADAPTER", "").lower() in {
-        "fake",
-        "offline",
-    }
 
 
 def _github_publish_disabled() -> bool:
@@ -312,3 +302,22 @@ def _changed_source_paths(
     return sorted(
         path for path in paths if before_files.get(path) != after_files.get(path)
     )
+
+
+def _production_codex_adapter(workspace_manager: WorkspaceManager) -> MvpCodexAdapter:
+    adapter = os.environ.get("SLUGGER_MVP_CODEX_ADAPTER", "").lower()
+    artifact_dir = os.environ.get("SLUGGER_MVP_ARTIFACT_DIR")
+    manifest_path = os.environ.get("SLUGGER_MVP_ARTIFACT_MANIFEST")
+    if artifact_dir and manifest_path:
+        from mvp.integrations.codex import ArtifactMvpCodexAdapter
+
+        return ArtifactMvpCodexAdapter(
+            workspace_manager, Path(artifact_dir), Path(manifest_path)
+        )
+    if adapter in {"fake", "offline"}:
+        from mvp.integrations.codex import FakeMvpCodexAdapter
+
+        return FakeMvpCodexAdapter(workspace_manager)
+    from mvp.integrations.codex import CodexCliMvpAdapter
+
+    return CodexCliMvpAdapter(workspace_manager)

@@ -7,6 +7,7 @@ from enum import StrEnum
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import stat
 from typing import Any
 
@@ -70,6 +71,14 @@ def write_manifest(root: Path, output: Path) -> None:
     )
 
 
+def write_protected_manifest(root: Path, output: Path) -> None:
+    """Write the canonical protected generated-project manifest."""
+    output.write_text(
+        json.dumps(create_protected_manifest(root), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def load_manifest(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -105,8 +114,19 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 
 def verify_manifest(root: Path, manifest_path: Path) -> dict[str, Any]:
+    return _verify_manifest_with_factory(root, manifest_path, create_manifest)
+
+
+def verify_protected_manifest(root: Path, manifest_path: Path) -> dict[str, Any]:
+    """Verify a manifest against the canonical protected-artifact contract."""
+    return _verify_manifest_with_factory(root, manifest_path, create_protected_manifest)
+
+
+def _verify_manifest_with_factory(
+    root: Path, manifest_path: Path, factory
+) -> dict[str, Any]:
     expected = load_manifest(manifest_path)
-    actual = create_manifest(root)
+    actual = factory(root)
     exp = {e["path"]: e for e in expected["entries"]}
     act = {e["path"]: e for e in actual["entries"]}
     missing = sorted(set(exp) - set(act))
@@ -195,3 +215,64 @@ def _is_runtime_artifact(relative: Path) -> bool:
     ):
         return True
     return relative.name in _RUNTIME_FILES or relative.suffix in _RUNTIME_SUFFIXES
+
+
+def sanitize_protected_artifact(raw_root: Path, sanitized_root: Path) -> dict[str, Any]:
+    """Copy only protected-manifest files from ``raw_root`` to ``sanitized_root``.
+
+    The raw tree is fully validated for prohibited paths, symlinks, and special
+    files. Known runtime/build artifacts are ignored by the protected manifest;
+    all protected files are copied with executable bits preserved.
+    """
+    raw = raw_root.resolve(strict=True)
+    destination = sanitized_root.resolve(strict=False)
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    _validate_tree_security(raw)
+    manifest = create_protected_manifest(raw)
+    for entry in manifest["entries"]:
+        rel = entry["path"]
+        _validate_relative(rel)
+        source = (raw / rel).resolve(strict=True)
+        if not source.is_relative_to(raw):
+            raise ManifestError(f"Protected source escapes root: {rel}")
+        st = source.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            raise ManifestError(f"Symlink is not allowed: {rel}")
+        if not stat.S_ISREG(st.st_mode):
+            raise ManifestError(f"Unsupported file type: {rel}")
+        target = (destination / rel).resolve(strict=False)
+        if not target.is_relative_to(destination):
+            raise ManifestError(f"Sanitized target escapes root: {rel}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target, follow_symlinks=False)
+        if entry.get("executable"):
+            target.chmod(target.stat().st_mode | stat.S_IXUSR)
+        else:
+            target.chmod(
+                target.stat().st_mode & ~stat.S_IXUSR & ~stat.S_IXGRP & ~stat.S_IXOTH
+            )
+    sanitized_manifest = create_protected_manifest(destination)
+    if sanitized_manifest["artifact_digest"] != manifest["artifact_digest"]:
+        raise ManifestError("Sanitized artifact digest mismatch")
+    return sanitized_manifest
+
+
+def _validate_tree_security(root: Path) -> None:
+    for path in sorted(root.rglob("*")):
+        rel_path = path.relative_to(root)
+        rel = rel_path.as_posix()
+        _validate_relative(rel)
+        if any(part in {".git", ".github"} for part in rel_path.parts):
+            raise ManifestError(f"Prohibited generated path: {rel}")
+        resolved = path.resolve(strict=False)
+        if not resolved.is_relative_to(root):
+            raise ManifestError(f"Generated path escapes root: {rel}")
+        st = path.lstat()
+        if stat.S_ISLNK(st.st_mode):
+            raise ManifestError(f"Symlink is not allowed: {rel}")
+        if path.is_dir():
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            raise ManifestError(f"Unsupported file type: {rel}")

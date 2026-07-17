@@ -1,16 +1,8 @@
-name: Real Codex CLI Demo
+name: Canonical Real Codex Slugger MVP Demo
 
 on:
   workflow_dispatch:
     inputs:
-      project_name:
-        description: Lowercase kebab-case demo project name
-        required: true
-        default: codex-cli-demo
-      demo_description:
-        description: Optional bounded CLI demo description
-        required: false
-        default: Small dependency-minimal Python CLI demo
       retain_diagnostics:
         description: Retain diagnostic artifacts for 14 days
         required: true
@@ -26,42 +18,53 @@ permissions:
 
 jobs:
   prepare-codex-input:
-    name: Prepare Codex input
+    name: Prepare deterministic Codex input
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     outputs:
-      project_name: ${{ steps.render.outputs.project_name }}
-      package_name: ${{ steps.render.outputs.package_name }}
+      project_name: hello-codex
+      package_name: hello_codex
     steps:
       - name: Check out Slugger
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
       - name: Render deterministic Codex prompt
-        id: render
         shell: bash
-        env:
-          PROJECT_NAME: ${{ inputs.project_name }}
-          DEMO_DESCRIPTION: ${{ inputs.demo_description }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import os
-          from pathlib import Path
-          from mvp.prompt_renderer import prompt_inputs, render_demo_prompt
-          inputs = prompt_inputs(os.environ["PROJECT_NAME"], os.environ["DEMO_DESCRIPTION"])
-          Path("rendered-codex-prompt.md").write_text(
-              render_demo_prompt(project_name=inputs.project_name, demo_description=inputs.demo_description),
-              encoding="utf-8",
-          )
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"project_name={inputs.project_name}\n")
-              handle.write(f"package_name={inputs.package_name}\n")
-          PY
+          cat > rendered-codex-prompt.md <<'EOF'
+          Generate a Python CLI project in ./generated-demo only.
+
+          Project name: hello-codex
+          Package name: hello_codex
+
+          Required command:
+          python -m hello_codex.main greet Joseph
+
+          Expected stdout exactly:
+          Hello, Joseph!
+
+          Requirements:
+          - Use argparse.
+          - Implement a greet NAME command.
+          - Print exactly Hello, NAME! followed by a newline.
+          - Preserve conventional --help behavior with usage output.
+          - Use a src layout with package files under src/hello_codex/.
+          - Create README.md, pyproject.toml, src/hello_codex/__init__.py, src/hello_codex/main.py, and tests/test_main.py.
+          - Use no runtime dependencies.
+          - Include at least three pytest tests.
+          - Include one test for the exact greet behavior.
+          - Do not use the network.
+          - Do not use external services.
+          - Do not run Git operations.
+          - Do not read or write files outside ./generated-demo.
+          - Do not modify Slugger source files.
+          EOF
       - name: Upload rendered prompt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: rendered-codex-prompt-${{ github.run_id }}
           path: rendered-codex-prompt.md
@@ -70,6 +73,7 @@ jobs:
 
   generate-with-codex:
     name: Generate with Codex
+    environment: codex-demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: prepare-codex-input
@@ -77,24 +81,24 @@ jobs:
       contents: read
     steps:
       - name: Check out Slugger
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
       - name: Download rendered prompt
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: rendered-codex-prompt-${{ github.run_id }}
           path: codex-input
       - name: Run Codex generation
         id: run_codex
-        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1 resolved from baseline run
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
           prompt-file: codex-input/rendered-codex-prompt.md
           output-file: codex-final-message.txt
       - name: Transfer raw Codex output
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: raw-codex-output-${{ github.run_id }}
           path: generated-demo/**
@@ -110,31 +114,34 @@ jobs:
       contents: read
     steps:
       - name: Check out clean Slugger
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 resolved from baseline run
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
       - name: Download raw Codex output
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: raw-codex-output-${{ github.run_id }}
-          path: generated-demo
+          path: raw-generated-demo
       - name: Validate generated directory and write manifest
         shell: bash
         run: |
           set -euo pipefail
-          test -d "generated-demo"
-          find generated-demo -path '*/.git/*' -o -path '*/.github/*' | (! grep .)
+          test -d "raw-generated-demo"
           python - <<'PY'
           import json
           from pathlib import Path
-          from mvp.inventory_manifest import write_manifest, create_manifest
+          from mvp.inventory_manifest import sanitize_protected_artifact, write_protected_manifest, create_protected_manifest, verify_protected_manifest
+          raw = Path("raw-generated-demo")
+          sanitized = Path("generated-demo")
           manifest_path = Path("generated-project-manifest.json")
-          write_manifest(Path("generated-demo"), manifest_path)
-          manifest = create_manifest(Path("generated-demo"))
+          manifest = sanitize_protected_artifact(raw, sanitized)
+          write_protected_manifest(sanitized, manifest_path)
+          verify_protected_manifest(sanitized, manifest_path)
+          manifest = create_protected_manifest(sanitized)
           summary = {
               "workflow_run_id": "${{ github.run_id }}",
               "project_name": "${{ needs.prepare-codex-input.outputs.project_name }}",
@@ -146,7 +153,7 @@ jobs:
           Path("generation-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
       - name: Upload generated project artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: generated-demo-${{ github.run_id }}
           path: |
@@ -154,16 +161,9 @@ jobs:
             generated-project-manifest.json
           if-no-files-found: error
           retention-days: 3
-      - name: Upload generation summary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
-        with:
-          name: generation-summary-${{ github.run_id }}
-          path: generation-summary.json
-          if-no-files-found: error
-          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
 
   verify-generated-demo:
-    name: Verify generated demo
+    name: Persist and verify generated demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [prepare-codex-input, prepare-generated-artifact]
@@ -171,11 +171,11 @@ jobs:
       contents: read
     steps:
       - name: Check out Slugger without credentials
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5 resolved from baseline run
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 resolved from baseline run
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
       - name: Install Slugger verifier dependencies
@@ -186,35 +186,113 @@ jobs:
           python -m pip install -e ".[test]"
       - name: Build offline verifier image
         shell: bash
-        run: |
-          set -euo pipefail
-          docker build -f docker/mvp-verifier.Dockerfile -t slugger-mvp-verifier:python3.11-pytest .
+        run: docker build -f docker/mvp-verifier.Dockerfile -t slugger-mvp-verifier:python3.11-pytest .
       - name: Download generated project artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5 resolved from baseline run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: generated-demo-${{ github.run_id }}
           path: downloaded-artifact
-      - name: Verify manifest before execution
+      - name: Run Slugger service with artifact adapter
         shell: bash
+        env:
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          SLUGGER_MVP_SKIP_PUBLISH: "1"
+          SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
+          SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
         run: |
           set -euo pipefail
+          python -m cli.main mvp build \
+            "Create a deterministic argparse CLI named hello-codex with greet NAME printing exactly Hello, NAME!." \
+            --name hello-codex \
+            --repo local/hello-codex \
+            --base main \
+            > slugger-build-summary.tmp.json \
+            2> slugger-build-error.log
+          python -m json.tool slugger-build-summary.tmp.json >/dev/null
+          mv slugger-build-summary.tmp.json slugger-build-summary.json
           python - <<'PY'
+          import json
           from pathlib import Path
-          from mvp.inventory_manifest import verify_manifest
-          verify_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
+          from mvp.inventory_manifest import verify_protected_manifest
+          data = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
+          assert data["status"] in {"ready_to_publish", "completed"}, data
+          assert data["publication_skipped"] is True, data
+          assert data["validation_passed"] is True, data
+          assert data["test_passed"] is True, data
+          assert data["smoke_passed"] is True, data
+          assert data["functional_passed"] is True, data
+          verify_protected_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
           PY
       - name: Verify generated project with restricted container
         shell: bash
         env:
-          PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}
+          PROJECT_NAME: hello-codex
         run: |
           set -euo pipefail
-          python -m cli.main mvp verify-existing --container --project-dir "downloaded-artifact/generated-demo" --project-name "$PROJECT_NAME" --workspace-root "downloaded-artifact"
-      - name: Upload verification evidence
+          # Verify the sanitized artifact downloaded from the prepare-generated-artifact job.
+          # The Slugger build workspace may contain post-build runtime files such as
+          # virtualenv symlinks, which are intentionally outside the protected manifest.
+          PROJECT_DIR="downloaded-artifact/generated-demo"
+          WORKSPACE_ROOT="downloaded-artifact"
+          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+      - name: Produce sanitized certification evidence
+        if: always()
+        shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          REPOSITORY_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+          cert = Path("certification")
+          cert.mkdir(exist_ok=True)
+          build = Path("slugger-build-summary.json")
+          verification = Path("downloaded-artifact/generated-demo/verification-evidence.json")
+          manifest = Path("downloaded-artifact/generated-project-manifest.json")
+          result = "passed" if build.is_file() and verification.is_file() else "failed"
+          failed_phase = None if result == "passed" else "verification"
+          error_summary = ""
+          slugger_run_id = None
+          manifest_digest = None
+          if build.is_file():
+              try:
+                  data = json.loads(build.read_text(encoding="utf-8"))
+                  slugger_run_id = data.get("run_id")
+                  if data.get("status") not in {"ready_to_publish", "completed"}:
+                      result = "failed"
+                      failed_phase = "slugger_build"
+                      error_summary = str(data.get("error_details") or "Slugger build did not pass")[:500]
+              except Exception as exc:
+                  result = "failed"
+                  failed_phase = "slugger_build"
+                  error_summary = f"Could not parse slugger build summary: {exc}"[:500]
+          if manifest.is_file():
+              try:
+                  manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
+              except Exception:
+                  manifest_digest = None
+          summary = {
+              "workflow_run_id": "${{ github.run_id }}",
+              "repository_commit_sha": "${{ github.sha }}",
+              "result": result,
+              "failed_phase": failed_phase,
+              "error_summary": error_summary,
+              "slugger_run_id": slugger_run_id,
+              "manifest_digest": manifest_digest,
+          }
+          (cert / "certification-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          for src in [build, verification, manifest]:
+              if src.is_file():
+                  shutil.copy2(src, cert / src.name)
+          PY
+      - name: Upload sanitized certification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
-          name: verification-evidence-${{ github.run_id }}
-          path: downloaded-artifact/generated-demo/verification-evidence.json
-          if-no-files-found: warn
+          name: slugger-codex-certification-${{ github.run_id }}
+          path: certification/**
+          if-no-files-found: error
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}

@@ -6,7 +6,7 @@ User idea → Slugger MVP CLI → isolated workspace → real Codex CLI → gene
 
 ## Prerequisites
 
-- Python 3.11 or newer, matching the repository's `requires-python` setting.
+- Python 3.11 or newer. Focused verifier tests are exercised on Python 3.11 locally and the offline verifier fallback is written to avoid version-specific setuptools internals so it remains compatible with newer supported interpreters such as Python 3.13.
 - Codex CLI installed and available on `PATH`.
 - Codex CLI already authenticated. In Codex cloud, where nested `codex` may not be installed, the demo script automatically uses Slugger's deterministic offline MVP adapter when `CODEX_CI=1` is present.
 - Slugger installed in editable mode:
@@ -91,3 +91,8 @@ Hello, Joseph!
 - Generated test failure: rerun the printed virtualenv command or `.../.venv/bin/python -m pytest -q` inside the workspace.
 - Publication intentionally skipped: this is expected when `SLUGGER_MVP_SKIP_PUBLISH=1`; no GitHub branch or pull request is created.
 - Inspect preserved workspace without rerunning Codex: use the `Generated workspace:` path printed by the script, or query the SQLite database under the printed temporary `SLUGGER_HOME` when using the raw CLI output.
+
+
+## Canonical GitHub certification workflow
+
+The real-Codex certification path is `.github/workflows/real-codex-cli-demo.yml`. Configure **Repository Settings → Environments → codex-demo → Required reviewer** and add `OPENAI_API_KEY` as an environment secret for that environment. The API key is intentionally referenced once and only by the protected generation job. The credential-free verification job imports the manifested artifact with `SLUGGER_MVP_CODEX_ADAPTER=artifact`, persists a Slugger `MvpRun`, skips publication with `SLUGGER_MVP_SKIP_PUBLISH=1`, performs the exact `python -m hello_codex.main greet Joseph` check, and uploads `slugger-codex-certification-<workflow-run-id>` for 14 days.
