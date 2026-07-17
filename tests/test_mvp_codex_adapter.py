@@ -17,10 +17,10 @@ from mvp.integrations.codex import (
     MvpCodexAdapter,
     MvpCodexGenerationError,
     PROMPT_VERSION,
+    _minimal_build_backend,
     package_name_for_project,
     render_prompt,
 )
-from mvp.inventory_manifest import write_manifest
 from mvp.models import MvpProjectRequest
 from mvp.inventory_manifest import sanitize_protected_artifact, write_protected_manifest
 from mvp.workspace import WorkspaceManager
@@ -359,7 +359,10 @@ def _write_hello_codex_artifact(root: Path) -> None:
         "[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='hello-codex'\nversion='0.1.0'\nrequires-python='>=3.11'\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
         encoding="utf-8",
     )
-    (root / "slugger_mvp_backend.py").write_text("# backend\n", encoding="utf-8")
+    (root / "slugger_mvp_backend.py").write_text(
+        _minimal_build_backend("hello-codex", include_pytest_extra=True),
+        encoding="utf-8",
+    )
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "main.py").write_text(
         "from __future__ import annotations\nimport argparse\ndef build_parser():\n    parser=argparse.ArgumentParser(prog='hello-codex')\n    subparsers=parser.add_subparsers(dest='command')\n    greet=subparsers.add_parser('greet')\n    greet.add_argument('name')\n    return parser\ndef main(argv=None):\n    args=build_parser().parse_args(argv)\n    if args.command == 'greet': print(f'Hello, {args.name}!')\n    return 0\n",
@@ -375,6 +378,35 @@ def _write_hello_codex_artifact(root: Path) -> None:
         d.mkdir(parents=True, exist_ok=True)
         (d / "runtime.txt").write_text("runtime", encoding="utf-8")
     (root / ".coverage").write_text("coverage", encoding="utf-8")
+
+
+def _artifact_project(root: Path, project_name: str = "hello-codex") -> None:
+    package_name = project_name.replace("-", "_")
+    package = root / "src" / package_name
+    package.mkdir(parents=True)
+    (root / "README.md").write_text(f"# {project_name}\n", encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        "[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='hello-codex'\nversion='0.1.0'\ndependencies=[]\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
+        encoding="utf-8",
+    )
+    (root / "slugger_mvp_backend.py").write_text(
+        _minimal_build_backend(project_name, include_pytest_extra=True),
+        encoding="utf-8",
+    )
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "main.py").write_text(
+        "from __future__ import annotations\nimport argparse\n"
+        "def build_parser():\n    p=argparse.ArgumentParser(prog='hello-codex'); s=p.add_subparsers(dest='command'); g=s.add_parser('greet'); g.add_argument('name'); return p\n"
+        "def main(argv=None):\n    a=build_parser().parse_args(argv)\n    if a.command == 'greet': print(f'Hello, {a.name}!')\n    return 0\n"
+        "if __name__ == '__main__': raise SystemExit(main())\n",
+        encoding="utf-8",
+    )
+    tests = root / "tests"
+    tests.mkdir()
+    (tests / "test_main.py").write_text(
+        "from hello_codex.main import main\n\ndef test_greet(capsys):\n    assert main(['greet','Joseph']) == 0\n    assert capsys.readouterr().out == 'Hello, Joseph!\\n'\ndef test_empty(): assert main([]) == 0\ndef test_import(): import hello_codex\n",
+        encoding="utf-8",
+    )
 
 
 def test_artifact_adapter_imports_sanitized_workflow_29529825540_shape(
