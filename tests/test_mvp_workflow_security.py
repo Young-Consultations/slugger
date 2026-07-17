@@ -21,7 +21,9 @@ def test_openai_key_only_in_codex_job() -> None:
     assert text.count("secrets.OPENAI_API_KEY") == 1
     data = _workflow()
     codex = data["jobs"]["generate-with-codex"]
+    assert codex["environment"] == "codex-demo"
     assert "secrets.OPENAI_API_KEY" in str(codex)
+    assert "python -m" not in str(codex)
     for name, job in data["jobs"].items():
         if name != "generate-with-codex":
             assert "secrets.OPENAI_API_KEY" not in str(job)
@@ -53,7 +55,9 @@ def test_evidence_uploads_always_and_jobs_have_timeouts() -> None:
     assert all("timeout-minutes" in job for job in data["jobs"].values())
     verify_steps = data["jobs"]["verify-generated-demo"]["steps"]
     upload = next(
-        step for step in verify_steps if step["name"] == "Upload verification evidence"
+        step
+        for step in verify_steps
+        if step["name"] == "Upload sanitized certification evidence"
     )
     certification = next(
         step
@@ -71,3 +75,16 @@ def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -
     assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' in text
     assert 'print(data["workspace_path"])' not in text
     assert 'print(Path(data["workspace_path"]).parent)' not in text
+
+
+def test_exactly_one_canonical_real_codex_workflow_exists() -> None:
+    workflows = sorted(Path(".github/workflows").glob("real-codex*.yml"))
+    assert workflows == [WORKFLOW]
+
+
+def test_slugger_artifact_adapter_and_exact_function_are_required() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "SLUGGER_MVP_CODEX_ADAPTER: artifact" in text
+    assert "python -m hello_codex.main greet Joseph" in text
+    assert "Hello, Joseph!" in text
+    assert "certification-evidence-${{ github.run_id }}" in text

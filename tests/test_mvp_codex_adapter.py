@@ -20,6 +20,7 @@ from mvp.integrations.codex import (
     package_name_for_project,
     render_prompt,
 )
+from mvp.inventory_manifest import write_manifest
 from mvp.models import MvpProjectRequest
 from mvp.inventory_manifest import sanitize_protected_artifact, write_protected_manifest
 from mvp.workspace import WorkspaceManager

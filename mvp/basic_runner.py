@@ -131,8 +131,8 @@ class BasicRunner:
                     "run_tests", False, "Skipped because pytest is not installed"
                 )
             )
+        package = package_name_for_project(request.project_name)
         if checks[-1].passed:
-            package = package_name_for_project(request.project_name)
             checks.append(
                 self._run_phase(
                     "cli_smoke",
@@ -145,6 +145,21 @@ class BasicRunner:
             checks.append(
                 CheckResult("cli_smoke", False, "Skipped because tests failed")
             )
+        if checks[-1].passed and request.project_name == "hello-codex":
+            checks.append(
+                self._run_phase(
+                    "functional_greet_joseph",
+                    [str(python), "-m", f"{package}.main", "greet", "Joseph"],
+                    workspace_path,
+                    exact_stdout="Hello, Joseph!\n",
+                )
+            )
+        elif request.project_name == "hello-codex":
+            checks.append(
+                CheckResult(
+                    "functional_greet_joseph", False, "Skipped because smoke failed"
+                )
+            )
         return BasicRunnerResult(tuple(checks))
 
     def _run_phase(
@@ -154,6 +169,7 @@ class BasicRunner:
         workspace_path: Path,
         *,
         require_stdout: tuple[str, ...] = (),
+        exact_stdout: str | None = None,
     ) -> CheckResult:
         try:
             completed = subprocess.run(
@@ -188,6 +204,14 @@ class BasicRunner:
                 name,
                 False,
                 f"Command exited with status {completed.returncode}",
+                details,
+            )
+        if exact_stdout is not None and completed.stdout != exact_stdout:
+            details["expected_stdout"] = exact_stdout
+            return CheckResult(
+                name,
+                False,
+                "Command succeeded but stdout did not exactly match expected output",
                 details,
             )
         missing_stdout = [
