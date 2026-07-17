@@ -72,9 +72,55 @@ def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'PROJECT_DIR="downloaded-artifact/generated-demo"' in text
     assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
+    assert "PROJECT_NAME: hello-codex" in text
+    assert '--project-name "$PROJECT_NAME"' in text
     assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' in text
     assert 'print(data["workspace_path"])' not in text
     assert 'print(Path(data["workspace_path"]).parent)' not in text
+
+
+def test_verify_job_runs_exactly_one_authoritative_slugger_build() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    data = _workflow()
+    verify_job = data["jobs"]["verify-generated-demo"]
+    assert str(verify_job).count("python -m cli.main mvp build") == 1
+    assert text.count("python -m cli.main mvp build") == 1
+    assert "${{ github.workspace }}/.slugger-demo" not in text
+    authoritative = next(
+        step
+        for step in verify_job["steps"]
+        if step["name"] == "Run Slugger service with artifact adapter"
+    )
+    assert authoritative["env"]["SLUGGER_HOME"] == "${{ runner.temp }}/slugger-home"
+    assert authoritative["env"]["SLUGGER_MVP_SKIP_PUBLISH"] == "1"
+    assert (
+        authoritative["env"]["SLUGGER_MVP_ARTIFACT_DIR"]
+        == "${{ github.workspace }}/downloaded-artifact/generated-demo"
+    )
+    assert (
+        authoritative["env"]["SLUGGER_MVP_ARTIFACT_MANIFEST"]
+        == "${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json"
+    )
+
+
+def test_build_summary_is_validated_atomically_without_tee() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "tee slugger-build-summary.json" not in text
+    assert "> slugger-build-summary.tmp.json" in text
+    assert "2> slugger-build-error.log" in text
+    assert "python -m json.tool slugger-build-summary.tmp.json >/dev/null" in text
+    assert "mv slugger-build-summary.tmp.json slugger-build-summary.json" in text
+
+
+def test_authoritative_build_result_is_fully_asserted() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'data["status"] in {"ready_to_publish", "completed"}' in text
+    assert 'data["publication_skipped"] is True' in text
+    assert 'data["validation_passed"] is True' in text
+    assert 'data["test_passed"] is True' in text
+    assert 'data["smoke_passed"] is True' in text
+    assert 'data["functional_passed"] is True' in text
+    assert "verify_protected_manifest" in text
 
 
 def test_exactly_one_canonical_real_codex_workflow_exists() -> None:

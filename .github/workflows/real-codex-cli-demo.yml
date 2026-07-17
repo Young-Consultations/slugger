@@ -203,29 +203,30 @@ jobs:
           set -euo pipefail
           python -m cli.main mvp build \
             "Create a deterministic argparse CLI named hello-codex with greet NAME printing exactly Hello, NAME!." \
-            --name hello-codex --repo local/hello-codex --base main > slugger-build-summary.json
+            --name hello-codex \
+            --repo local/hello-codex \
+            --base main \
+            > slugger-build-summary.tmp.json \
+            2> slugger-build-error.log
+          python -m json.tool slugger-build-summary.tmp.json >/dev/null
+          mv slugger-build-summary.tmp.json slugger-build-summary.json
           python - <<'PY'
           import json
           from pathlib import Path
           from mvp.inventory_manifest import verify_protected_manifest
-          data = json.loads(open('slugger-build-summary.json', encoding='utf-8').read())
-          assert data['status'] == 'ready_to_publish', data
-          assert data['publication_skipped'] is True, data
+          data = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
+          assert data["status"] in {"ready_to_publish", "completed"}, data
+          assert data["publication_skipped"] is True, data
+          assert data["validation_passed"] is True, data
+          assert data["test_passed"] is True, data
+          assert data["smoke_passed"] is True, data
+          assert data["functional_passed"] is True, data
           verify_protected_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
           PY
-      - name: Import artifact through Slugger and run MVP validation
-        shell: bash
-        env:
-          PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}
-          SLUGGER_HOME: ${{ github.workspace }}/.slugger-demo
-          SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
-          SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
-          SLUGGER_MVP_SKIP_PUBLISH: "1"
-        run: |
-          set -euo pipefail
-          python -m cli.main mvp build "Small dependency-minimal Python CLI demo" --name "$PROJECT_NAME" --template cli --repo "mightyjoe909/$PROJECT_NAME" | tee slugger-build-summary.json
       - name: Verify generated project with restricted container
         shell: bash
+        env:
+          PROJECT_NAME: hello-codex
         run: |
           set -euo pipefail
           # Verify the sanitized artifact downloaded from the prepare-generated-artifact job.
