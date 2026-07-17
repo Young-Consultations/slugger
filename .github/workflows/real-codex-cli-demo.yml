@@ -291,6 +291,12 @@ jobs:
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
           cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
           cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          rm -f mvp-artifact/generated-demo/verification-evidence.json
+          python - <<'PY'
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_protected_manifest
+          verify_protected_manifest(Path("mvp-artifact/generated-demo"), Path("mvp-artifact/generated-project-manifest.json"))
+          PY
           find mvp-artifact -name '.venv' -o -name '__pycache__' -o -name '.pytest_cache' | sort
       - name: Upload success artifact
         if: success()

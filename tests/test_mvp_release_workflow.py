@@ -41,6 +41,14 @@ def test_mvp_workflow_uploads_success_artifact_and_failure_diagnostics() -> None
     assert "Hello, Joseph!" in text
 
 
+def test_success_artifact_keeps_generated_demo_manifest_clean() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json" in text
+    assert "rm -f mvp-artifact/generated-demo/verification-evidence.json" in text
+    assert 'verify_protected_manifest(Path("mvp-artifact/generated-demo"), Path("mvp-artifact/generated-project-manifest.json"))' in text
+
+
 def test_mvp_release_documentation_names_supported_path_and_limitations() -> None:
     readme = README.read_text(encoding="utf-8")
     checklist = CHECKLIST.read_text(encoding="utf-8")
