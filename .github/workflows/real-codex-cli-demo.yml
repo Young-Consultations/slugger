@@ -223,20 +223,11 @@ jobs:
           PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}
         run: |
           set -euo pipefail
-          PROJECT_DIR=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          data = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
-          print(data["workspace_path"])
-          PY
-          )
-          WORKSPACE_ROOT=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          data = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
-          print(Path(data["workspace_path"]).parent)
-          PY
-          )
+          # Verify the sanitized artifact downloaded from the credential-free prepare job.
+          # The Slugger build workspace may contain post-build runtime files such as
+          # virtualenv symlinks, which are intentionally outside the protected manifest.
+          PROJECT_DIR="downloaded-artifact/generated-demo"
+          WORKSPACE_ROOT="downloaded-artifact"
           python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT"
       - name: Produce sanitized certification evidence
         if: always()

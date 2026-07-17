@@ -64,8 +64,9 @@ def test_evidence_uploads_always_and_jobs_have_timeouts() -> None:
     assert certification["if"] == "always()"
 
 
-def test_restricted_verification_uses_imported_workspace_parent_root() -> None:
+def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert 'print(data["workspace_path"])' in text
-    assert 'print(Path(data["workspace_path"]).parent)' in text
-    assert '--workspace-root "downloaded-artifact"' not in text
+    assert 'PROJECT_DIR="downloaded-artifact/generated-demo"' in text
+    assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
+    assert 'print(data["workspace_path"])' not in text
+    assert 'print(Path(data["workspace_path"]).parent)' not in text
