@@ -125,27 +125,32 @@ jobs:
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: raw-codex-output-${{ github.run_id }}
-          path: generated-demo
+          path: raw-generated-demo
       - name: Validate generated directory and write manifest
         shell: bash
         run: |
           set -euo pipefail
-          test -d generated-demo
-          find generated-demo -path '*/.git/*' -o -path '*/.github/*' | (! grep .)
+          test -d "raw-generated-demo"
           python - <<'PY'
           import json
           from pathlib import Path
-          from mvp.inventory_manifest import create_manifest, write_manifest
-          manifest_path = Path('generated-project-manifest.json')
-          write_manifest(Path('generated-demo'), manifest_path)
-          manifest = create_manifest(Path('generated-demo'))
-          Path('generation-summary.json').write_text(json.dumps({
-              'workflow_run_id': '${{ github.run_id }}',
-              'project_name': 'hello-codex',
-              'package_name': 'hello_codex',
-              'artifact_digest': manifest['artifact_digest'],
-              'generated_files': len(manifest['entries']),
-          }, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          from mvp.inventory_manifest import sanitize_protected_artifact, write_protected_manifest, create_protected_manifest, verify_protected_manifest
+          raw = Path("raw-generated-demo")
+          sanitized = Path("generated-demo")
+          manifest_path = Path("generated-project-manifest.json")
+          manifest = sanitize_protected_artifact(raw, sanitized)
+          write_protected_manifest(sanitized, manifest_path)
+          verify_protected_manifest(sanitized, manifest_path)
+          manifest = create_protected_manifest(sanitized)
+          summary = {
+              "workflow_run_id": "${{ github.run_id }}",
+              "project_name": "${{ needs.prepare-codex-input.outputs.project_name }}",
+              "package_name": "${{ needs.prepare-codex-input.outputs.package_name }}",
+              "generated_dir": "generated-demo",
+              "generated_files": len(manifest["entries"]),
+              "artifact_digest": manifest["artifact_digest"],
+          }
+          Path("generation-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
       - name: Upload generated project artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -192,82 +197,101 @@ jobs:
         env:
           SLUGGER_HOME: ${{ runner.temp }}/slugger-home
           SLUGGER_MVP_SKIP_PUBLISH: "1"
-          SLUGGER_MVP_CODEX_ADAPTER: artifact
-          SLUGGER_MVP_CODEX_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
-          SLUGGER_MVP_CODEX_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
-          SLUGGER_MVP_EXTERNAL_GENERATION_ID: ${{ github.run_id }}
+          SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
+          SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
         run: |
           set -euo pipefail
           python -m cli.main mvp build \
             "Create a deterministic argparse CLI named hello-codex with greet NAME printing exactly Hello, NAME!." \
             --name hello-codex --repo local/hello-codex --base main > slugger-build-summary.json
           python - <<'PY'
-          import json, os
+          import json
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_protected_manifest
           data = json.loads(open('slugger-build-summary.json', encoding='utf-8').read())
           assert data['status'] == 'ready_to_publish', data
           assert data['publication_skipped'] is True, data
-          assert data['external_generation_id'] == os.environ['SLUGGER_MVP_EXTERNAL_GENERATION_ID'], data
+          verify_protected_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
           PY
+      - name: Import artifact through Slugger and run MVP validation
+        shell: bash
+        env:
+          PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}
+          SLUGGER_HOME: ${{ github.workspace }}/.slugger-demo
+          SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
+          SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
+          SLUGGER_MVP_SKIP_PUBLISH: "1"
+        run: |
+          set -euo pipefail
+          python -m cli.main mvp build "Small dependency-minimal Python CLI demo" --name "$PROJECT_NAME" --template cli --repo "mightyjoe909/$PROJECT_NAME" | tee slugger-build-summary.json
       - name: Verify generated project with restricted container
         shell: bash
         run: |
           set -euo pipefail
-          python -m cli.main mvp verify-existing --container \
-            --project-dir "$(python - <<'PY'
-          import json
-          print(json.load(open('slugger-build-summary.json'))['workspace_path'])
-          PY
-          )" \
-            --project-name hello-codex --workspace-root "$(python - <<'PY'
-          import json
-          from pathlib import Path
-          print(Path(json.load(open('slugger-build-summary.json'))['workspace_path']).parent)
-          PY
-          )"
+          # Verify the sanitized artifact downloaded from the prepare-generated-artifact job.
+          # The Slugger build workspace may contain post-build runtime files such as
+          # virtualenv symlinks, which are intentionally outside the protected manifest.
+          PROJECT_DIR="downloaded-artifact/generated-demo"
+          WORKSPACE_ROOT="downloaded-artifact"
+          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash
+        env:
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          REPOSITORY_COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          mkdir -p certification
-          cp downloaded-artifact/generated-project-manifest.json certification/generated-project-manifest.json
-          cp "$(python - <<'PY'
-          import json
-          print(json.load(open('slugger-build-summary.json'))['workspace_path'] + '/verification-evidence.json')
-          PY
-          )" certification/verification-evidence.json
           python - <<'PY'
-          import json, subprocess
+          import json
+          import shutil
           from pathlib import Path
-          build = json.loads(Path('slugger-build-summary.json').read_text(encoding='utf-8'))
-          manifest = json.loads(Path('certification/generated-project-manifest.json').read_text(encoding='utf-8'))
-          evidence = json.loads(Path('certification/verification-evidence.json').read_text(encoding='utf-8'))
+          cert = Path("certification")
+          cert.mkdir(exist_ok=True)
+          build = Path("slugger-build-summary.json")
+          verification = Path("downloaded-artifact/generated-demo/verification-evidence.json")
+          manifest = Path("downloaded-artifact/generated-project-manifest.json")
+          result = "passed" if build.is_file() and verification.is_file() else "failed"
+          failed_phase = None if result == "passed" else "verification"
+          error_summary = ""
+          slugger_run_id = None
+          manifest_digest = None
+          if build.is_file():
+              try:
+                  data = json.loads(build.read_text(encoding="utf-8"))
+                  slugger_run_id = data.get("run_id")
+                  if data.get("status") not in {"ready_to_publish", "completed"}:
+                      result = "failed"
+                      failed_phase = "slugger_build"
+                      error_summary = str(data.get("error_details") or "Slugger build did not pass")[:500]
+              except Exception as exc:
+                  result = "failed"
+                  failed_phase = "slugger_build"
+                  error_summary = f"Could not parse slugger build summary: {exc}"[:500]
+          if manifest.is_file():
+              try:
+                  manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
+              except Exception:
+                  manifest_digest = None
           summary = {
-              'repository_commit_sha': '${{ github.sha }}',
-              'workflow_run_id': '${{ github.run_id }}',
-              'slugger_run_id': build.get('run_id'),
-              'project_name': 'hello-codex',
-              'package_name': 'hello_codex',
-              'manifest_digest': manifest.get('artifact_digest'),
-              'generated_inventory_digest': build.get('generated_inventory_digest'),
-              'final_status': build.get('status'),
-              'exact_functional_output': 'Hello, Joseph!',
-              'validation_status': 'passed' if build.get('validation_passed') else 'failed',
-              'test_status': 'passed' if build.get('test_passed') else 'failed',
-              'smoke_status': 'passed' if build.get('smoke_passed') else 'failed',
-              'functional_status': 'passed' if build.get('functional_passed') else 'failed',
-              'container_isolation_summary': evidence.get('container_summary'),
-              'generated_source_mutation_status': evidence.get('mutation_check_result'),
-              'publication_skipped': build.get('publication_skipped'),
-              'source_integrity_result': build.get('source_integrity_result'),
+              "workflow_run_id": "${{ github.run_id }}",
+              "repository_commit_sha": "${{ github.sha }}",
+              "result": result,
+              "failed_phase": failed_phase,
+              "error_summary": error_summary,
+              "slugger_run_id": slugger_run_id,
+              "manifest_digest": manifest_digest,
           }
-          Path('certification/certification-summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (cert / "certification-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          for src in [build, verification, manifest]:
+              if src.is_file():
+                  shutil.copy2(src, cert / src.name)
           PY
       - name: Upload sanitized certification evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
           name: slugger-codex-certification-${{ github.run_id }}
-          path: certification/*
+          path: certification/**
           if-no-files-found: error
-          retention-days: 14
+          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}

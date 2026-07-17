@@ -42,7 +42,10 @@ def test_manifest_and_container_verification_are_in_fresh_jobs() -> None:
     assert "prepare-generated-artifact" in data["jobs"]
     assert "verify-generated-demo" in data["jobs"]
     assert "write_manifest" not in str(data["jobs"]["generate-with-codex"])
-    assert "write_manifest" in str(data["jobs"]["prepare-generated-artifact"])
+    assert "write_protected_manifest" in str(data["jobs"]["prepare-generated-artifact"])
+    assert "sanitize_protected_artifact" in str(
+        data["jobs"]["prepare-generated-artifact"]
+    )
     assert "--container" in str(data["jobs"]["verify-generated-demo"])
     assert data["jobs"]["verify-generated-demo"]["permissions"] == {"contents": "read"}
 
@@ -56,8 +59,22 @@ def test_evidence_uploads_always_and_jobs_have_timeouts() -> None:
         for step in verify_steps
         if step["name"] == "Upload sanitized certification evidence"
     )
+    certification = next(
+        step
+        for step in verify_steps
+        if step["name"] == "Produce sanitized certification evidence"
+    )
     assert upload["if"] == "always()"
-    assert upload["with"]["retention-days"] == 14
+    assert certification["if"] == "always()"
+
+
+def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'PROJECT_DIR="downloaded-artifact/generated-demo"' in text
+    assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
+    assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' in text
+    assert 'print(data["workspace_path"])' not in text
+    assert 'print(Path(data["workspace_path"]).parent)' not in text
 
 
 def test_exactly_one_canonical_real_codex_workflow_exists() -> None:
@@ -67,17 +84,8 @@ def test_exactly_one_canonical_real_codex_workflow_exists() -> None:
 
 def test_slugger_artifact_adapter_and_exact_function_are_required() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "SLUGGER_MVP_CODEX_ADAPTER: artifact" in text
+    assert "SLUGGER_MVP_ARTIFACT_DIR" in text
+    assert "SLUGGER_MVP_ARTIFACT_MANIFEST" in text
     assert "python -m hello_codex.main greet Joseph" in text
     assert "Hello, Joseph!" in text
     assert "slugger-codex-certification-${{ github.run_id }}" in text
-
-
-def test_container_verifier_uses_imported_workspace_root() -> None:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    verify_step = text.split("- name: Verify generated project with restricted container", 1)[1]
-    verify_step = verify_step.split("- name: Produce sanitized certification evidence", 1)[0]
-
-    assert "json.load(open('slugger-build-summary.json'))['workspace_path']" in verify_step
-    assert "Path(json.load(open('slugger-build-summary.json'))['workspace_path']).parent" in verify_step
-    assert '--workspace-root "downloaded-artifact"' not in verify_step

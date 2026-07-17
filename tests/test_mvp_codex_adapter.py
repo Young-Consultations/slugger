@@ -17,11 +17,12 @@ from mvp.integrations.codex import (
     MvpCodexAdapter,
     MvpCodexGenerationError,
     PROMPT_VERSION,
+    _minimal_build_backend,
     package_name_for_project,
     render_prompt,
 )
-from mvp.inventory_manifest import write_manifest
 from mvp.models import MvpProjectRequest
+from mvp.inventory_manifest import sanitize_protected_artifact, write_protected_manifest
 from mvp.workspace import WorkspaceManager
 
 
@@ -349,13 +350,47 @@ def test_production_adapter_fails_when_codex_generates_no_inventory(
         CodexCliMvpAdapter(manager).generate_project(_request(), workspace)
 
 
+def _write_hello_codex_artifact(root: Path) -> None:
+    package = root / "src" / "hello_codex"
+    (package / "__pycache__").mkdir(parents=True)
+    (root / "tests").mkdir()
+    (root / "README.md").write_text("# hello-codex\n", encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        "[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='hello-codex'\nversion='0.1.0'\nrequires-python='>=3.11'\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
+        encoding="utf-8",
+    )
+    (root / "slugger_mvp_backend.py").write_text(
+        _minimal_build_backend("hello-codex", include_pytest_extra=True),
+        encoding="utf-8",
+    )
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "main.py").write_text(
+        "from __future__ import annotations\nimport argparse\ndef build_parser():\n    parser=argparse.ArgumentParser(prog='hello-codex')\n    subparsers=parser.add_subparsers(dest='command')\n    greet=subparsers.add_parser('greet')\n    greet.add_argument('name')\n    return parser\ndef main(argv=None):\n    args=build_parser().parse_args(argv)\n    if args.command == 'greet': print(f'Hello, {args.name}!')\n    return 0\n",
+        encoding="utf-8",
+    )
+    (root / "tests" / "test_main.py").write_text(
+        "def test_ok(): assert True\n", encoding="utf-8"
+    )
+    (package / "__pycache__" / "main.cpython-312.pyc").write_bytes(b"pyc")
+    (package / "__pycache__" / "__init__.cpython-312.pyc").write_bytes(b"pyc")
+    for dirname in [".pytest_cache", "src/hello_codex.egg-info", "build", "dist"]:
+        d = root / dirname
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "runtime.txt").write_text("runtime", encoding="utf-8")
+    (root / ".coverage").write_text("coverage", encoding="utf-8")
+
+
 def _artifact_project(root: Path, project_name: str = "hello-codex") -> None:
     package_name = project_name.replace("-", "_")
     package = root / "src" / package_name
     package.mkdir(parents=True)
     (root / "README.md").write_text(f"# {project_name}\n", encoding="utf-8")
     (root / "pyproject.toml").write_text(
-        "[build-system]\nrequires=[]\nbuild-backend='setuptools.build_meta'\n\n[project]\nname='hello-codex'\nversion='0.1.0'\ndependencies=[]\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
+        f"[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='{project_name}'\nversion='0.1.0'\ndependencies=[]\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
+        encoding="utf-8",
+    )
+    (root / "slugger_mvp_backend.py").write_text(
+        _minimal_build_backend(project_name, include_pytest_extra=True),
         encoding="utf-8",
     )
     (package / "__init__.py").write_text("", encoding="utf-8")
@@ -374,133 +409,82 @@ def _artifact_project(root: Path, project_name: str = "hello-codex") -> None:
     )
 
 
-def test_artifact_adapter_imports_manifested_project(tmp_path: Path) -> None:
-    artifact = tmp_path / "artifact"
-    artifact.mkdir()
-    _artifact_project(artifact)
-    manifest = tmp_path / "manifest.json"
-    write_manifest(artifact, manifest)
-    manager = WorkspaceManager(tmp_path / "workspaces")
-    workspace = manager.create_workspace("run-artifact")
+def test_artifact_adapter_imports_sanitized_workflow_29529825540_shape(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    _write_hello_codex_artifact(raw)
+    sanitized = tmp_path / "sanitized"
+    manifest = tmp_path / "generated-project-manifest.json"
+    sanitize_protected_artifact(raw, sanitized)
+    write_protected_manifest(sanitized, manifest)
 
-    result = ArtifactMvpCodexAdapter(
-        manager,
-        artifact_dir=artifact,
-        manifest_path=manifest,
-        external_generation_id="workflow-123",
-    ).generate_project(
-        MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo"),
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("imported")
+    result = ArtifactMvpCodexAdapter(manager, sanitized, manifest).generate_project(
+        MvpProjectRequest(
+            idea="Small dependency-minimal Python CLI demo",
+            project_name="hello-codex",
+            template="cli",
+            github_repository="example/hello-codex",
+        ),
         workspace,
     )
 
-    assert result.codex_session_id is None
-    assert result.external_generation_id == "workflow-123"
-    assert result.artifact_manifest_digest
-    assert (workspace.path / "src" / "hello_codex" / "main.py").is_file()
+    assert result.inventory.inventory_hash
+    assert not any("__pycache__" in p.as_posix() for p in workspace.path.rglob("*"))
+    assert not (workspace.path / ".coverage").exists()
 
 
-@pytest.mark.parametrize(
-    ("mutate", "message"),
-    [
-        (
-            lambda artifact: (artifact / "README.md").write_text(
-                "changed", encoding="utf-8"
-            ),
-            "Manifest mismatch",
-        ),
-        (lambda artifact: (artifact / "README.md").unlink(), "Manifest mismatch"),
-        (
-            lambda artifact: (artifact / "extra.txt").write_text("x", encoding="utf-8"),
-            "Manifest mismatch",
-        ),
-    ],
-)
-def test_artifact_adapter_fails_closed_for_manifest_mismatches(
-    tmp_path: Path, mutate, message: str
+def test_artifact_adapter_fails_closed_on_unknown_extra_source_and_cleans_workspace(
+    tmp_path: Path,
 ) -> None:
-    artifact = tmp_path / "artifact"
-    artifact.mkdir()
-    _artifact_project(artifact)
-    manifest = tmp_path / "manifest.json"
-    write_manifest(artifact, manifest)
-    mutate(artifact)
-    manager = WorkspaceManager(tmp_path / "workspaces")
-    workspace = manager.create_workspace("run-artifact")
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    _write_hello_codex_artifact(raw)
+    sanitized = tmp_path / "sanitized"
+    sanitize_protected_artifact(raw, sanitized)
+    manifest = tmp_path / "generated-project-manifest.json"
+    write_protected_manifest(sanitized, manifest)
+    (sanitized / "unexpected.bin").write_bytes(b"bad")
 
-    with pytest.raises(MvpCodexGenerationError, match=message):
-        ArtifactMvpCodexAdapter(
-            manager,
-            artifact_dir=artifact,
-            manifest_path=manifest,
-            external_generation_id="workflow-123",
-        ).generate_project(
-            MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo"),
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("bad-import")
+    with pytest.raises(MvpCodexGenerationError):
+        ArtifactMvpCodexAdapter(manager, sanitized, manifest).generate_project(
+            MvpProjectRequest(
+                idea="Small dependency-minimal Python CLI demo",
+                project_name="hello-codex",
+                template="cli",
+                github_repository="example/hello-codex",
+            ),
             workspace,
         )
     assert list(workspace.path.rglob("*")) == []
 
 
-def test_artifact_adapter_rejects_traversal_symlink_and_special_file(
-    tmp_path: Path,
-) -> None:
-    artifact = tmp_path / "artifact"
-    artifact.mkdir()
-    _artifact_project(artifact)
-    manifest = tmp_path / "manifest.json"
-    write_manifest(artifact, manifest)
+def test_artifact_adapter_rejects_manifest_tampering(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    _write_hello_codex_artifact(raw)
+    sanitized = tmp_path / "sanitized"
+    sanitize_protected_artifact(raw, sanitized)
+    manifest = tmp_path / "generated-project-manifest.json"
+    write_protected_manifest(sanitized, manifest)
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    data["entries"][0]["path"] = "../escape"
+    data["entries"][0]["sha256"] = "0" * 64
     manifest.write_text(json.dumps(data), encoding="utf-8")
+
     manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("tampered")
     with pytest.raises(MvpCodexGenerationError):
-        ArtifactMvpCodexAdapter(
-            manager,
-            artifact_dir=artifact,
-            manifest_path=manifest,
-            external_generation_id="workflow-123",
-        ).generate_project(
-            MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo"),
-            manager.create_workspace("run-traversal"),
-        )
-
-    artifact = tmp_path / "artifact-symlink"
-    artifact.mkdir()
-    _artifact_project(artifact)
-    manifest = tmp_path / "manifest-symlink.json"
-    write_manifest(artifact, manifest)
-    (artifact / "README.md").unlink()
-    (artifact / "README.md").symlink_to(artifact / "pyproject.toml")
-    with pytest.raises(MvpCodexGenerationError):
-        ArtifactMvpCodexAdapter(
-            manager,
-            artifact_dir=artifact,
-            manifest_path=manifest,
-            external_generation_id="workflow-123",
-        ).generate_project(
-            MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo"),
-            manager.create_workspace("run-symlink"),
-        )
-
-
-def test_artifact_adapter_rejects_unsupported_file_type(tmp_path: Path) -> None:
-    artifact = tmp_path / "artifact-fifo"
-    artifact.mkdir()
-    _artifact_project(artifact)
-    manifest = tmp_path / "manifest-fifo.json"
-    write_manifest(artifact, manifest)
-    fifo = artifact / "README.md"
-    fifo.unlink()
-    if not hasattr(os, "mkfifo"):
-        pytest.skip("mkfifo is unavailable on this platform")
-    os.mkfifo(fifo)
-    manager = WorkspaceManager(tmp_path / "workspaces")
-    with pytest.raises(MvpCodexGenerationError):
-        ArtifactMvpCodexAdapter(
-            manager,
-            artifact_dir=artifact,
-            manifest_path=manifest,
-            external_generation_id="workflow-123",
-        ).generate_project(
-            MvpProjectRequest("Create hello", "hello-codex", "cli", "owner/repo"),
-            manager.create_workspace("run-fifo"),
+        ArtifactMvpCodexAdapter(manager, sanitized, manifest).generate_project(
+            MvpProjectRequest(
+                idea="Small dependency-minimal Python CLI demo",
+                project_name="hello-codex",
+                template="cli",
+                github_repository="example/hello-codex",
+            ),
+            workspace,
         )

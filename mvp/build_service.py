@@ -248,36 +248,6 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     )
 
 
-def _production_codex_adapter(workspace_manager: WorkspaceManager) -> MvpCodexAdapter:
-    from mvp.integrations.codex import (
-        ArtifactMvpCodexAdapter,
-        CodexCliMvpAdapter,
-        FakeMvpCodexAdapter,
-    )
-
-    adapter = os.environ.get("SLUGGER_MVP_CODEX_ADAPTER", "").lower()
-    if adapter in {"fake", "offline"}:
-        return FakeMvpCodexAdapter(workspace_manager)
-    if adapter == "artifact":
-        artifact_dir = _required_path_env("SLUGGER_MVP_CODEX_ARTIFACT_DIR")
-        manifest = _required_path_env("SLUGGER_MVP_CODEX_MANIFEST")
-        external_id = os.environ.get("SLUGGER_MVP_EXTERNAL_GENERATION_ID", "").strip()
-        return ArtifactMvpCodexAdapter(
-            workspace_manager,
-            artifact_dir=artifact_dir,
-            manifest_path=manifest,
-            external_generation_id=external_id,
-        )
-    return CodexCliMvpAdapter(workspace_manager)
-
-
-def _required_path_env(name: str) -> Path:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        raise MvpBuildPhaseError(f"{name} is required for artifact Codex adapter")
-    return Path(value).resolve(strict=False)
-
-
 def _github_publish_disabled() -> bool:
     import os
 
@@ -332,3 +302,22 @@ def _changed_source_paths(
     return sorted(
         path for path in paths if before_files.get(path) != after_files.get(path)
     )
+
+
+def _production_codex_adapter(workspace_manager: WorkspaceManager) -> MvpCodexAdapter:
+    adapter = os.environ.get("SLUGGER_MVP_CODEX_ADAPTER", "").lower()
+    artifact_dir = os.environ.get("SLUGGER_MVP_ARTIFACT_DIR")
+    manifest_path = os.environ.get("SLUGGER_MVP_ARTIFACT_MANIFEST")
+    if artifact_dir and manifest_path:
+        from mvp.integrations.codex import ArtifactMvpCodexAdapter
+
+        return ArtifactMvpCodexAdapter(
+            workspace_manager, Path(artifact_dir), Path(manifest_path)
+        )
+    if adapter in {"fake", "offline"}:
+        from mvp.integrations.codex import FakeMvpCodexAdapter
+
+        return FakeMvpCodexAdapter(workspace_manager)
+    from mvp.integrations.codex import CodexCliMvpAdapter
+
+    return CodexCliMvpAdapter(workspace_manager)
