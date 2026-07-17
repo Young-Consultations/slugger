@@ -228,7 +228,7 @@ jobs:
           # virtualenv symlinks, which are intentionally outside the protected manifest.
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
-          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT"
+          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash

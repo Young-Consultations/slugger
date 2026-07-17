@@ -68,5 +68,6 @@ def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -
     text = WORKFLOW.read_text(encoding="utf-8")
     assert 'PROJECT_DIR="downloaded-artifact/generated-demo"' in text
     assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
+    assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' in text
     assert 'print(data["workspace_path"])' not in text
     assert 'print(Path(data["workspace_path"]).parent)' not in text
