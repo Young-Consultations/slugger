@@ -135,6 +135,12 @@ The long-term vision remains an AI Software Factory capable of producing complet
 
 ⸻
 
+
+## Consulting Operating System
+
+Reusable software delivery assessment, reporting, roadmap, and consulting templates are available in [`consulting/`](consulting/README.md).
+
+⸻
 ## Continuous Integration
 
 GitHub Actions runs the project's CI workflow on pushes to `main` and on pull requests.
