@@ -286,6 +286,7 @@ jobs:
           set -euo pipefail
           mkdir -p mvp-artifact
           cp -R downloaded-artifact/generated-demo mvp-artifact/generated-demo
+          rm -f mvp-artifact/generated-demo/verification-evidence.json
           cp downloaded-artifact/generated-project-manifest.json mvp-artifact/generated-project-manifest.json
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
