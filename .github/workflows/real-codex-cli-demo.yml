@@ -72,13 +72,15 @@ jobs:
           retention-days: 3
 
   generate-with-codex:
-    name: Generate with Codex
+    name: Generate CLI demo with real Codex
     environment: codex-demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: prepare-codex-input
     permissions:
       contents: read
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: Check out Slugger
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -89,11 +91,20 @@ jobs:
         with:
           name: rendered-codex-prompt-${{ github.run_id }}
           path: codex-input
+      - name: Validate required Codex secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY is not configured on the protected codex-demo environment." >&2
+            exit 1
+          fi
+          echo "Codex environment secret is configured."
       - name: Run Codex generation
         id: run_codex
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openai-api-key: ${{ env.OPENAI_API_KEY }}
           permission-profile: ":workspace"
           prompt-file: codex-input/rendered-codex-prompt.md
           output-file: codex-final-message.txt
@@ -106,7 +117,7 @@ jobs:
           retention-days: 1
 
   prepare-generated-artifact:
-    name: Prepare generated artifact
+    name: Package generated CLI demo
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [prepare-codex-input, generate-with-codex]
@@ -152,6 +163,35 @@ jobs:
           }
           Path("generation-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
+      - name: Write artifact run instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > MVP_ARTIFACT_README.md <<'EOF'
+          # Slugger MVP CLI Demo Artifact
+
+          This artifact contains the generated `hello-codex` Python CLI demo and sanitized validation metadata.
+
+          ## Run locally
+
+          ```bash
+          cd generated-demo
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pytest -q
+          python -m hello_codex.main greet Joseph
+          ```
+
+          Expected output:
+
+          ```text
+          Hello, Joseph!
+          ```
+
+          Do not add secrets to this directory. Virtual environments and caches are intentionally excluded from the protected manifest.
+          EOF
       - name: Upload generated project artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -159,11 +199,13 @@ jobs:
           path: |
             generated-demo/**
             generated-project-manifest.json
+            generation-summary.json
+            MVP_ARTIFACT_README.md
           if-no-files-found: error
           retention-days: 3
 
   verify-generated-demo:
-    name: Persist and verify generated demo
+    name: Validate generated CLI demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [prepare-codex-input, prepare-generated-artifact]
@@ -178,6 +220,8 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
       - name: Install Slugger verifier dependencies
         shell: bash
         run: |
@@ -235,6 +279,27 @@ jobs:
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
           python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+      - name: Assemble success artifact
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mvp-artifact
+          cp -R downloaded-artifact/generated-demo mvp-artifact/generated-demo
+          cp downloaded-artifact/generated-project-manifest.json mvp-artifact/generated-project-manifest.json
+          cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
+          cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
+          cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
+          cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          find mvp-artifact -name '.venv' -o -name '__pycache__' -o -name '.pytest_cache' | sort
+      - name: Upload success artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: slugger-mvp-cli-demo-${{ github.run_id }}
+          path: mvp-artifact/**
+          if-no-files-found: error
+          retention-days: 14
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash

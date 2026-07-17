@@ -161,27 +161,101 @@ This project is licensed under the MIT License.
 
 The MVP path resolves runtime state through `mvp.runtime_paths` instead of writing beside package files. Set `SLUGGER_HOME` to choose an explicit runtime home; otherwise Slugger uses the current platform's user-data directory and falls back to `~/.slugger` for development-only environments. The layout is `workspaces/`, `state/mvp_runs.sqlite3`, and `logs/`. MVP CLI diagnostics print the resolved workspace root and SQLite path.
 
-## Real Codex CLI demo workflow
+## Real Codex GitHub Actions MVP release path
 
-The repository includes a manually triggered workflow, `.github/workflows/real-codex-cli-demo.yml`, that demonstrates a real `openai/codex-action@v1` generation followed by a separate credential-free verification job. The generated demo is a Python CLI application only; the workflow does not publish, push, or open a pull request for generated application code by default.
+The single supported MVP release path is the manually triggered workflow `.github/workflows/real-codex-cli-demo.yml`. A new user should follow this path instead of local diagnostic scripts when validating the MVP release. The workflow asks real Codex to generate a small Python CLI demo, validates the generated project, runs tests, runs a deterministic smoke command, and uploads a reviewable artifact.
 
-Required setup:
-1. Configure **Repository Settings → Environments → codex-demo**.
-2. Add a required reviewer for the `codex-demo` environment.
-3. Add `OPENAI_API_KEY` as an **environment secret** on `codex-demo`; do not make it a repository-wide environment variable.
-4. Start **Actions → Canonical Real Codex Slugger MVP Demo → Run workflow**. The deterministic request is fixed to `hello-codex` / `hello_codex`.
+### What the MVP generates
 
-Expected artifact:
-- `slugger-codex-certification-<run_id>`: sanitized `certification-summary.json`, `verification-evidence.json`, and `generated-project-manifest.json`, retained for 14 days.
+Codex must create a dependency-minimal Python CLI project in `generated-demo/`:
 
-Security boundaries: only the protected `generate-with-codex` job receives `OPENAI_API_KEY`, passed directly to the Codex action as `openai-api-key`. The verification job checks out with `persist-credentials: false`, downloads the artifact, verifies the SHA-256 JSON manifest, imports only manifested files through `ArtifactMvpCodexAdapter` into the existing `DefaultMvpBuildService`, persists a `MvpRun`, independently checks `python -m hello_codex.main greet Joseph`, runs restricted container verification, and uploads bounded certification evidence. Outbound dependency installation is intentionally constrained by requiring a dependency-minimal project and rejecting unsafe package metadata. A Python virtual environment is not a sandbox; the workflow separates credential-bearing generation from generated-code execution and the verification service uses a disposable execution copy for mutation detection.
+- project name: `hello-codex`
+- package name: `hello_codex`
+- required command: `python -m hello_codex.main greet Joseph`
+- expected stdout: `Hello, Joseph!`
 
-Troubleshooting:
-- Missing secret or pending approval: configure `OPENAI_API_KEY` as a `codex-demo` environment secret and approve the protected environment run.
-- Codex-action failure: inspect the generation summary and the Codex action logs; no generated project artifact is trusted unless a manifest is produced.
-- Artifact-integrity failure: the verification job rejects missing, extra, modified, symlinked, or mode-changed files before execution.
-- Validation failure: review `validator_results` in `verification-evidence.json`.
-- Packaging failure: ensure `pyproject.toml` uses `setuptools.build_meta` with no custom backend, path, URL, Git, or index configuration.
-- Test failure: review the bounded `run_tests` excerpts in evidence.
-- Smoke-test failure: confirm `python -m <package>.main --help` prints help including usage and the project name.
-- Container or Docker failure: the current local verifier uses a disposable execution copy; if the GitHub runner Docker service is unavailable, keep verification credential-free and inspect evidence.
+### Prerequisites
+
+1. Fork or clone this repository on GitHub.
+2. Enable GitHub Actions for the repository.
+3. Create the protected environment **Settings → Environments → codex-demo**.
+4. Add `OPENAI_API_KEY` as an environment secret on `codex-demo`. Do not store it as a repository variable and never commit it.
+5. Optionally add a required reviewer to the `codex-demo` environment so the secret-bearing generation job requires approval.
+
+No repository variables are required for the MVP workflow.
+
+### How to run the workflow
+
+1. Open **Actions → Canonical Real Codex Slugger MVP Demo**.
+2. Select **Run workflow**.
+3. Keep `retain_diagnostics` disabled for normal runs, or enable it to retain failure diagnostics for 14 days.
+4. Approve the `codex-demo` environment if your repository requires approval.
+
+### Workflow execution path
+
+The workflow has one primary manual trigger and these jobs:
+
+1. **Prepare deterministic Codex input** renders the fixed prompt.
+2. **Generate CLI demo with real Codex** checks that `OPENAI_API_KEY` is configured and invokes `openai/codex-action` without exposing the secret in logs.
+3. **Package generated CLI demo** sanitizes the generated files and writes a protected manifest.
+4. **Validate generated CLI demo** installs verifier dependencies, imports the artifact through Slugger's artifact adapter, runs generated-project validation, runs unit/integration checks, runs the non-interactive smoke command, verifies the protected manifest, and records sanitized evidence.
+5. **Upload success artifact** uploads `slugger-mvp-cli-demo-<run_id>` only when validation succeeds.
+
+Failure paths return non-zero exit codes and upload `slugger-codex-certification-<run_id>` with sanitized logs and evidence when available.
+
+### Downloaded artifact contents
+
+The success artifact contains only review/run material:
+
+- `generated-demo/` source, tests, README, and dependency metadata
+- `generated-project-manifest.json`
+- `generation-summary.json`
+- `verification-evidence.json`
+- `slugger-build-summary.json`
+- `MVP_ARTIFACT_README.md`
+
+It excludes secrets, virtual environments, caches, `.git`, workflow files, and unrelated repository content.
+
+### Run the generated CLI locally
+
+After downloading and extracting `slugger-mvp-cli-demo-<run_id>`:
+
+```bash
+cd generated-demo
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[test]'
+python -m pytest -q
+python -m hello_codex.main greet Joseph
+```
+
+Expected successful output:
+
+```text
+Hello, Joseph!
+```
+
+### Run repository validation locally
+
+Use the same repository checks that CI uses where local tools are available:
+
+```bash
+python -m pip install -e '.[test]'
+ruff check .
+ruff format --check .
+python -m mypy mvp cli
+python -m compileall .
+python -m pytest tests/test_mvp_*.py tests/mvp -q
+```
+
+### Common failure conditions
+
+- Missing `OPENAI_API_KEY`: configure it as a `codex-demo` environment secret.
+- Pending environment approval: approve the protected `generate-with-codex` job.
+- Codex generation error: inspect the Codex action step and diagnostics artifact.
+- Invalid generated project: inspect `verification-evidence.json` for the failed validation, install, test, smoke, or mutation-check phase.
+- Artifact manifest mismatch: rerun the workflow; do not manually edit files inside the artifact.
+- Docker unavailable: GitHub-hosted Ubuntu runners provide Docker; local workflow emulation must provide Docker for container verification.
+
+See [docs/mvp-release-checklist.md](docs/mvp-release-checklist.md) before tagging `v0.1.0`.
