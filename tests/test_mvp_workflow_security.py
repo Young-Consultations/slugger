@@ -84,7 +84,8 @@ def test_exactly_one_canonical_real_codex_workflow_exists() -> None:
 
 def test_slugger_artifact_adapter_and_exact_function_are_required() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "SLUGGER_MVP_CODEX_ADAPTER: artifact" in text
+    assert "SLUGGER_MVP_ARTIFACT_DIR" in text
+    assert "SLUGGER_MVP_ARTIFACT_MANIFEST" in text
     assert "python -m hello_codex.main greet Joseph" in text
     assert "Hello, Joseph!" in text
-    assert "certification-evidence-${{ github.run_id }}" in text
+    assert "slugger-codex-certification-${{ github.run_id }}" in text

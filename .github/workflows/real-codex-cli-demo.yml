@@ -197,23 +197,20 @@ jobs:
         env:
           SLUGGER_HOME: ${{ runner.temp }}/slugger-home
           SLUGGER_MVP_SKIP_PUBLISH: "1"
-          SLUGGER_MVP_CODEX_ADAPTER: artifact
-          SLUGGER_MVP_CODEX_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
-          SLUGGER_MVP_CODEX_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
-          SLUGGER_MVP_EXTERNAL_GENERATION_ID: ${{ github.run_id }}
+          SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
+          SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
         run: |
           set -euo pipefail
           python -m cli.main mvp build \
             "Create a deterministic argparse CLI named hello-codex with greet NAME printing exactly Hello, NAME!." \
             --name hello-codex --repo local/hello-codex --base main > slugger-build-summary.json
           python - <<'PY'
-          import json, os
+          import json
           from pathlib import Path
           from mvp.inventory_manifest import verify_protected_manifest
           data = json.loads(open('slugger-build-summary.json', encoding='utf-8').read())
           assert data['status'] == 'ready_to_publish', data
           assert data['publication_skipped'] is True, data
-          assert data['external_generation_id'] == os.environ['SLUGGER_MVP_EXTERNAL_GENERATION_ID'], data
           verify_protected_manifest(Path("downloaded-artifact/generated-demo"), Path("downloaded-artifact/generated-project-manifest.json"))
           PY
       - name: Import artifact through Slugger and run MVP validation
@@ -290,60 +287,11 @@ jobs:
               if src.is_file():
                   shutil.copy2(src, cert / src.name)
           PY
-      - name: Upload certification evidence
+      - name: Upload sanitized certification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 resolved from baseline run
         with:
-          name: certification-evidence-${{ github.run_id }}
+          name: slugger-codex-certification-${{ github.run_id }}
           path: certification/**
           if-no-files-found: error
-          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
-      - name: Upload verification evidence
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p certification
-          cp downloaded-artifact/generated-project-manifest.json certification/generated-project-manifest.json
-          cp "$(python - <<'PY'
-          import json
-          print(json.load(open('slugger-build-summary.json'))['workspace_path'] + '/verification-evidence.json')
-          PY
-          )" certification/verification-evidence.json
-          python - <<'PY'
-          import json, subprocess
-          from pathlib import Path
-          build = json.loads(Path('slugger-build-summary.json').read_text(encoding='utf-8'))
-          manifest = json.loads(Path('certification/generated-project-manifest.json').read_text(encoding='utf-8'))
-          evidence = json.loads(Path('certification/verification-evidence.json').read_text(encoding='utf-8'))
-          summary = {
-              'repository_commit_sha': '${{ github.sha }}',
-              'workflow_run_id': '${{ github.run_id }}',
-              'slugger_run_id': build.get('run_id'),
-              'project_name': 'hello-codex',
-              'package_name': 'hello_codex',
-              'manifest_digest': manifest.get('artifact_digest'),
-              'generated_inventory_digest': build.get('generated_inventory_digest'),
-              'final_status': build.get('status'),
-              'exact_functional_output': 'Hello, Joseph!',
-              'validation_status': 'passed' if build.get('validation_passed') else 'failed',
-              'test_status': 'passed' if build.get('test_passed') else 'failed',
-              'smoke_status': 'passed' if build.get('smoke_passed') else 'failed',
-              'functional_status': 'passed' if build.get('functional_passed') else 'failed',
-              'container_isolation_summary': evidence.get('container_summary'),
-              'generated_source_mutation_status': evidence.get('mutation_check_result'),
-              'publication_skipped': build.get('publication_skipped'),
-              'source_integrity_result': build.get('source_integrity_result'),
-          }
-          Path('certification/certification-summary.json').write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          PY
-      - name: Upload sanitized certification evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: verification-evidence-${{ github.run_id }}
-          path: |
-            downloaded-artifact/generated-demo/verification-evidence.json
-            slugger-build-summary.json
-          if-no-files-found: warn
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}

@@ -386,7 +386,7 @@ def _artifact_project(root: Path, project_name: str = "hello-codex") -> None:
     package.mkdir(parents=True)
     (root / "README.md").write_text(f"# {project_name}\n", encoding="utf-8")
     (root / "pyproject.toml").write_text(
-        "[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='hello-codex'\nversion='0.1.0'\ndependencies=[]\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
+        f"[build-system]\nrequires=[]\nbuild-backend='slugger_mvp_backend'\nbackend-path=['.']\n\n[project]\nname='{project_name}'\nversion='0.1.0'\ndependencies=[]\n[project.optional-dependencies]\ntest=['pytest>=8,<10']\n",
         encoding="utf-8",
     )
     (root / "slugger_mvp_backend.py").write_text(
