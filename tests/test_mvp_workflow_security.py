@@ -16,14 +16,19 @@ def test_workflow_is_manual_only_and_has_concurrency() -> None:
     assert data["concurrency"]["cancel-in-progress"] is False
 
 
-def test_openai_key_only_in_codex_job() -> None:
+def test_openai_key_only_in_secret_bearing_codex_steps() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert text.count("secrets.OPENAI_API_KEY") == 1
+    assert text.count("secrets.OPENAI_API_KEY") == 2
     data = _workflow()
     codex = data["jobs"]["generate-with-codex"]
     assert codex["environment"] == "codex-demo"
-    assert "secrets.OPENAI_API_KEY" in str(codex)
-    assert "python -m" not in str(codex)
+    assert "env" not in codex
+    for step in codex["steps"]:
+        if "secrets.OPENAI_API_KEY" in str(step):
+            assert step["name"] in {
+                "Validate required Codex secret",
+                "Run Codex generation",
+            }
     for name, job in data["jobs"].items():
         if name != "generate-with-codex":
             assert "secrets.OPENAI_API_KEY" not in str(job)
@@ -50,22 +55,32 @@ def test_manifest_and_container_verification_are_in_fresh_jobs() -> None:
     assert data["jobs"]["verify-generated-demo"]["permissions"] == {"contents": "read"}
 
 
-def test_evidence_uploads_always_and_jobs_have_timeouts() -> None:
+def test_evidence_uploads_from_final_always_job_and_jobs_have_timeouts() -> None:
     data = _workflow()
     assert all("timeout-minutes" in job for job in data["jobs"].values())
-    verify_steps = data["jobs"]["verify-generated-demo"]["steps"]
+    diagnostics = data["jobs"]["publish-certification-diagnostics"]
+    assert diagnostics["if"] == "always()"
+    assert diagnostics["needs"] == [
+        "prepare-codex-input",
+        "generate-with-codex",
+        "prepare-generated-artifact",
+        "verify-generated-demo",
+    ]
+    steps = diagnostics["steps"]
     upload = next(
         step
-        for step in verify_steps
+        for step in steps
         if step["name"] == "Upload sanitized certification evidence"
     )
     certification = next(
         step
-        for step in verify_steps
+        for step in steps
         if step["name"] == "Produce sanitized certification evidence"
     )
     assert upload["if"] == "always()"
     assert certification["if"] == "always()"
+    assert "needs.verify-generated-demo.result" in str(certification)
+    assert "job_results" in str(certification)
 
 
 def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -> None:

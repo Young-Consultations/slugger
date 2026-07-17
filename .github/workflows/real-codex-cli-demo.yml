@@ -72,7 +72,7 @@ jobs:
           retention-days: 3
 
   generate-with-codex:
-    name: Generate with Codex
+    name: Generate CLI demo with real Codex
     environment: codex-demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -89,6 +89,17 @@ jobs:
         with:
           name: rendered-codex-prompt-${{ github.run_id }}
           path: codex-input
+      - name: Validate required Codex secret
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "OPENAI_API_KEY is not configured on the protected codex-demo environment." >&2
+            exit 1
+          fi
+          echo "Codex environment secret is configured."
       - name: Run Codex generation
         id: run_codex
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56
@@ -106,7 +117,7 @@ jobs:
           retention-days: 1
 
   prepare-generated-artifact:
-    name: Prepare generated artifact
+    name: Package generated CLI demo
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [prepare-codex-input, generate-with-codex]
@@ -152,6 +163,35 @@ jobs:
           }
           Path("generation-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
+      - name: Write artifact run instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > MVP_ARTIFACT_README.md <<'EOF'
+          # Slugger MVP CLI Demo Artifact
+
+          This artifact contains the generated `hello-codex` Python CLI demo and sanitized validation metadata.
+
+          ## Run locally
+
+          ```bash
+          cd generated-demo
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pytest -q
+          python -m hello_codex.main greet Joseph
+          ```
+
+          Expected output:
+
+          ```text
+          Hello, Joseph!
+          ```
+
+          Do not add secrets to this directory. Virtual environments and caches are intentionally excluded from the protected manifest.
+          EOF
       - name: Upload generated project artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -159,11 +199,13 @@ jobs:
           path: |
             generated-demo/**
             generated-project-manifest.json
+            generation-summary.json
+            MVP_ARTIFACT_README.md
           if-no-files-found: error
           retention-days: 3
 
   verify-generated-demo:
-    name: Persist and verify generated demo
+    name: Validate generated CLI demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [prepare-codex-input, prepare-generated-artifact]
@@ -178,6 +220,8 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
       - name: Install Slugger verifier dependencies
         shell: bash
         run: |
@@ -235,12 +279,84 @@ jobs:
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
           python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+      - name: Assemble success artifact
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mvp-artifact
+          cp -R downloaded-artifact/generated-demo mvp-artifact/generated-demo
+          rm -f mvp-artifact/generated-demo/verification-evidence.json
+          cp downloaded-artifact/generated-project-manifest.json mvp-artifact/generated-project-manifest.json
+          cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
+          cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
+          cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
+          cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          python - <<'PY'
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_protected_manifest
+          verify_protected_manifest(
+              Path("mvp-artifact/generated-demo"),
+              Path("mvp-artifact/generated-project-manifest.json"),
+          )
+          PY
+          find mvp-artifact -name '.venv' -o -name '__pycache__' -o -name '.pytest_cache' | sort
+      - name: Upload success artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: slugger-mvp-cli-demo-${{ github.run_id }}
+          path: mvp-artifact/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload verifier diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verifier-diagnostics-${{ github.run_id }}
+          path: |
+            slugger-build-summary.json
+            slugger-build-error.log
+            downloaded-artifact/generated-demo/verification-evidence.json
+            downloaded-artifact/generated-project-manifest.json
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
+
+  publish-certification-diagnostics:
+    name: Publish MVP certification diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+    needs:
+      - prepare-codex-input
+      - generate-with-codex
+      - prepare-generated-artifact
+      - verify-generated-demo
+    permissions:
+      contents: read
+    steps:
+      - name: Download generated artifact diagnostics
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: generated-demo-${{ github.run_id }}
+          path: certification-input/generated-artifact
+      - name: Download verifier diagnostics
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: verifier-diagnostics-${{ github.run_id }}
+          path: certification-input/verifier-diagnostics
       - name: Produce sanitized certification evidence
         if: always()
         shell: bash
         env:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           REPOSITORY_COMMIT_SHA: ${{ github.sha }}
+          PREPARE_CODEX_INPUT_RESULT: ${{ needs.prepare-codex-input.result }}
+          GENERATE_WITH_CODEX_RESULT: ${{ needs.generate-with-codex.result }}
+          PREPARE_GENERATED_ARTIFACT_RESULT: ${{ needs.prepare-generated-artifact.result }}
+          VERIFY_GENERATED_DEMO_RESULT: ${{ needs.verify-generated-demo.result }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -249,19 +365,32 @@ jobs:
           from pathlib import Path
           cert = Path("certification")
           cert.mkdir(exist_ok=True)
-          build = Path("slugger-build-summary.json")
-          verification = Path("downloaded-artifact/generated-demo/verification-evidence.json")
-          manifest = Path("downloaded-artifact/generated-project-manifest.json")
-          result = "passed" if build.is_file() and verification.is_file() else "failed"
-          failed_phase = None if result == "passed" else "verification"
-          error_summary = ""
+          job_results = {
+              "prepare-codex-input": "${{ needs.prepare-codex-input.result }}",
+              "generate-with-codex": "${{ needs.generate-with-codex.result }}",
+              "prepare-generated-artifact": "${{ needs.prepare-generated-artifact.result }}",
+              "verify-generated-demo": "${{ needs.verify-generated-demo.result }}",
+          }
+          result = "passed" if all(value == "success" for value in job_results.values()) else "failed"
+          failed_phase = None
+          for name, value in job_results.items():
+              if value != "success":
+                  failed_phase = name
+                  break
+          error_summary = "" if result == "passed" else f"Job {failed_phase} concluded with {job_results[failed_phase]}"
           slugger_run_id = None
           manifest_digest = None
+          build = Path("certification-input/verifier-diagnostics/slugger-build-summary.json")
+          verification = Path("certification-input/verifier-diagnostics/verification-evidence.json")
+          manifest_candidates = [
+              Path("certification-input/verifier-diagnostics/generated-project-manifest.json"),
+              Path("certification-input/generated-artifact/generated-project-manifest.json"),
+          ]
           if build.is_file():
               try:
                   data = json.loads(build.read_text(encoding="utf-8"))
                   slugger_run_id = data.get("run_id")
-                  if data.get("status") not in {"ready_to_publish", "completed"}:
+                  if data.get("status") not in {"ready_to_publish", "completed"} and result == "passed":
                       result = "failed"
                       failed_phase = "slugger_build"
                       error_summary = str(data.get("error_details") or "Slugger build did not pass")[:500]
@@ -269,22 +398,25 @@ jobs:
                   result = "failed"
                   failed_phase = "slugger_build"
                   error_summary = f"Could not parse slugger build summary: {exc}"[:500]
-          if manifest.is_file():
-              try:
-                  manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
-              except Exception:
-                  manifest_digest = None
+          for manifest in manifest_candidates:
+              if manifest.is_file():
+                  try:
+                      manifest_digest = json.loads(manifest.read_text(encoding="utf-8")).get("artifact_digest")
+                  except Exception:
+                      manifest_digest = None
+                  break
           summary = {
               "workflow_run_id": "${{ github.run_id }}",
               "repository_commit_sha": "${{ github.sha }}",
               "result": result,
               "failed_phase": failed_phase,
               "error_summary": error_summary,
+              "job_results": job_results,
               "slugger_run_id": slugger_run_id,
               "manifest_digest": manifest_digest,
           }
           (cert / "certification-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          for src in [build, verification, manifest]:
+          for src in [build, verification, *manifest_candidates]:
               if src.is_file():
                   shutil.copy2(src, cert / src.name)
           PY
