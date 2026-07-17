@@ -228,7 +228,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Verify the sanitized artifact downloaded from the credential-free prepare job.
+          # Verify the sanitized artifact downloaded from the prepare-generated-artifact job.
           # The Slugger build workspace may contain post-build runtime files such as
           # virtualenv symlinks, which are intentionally outside the protected manifest.
           PROJECT_DIR="downloaded-artifact/generated-demo"
