@@ -40,7 +40,10 @@ def test_manifest_and_container_verification_are_in_fresh_jobs() -> None:
     assert "prepare-generated-artifact" in data["jobs"]
     assert "verify-generated-demo" in data["jobs"]
     assert "write_manifest" not in str(data["jobs"]["generate-with-codex"])
-    assert "write_manifest" in str(data["jobs"]["prepare-generated-artifact"])
+    assert "write_protected_manifest" in str(data["jobs"]["prepare-generated-artifact"])
+    assert "sanitize_protected_artifact" in str(
+        data["jobs"]["prepare-generated-artifact"]
+    )
     assert "--container" in str(data["jobs"]["verify-generated-demo"])
     assert data["jobs"]["verify-generated-demo"]["permissions"] == {"contents": "read"}
 
@@ -52,4 +55,17 @@ def test_evidence_uploads_always_and_jobs_have_timeouts() -> None:
     upload = next(
         step for step in verify_steps if step["name"] == "Upload verification evidence"
     )
+    certification = next(
+        step
+        for step in verify_steps
+        if step["name"] == "Produce sanitized certification evidence"
+    )
     assert upload["if"] == "always()"
+    assert certification["if"] == "always()"
+
+
+def test_restricted_verification_uses_imported_workspace_parent_root() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert 'print(data["workspace_path"])' in text
+    assert 'print(Path(data["workspace_path"]).parent)' in text
+    assert '--workspace-root "downloaded-artifact"' not in text

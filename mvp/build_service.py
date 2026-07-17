@@ -228,7 +228,6 @@ class MvpBuildPhaseError(RuntimeError):
 def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     """Create production MVP dependencies without legacy workflow initialization."""
 
-    from mvp.integrations.codex import CodexCliMvpAdapter, FakeMvpCodexAdapter
     from mvp.integrations.github import GitHubCliMvpPublisher
 
     home = runtime_home()
@@ -239,11 +238,7 @@ def production_mvp_build_service(root_path: Path) -> DefaultMvpBuildService:
     return DefaultMvpBuildService(
         run_repository=run_repository,
         workspace_manager=workspace_manager,
-        codex_adapter=(
-            FakeMvpCodexAdapter(workspace_manager)
-            if _use_fake_codex_adapter()
-            else CodexCliMvpAdapter(workspace_manager)
-        ),
+        codex_adapter=_production_codex_adapter(workspace_manager),
         project_validator=project_validator,
         basic_runner=basic_runner,
         github_publisher=GitHubCliMvpPublisher(workspace_manager),
@@ -312,3 +307,21 @@ def _changed_source_paths(
     return sorted(
         path for path in paths if before_files.get(path) != after_files.get(path)
     )
+
+
+def _production_codex_adapter(workspace_manager: WorkspaceManager) -> MvpCodexAdapter:
+    artifact_dir = os.environ.get("SLUGGER_MVP_ARTIFACT_DIR")
+    manifest_path = os.environ.get("SLUGGER_MVP_ARTIFACT_MANIFEST")
+    if artifact_dir and manifest_path:
+        from mvp.integrations.codex import ArtifactMvpCodexAdapter
+
+        return ArtifactMvpCodexAdapter(
+            workspace_manager, Path(artifact_dir), Path(manifest_path)
+        )
+    if _use_fake_codex_adapter():
+        from mvp.integrations.codex import FakeMvpCodexAdapter
+
+        return FakeMvpCodexAdapter(workspace_manager)
+    from mvp.integrations.codex import CodexCliMvpAdapter
+
+    return CodexCliMvpAdapter(workspace_manager)
