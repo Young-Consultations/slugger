@@ -63,3 +63,9 @@ def test_mvp_release_documentation_names_supported_path_and_limitations() -> Non
     assert "slugger-mvp-cli-demo-<run_id>" in readme
     assert "Known limitations" in checklist
     assert "v0.1.0" in checklist
+
+
+def test_release_workflow_checks_checklist_with_literal_dash_pattern() -> None:
+    text = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    assert "grep -q -- '- \\[ \\]' docs/mvp-release-checklist.md" in text
