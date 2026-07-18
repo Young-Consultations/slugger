@@ -24,7 +24,7 @@ jobs:
       - name: Check checklist is complete
         id: check
         run: |
-          if grep -q '- \[ \]' docs/mvp-release-checklist.md; then
+          if grep -q -- '- \[ \]' docs/mvp-release-checklist.md; then
             echo "Checklist has open items — skipping release."
             echo "release=false" >> "$GITHUB_OUTPUT"
           else
