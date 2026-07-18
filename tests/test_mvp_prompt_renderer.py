@@ -29,6 +29,13 @@ def test_render_demo_prompt_rejects_invalid_names(name: str) -> None:
         render_demo_prompt(project_name=name, demo_description="ok")
 
 
+def test_render_demo_prompt_rejects_reserved_canonical_name() -> None:
+    with pytest.raises(ValueError, match="reserved"):
+        render_demo_prompt(project_name="hello-codex", demo_description="ok")
+    with pytest.raises(ValueError, match="reserved"):
+        prompt_inputs("hello-codex", "ok")
+
+
 @pytest.mark.parametrize(
     "description",
     ["x" * 501, "bad\rdesc", "```breakout```", "${{ secrets.OPENAI_API_KEY }}"],

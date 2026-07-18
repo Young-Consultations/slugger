@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       project_name:
-        description: Lowercase kebab-case project name
+        description: Lowercase kebab-case project name (hello-codex is reserved)
         required: true
         type: string
         default: user-idea-cli
