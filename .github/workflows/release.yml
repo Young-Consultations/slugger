@@ -57,8 +57,7 @@ jobs:
           gh release create v0.1.0 \
             --repo "$GITHUB_REPOSITORY" \
             --title "Slugger v0.1.0" \
-            --notes
-                ## Slugger v0.1.0 is the first certified MVP release of the AI Software Factory.
+            --notes "## Slugger v0.1.0 is the first certified MVP release of the AI Software Factory.
                 ### MVP capabilities
                 - Generates a constrained Python CLI project using real Codex.
                 - Uses a protected GitHub Actions environment for Codex credentials.
