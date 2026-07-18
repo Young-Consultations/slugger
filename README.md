@@ -59,6 +59,10 @@ For a local-only end-to-end demo that uses the real Codex CLI and intentionally 
 ./scripts/run_codex_demo.sh
 ```
 
+### User-idea GitHub Actions demo
+
+For a manual GitHub Actions demo that follows the MVP certification flow but lets the operator supply the project idea, run **Actions → User Idea Codex Slugger MVP Demo**. Provide `idea` as the generated CLI concept and `project_name` as a lowercase kebab-case package name other than reserved canonical names such as `hello-codex`; the workflow renders a safe Codex prompt, generates the project in `generated-demo/`, validates it through Slugger, and uploads a reviewable artifact.
+
 
 ⸻
 

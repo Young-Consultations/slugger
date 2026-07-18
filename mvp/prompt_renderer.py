@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 _NAME_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
+_RESERVED_PROJECT_NAMES = {"hello-codex"}
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,8 @@ class PromptInputs:
 def validate_project_name(project_name: str) -> str:
     if not _NAME_RE.fullmatch(project_name):
         raise ValueError("project_name must be lowercase kebab-case")
+    if project_name in _RESERVED_PROJECT_NAMES:
+        raise ValueError("project_name is reserved for the canonical MVP demo")
     return project_name
 
 
