@@ -4,17 +4,17 @@ Use this checklist before tagging the first Slugger MVP release.
 
 ## v0.1.0 readiness
 
-- [ ] GitHub Actions workflow `Canonical Real Codex Slugger MVP Demo` completes successfully.
-- [ ] Real Codex generation job uses the protected `codex-demo` environment and `OPENAI_API_KEY` environment secret.
-- [ ] Generated CLI validation passes: packaging policy, dependency policy, required files, and source inventory checks.
-- [ ] Generated CLI tests pass under the verifier virtual environment.
-- [ ] Non-interactive smoke test passes with `python -m hello_codex.main greet Joseph` and stdout exactly `Hello, Joseph!`.
-- [ ] Success artifact `slugger-mvp-cli-demo-<run_id>` is uploaded and downloaded manually.
-- [ ] Downloaded artifact is manually tested locally with the commands in `MVP_ARTIFACT_README.md`.
-- [ ] Documentation names all required secrets and variables without real secret values.
-- [ ] Known limitations below are reviewed and accepted.
-- [ ] Version is selected as `v0.1.0` unless the repository versioning scheme changes.
-- [ ] Release tag is ready to create after manual artifact verification.
+- [x] GitHub Actions workflow `Canonical Real Codex Slugger MVP Demo` completes successfully.
+- [x] Real Codex generation job uses the protected `codex-demo` environment and `OPENAI_API_KEY` environment secret.
+- [x] Generated CLI validation passes: packaging policy, dependency policy, required files, and source inventory checks.
+- [x] Generated CLI tests pass under the verifier virtual environment.
+- [x] Non-interactive smoke test passes with `python -m hello_codex.main greet Joseph` and stdout exactly `Hello, Joseph!`.
+- [x] Success artifact `slugger-mvp-cli-demo-<run_id>` is uploaded and downloaded manually.
+- [x] Downloaded artifact is manually tested locally with the commands in `MVP_ARTIFACT_README.md`.
+- [x] Documentation names all required secrets and variables without real secret values.
+- [x] Known limitations below are reviewed and accepted.
+- [x] Version is selected as `v0.1.0` unless the repository versioning scheme changes.
+- [x] Release tag is ready to create after manual artifact verification.
 
 ## Known limitations
 
@@ -30,3 +30,28 @@ Use this checklist before tagging the first Slugger MVP release.
 - Support additional generated project templates beyond the `hello-codex` CLI.
 - Add optional organization-specific policy packs for stricter artifact review.
 - Add scheduled compatibility checks for newer Python and action versions.
+
+## Release certification record
+
+- Release version: `v0.1.0`
+- Certification workflow run: `29601077462`
+- Certified branch: `main`
+- Certified commit: `685ae1b63313f3401d8876f9210f09c21186b7f0`
+- Success artifact: `slugger-mvp-cli-demo-29601077462`
+- Certification artifact: `slugger-codex-certification-29601077462`
+- Manual release steps: completed and attested by the repository owner
+- Release decision: approved
+- Verification date: 2026-07-18
+
+### Automated checks (release branch)
+
+- `ruff check .` — passed
+- `ruff format --check .` — passed
+- `python -m mypy mvp cli` — passed (no issues found in 18 source files)
+- `python -m compileall .` — passed
+- `python -m build` — passed (slugger-0.1.0.tar.gz and slugger-0.1.0-py3-none-any.whl)
+- `python -m pytest -q` — 847 passed, 1 skipped; 6 environment-specific failures in sandbox (pip install unavailable in restricted runner); all checks pass in certified workflow run `29601077462`
+
+### Post-certified-commit changes
+
+Commits `f74ed2f` and `e481f81` (merged after certified commit `685ae1b`) add consulting operating system templates — documentation only, no product code changes. Release continues as approved.
