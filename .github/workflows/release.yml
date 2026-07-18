@@ -56,27 +56,27 @@ jobs:
           gh release create v0.1.0 \
             --repo "$GITHUB_REPOSITORY" \
             --title "Slugger v0.1.0" \
-            --notes "## Slugger v0.1.0
-Slugger v0.1.0 is the first certified MVP release of the AI Software Factory.
-### MVP capabilities
-- Generates a constrained Python CLI project using real Codex.
-- Uses a protected GitHub Actions environment for Codex credentials.
-- Sanitizes generated files and verifies a SHA-256 protected manifest.
-- Validates packaging, dependencies, project structure, and source safety.
-- Installs generated projects in an isolated environment.
-- Runs generated pytest tests and deterministic smoke checks.
-- Verifies generated code in a restricted, network-disabled container.
-- Produces downloadable success and certification artifacts.
-### Certified execution
-- Workflow run: \`29601077462\`
-- Certified branch: \`main\`
-- Certified commit: \`685ae1b63313f3401d8876f9210f09c21186b7f0\`
-- Success artifact: \`slugger-mvp-cli-demo-29601077462\`
-- Certification artifact: \`slugger-codex-certification-29601077462\`
-- Manual release validation: completed and attested by the repository owner
-### Known limitations
-- The MVP supports a constrained Python CLI generation path.
-- The canonical release-validation workflow is manually triggered.
-- Generated code requires human review before production use.
-- Additional templates, automatic release assets, and policy packs are deferred."
+            --notes
+                ## Slugger v0.1.0 is the first certified MVP release of the AI Software Factory.
+                ### MVP capabilities
+                - Generates a constrained Python CLI project using real Codex.
+                - Uses a protected GitHub Actions environment for Codex credentials.
+                - Sanitizes generated files and verifies a SHA-256 protected manifest.
+                - Validates packaging, dependencies, project structure, and source safety.
+                - Installs generated projects in an isolated environment.
+                - Runs generated pytest tests and deterministic smoke checks.
+                - Verifies generated code in a restricted, network-disabled container.
+                - Produces downloadable success and certification artifacts.
+                ### Certified execution
+                - Workflow run: \`29601077462\`
+                - Certified branch: \`main\`
+                - Certified commit: \`685ae1b63313f3401d8876f9210f09c21186b7f0\`
+                - Success artifact: \`slugger-mvp-cli-demo-29601077462\`
+                - Certification artifact: \`slugger-codex-certification-29601077462\`
+                - Manual release validation: completed and attested by the repository owner
+                ### Known limitations
+                - The MVP supports a constrained Python CLI generation path.
+                - The canonical release-validation workflow is manually triggered.
+                - Generated code requires human review before production use.
+                - Additional templates, automatic release assets, and policy packs are deferred."
           echo "GitHub Release v0.1.0 published."
