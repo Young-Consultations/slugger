@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       project_name:
-        description: Lowercase kebab-case project name (hello-codex is reserved)
+        description: Human-friendly project name; normalized to lowercase kebab-case (hello-codex is reserved)
         required: true
         type: string
         default: user-idea-cli
@@ -50,9 +50,17 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          from mvp.prompt_renderer import prompt_inputs, render_demo_prompt
+          from mvp.prompt_renderer import (
+              normalize_project_name,
+              prompt_inputs,
+              render_demo_prompt,
+          )
           import os
-          inputs = prompt_inputs(os.environ["PROJECT_NAME"], os.environ["USER_IDEA"])
+          submitted_project_name = os.environ["PROJECT_NAME"]
+          normalized_project_name = normalize_project_name(submitted_project_name)
+          if submitted_project_name != normalized_project_name:
+              print("Project name normalized for Codex prompt rendering.")
+          inputs = prompt_inputs(normalized_project_name, os.environ["USER_IDEA"])
           Path("rendered-codex-prompt.md").write_text(
               render_demo_prompt(
                   project_name=inputs.project_name,
@@ -63,6 +71,10 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
               out.write(f"project_name={inputs.project_name}\n")
               out.write(f"package_name={inputs.package_name}\n")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("## Project name normalization\n\n")
+              summary.write(f"- Submitted project name: `{submitted_project_name}`\n")
+              summary.write(f"- Normalized project name: `{inputs.project_name}`\n")
           PY
       - name: Upload rendered prompt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

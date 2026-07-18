@@ -26,6 +26,24 @@ def validate_project_name(project_name: str) -> str:
     return project_name
 
 
+def normalize_project_name(project_name: str) -> str:
+    """Normalize a user-submitted project name to strict lowercase kebab-case."""
+
+    normalized = project_name.strip()
+    normalized = normalized.translate(
+        str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+    )
+    normalized = re.sub(r"[ _]+", "-", normalized)
+    normalized = re.sub(r"-+", "-", normalized)
+    normalized = normalized.strip("-")
+    if not normalized:
+        raise ValueError("project_name normalization produced an empty name")
+    try:
+        return validate_project_name(normalized)
+    except ValueError as exc:
+        raise ValueError(f"project_name is invalid after normalization: {exc}") from exc
+
+
 def validate_description(description: str) -> str:
     if len(description) > 500 or any(ch in description for ch in "\x00\r"):
         raise ValueError("demo_description is too long or unsafe")

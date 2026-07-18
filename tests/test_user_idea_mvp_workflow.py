@@ -16,6 +16,7 @@ def test_user_idea_workflow_accepts_manual_idea_input() -> None:
     assert inputs["idea"]["required"] is True
     assert inputs["idea"]["type"] == "string"
     assert inputs["project_name"]["required"] is True
+    assert "normalized to lowercase kebab-case" in inputs["project_name"]["description"]
     assert "hello-codex is reserved" in inputs["project_name"]["description"]
     assert inputs["project_name"]["default"] == "user-idea-cli"
     assert inputs["retain_diagnostics"]["type"] == "boolean"
@@ -29,11 +30,14 @@ def test_user_idea_workflow_renders_prompt_from_safe_inputs() -> None:
         "project_name": "${{ steps.idea_inputs.outputs.project_name }}",
         "package_name": "${{ steps.idea_inputs.outputs.package_name }}",
     }
-    assert "prompt_inputs(os.environ[\"PROJECT_NAME\"], os.environ[\"USER_IDEA\"])" in text
+    assert "normalize_project_name(submitted_project_name)" in text
+    assert "prompt_inputs(normalized_project_name, os.environ[\"USER_IDEA\"])" in text
     assert "render_demo_prompt(" in text
     assert "USER_IDEA: ${{ inputs.idea }}" in text
     assert "PROJECT_NAME: ${{ inputs.project_name }}" in text
-    assert "prompt_inputs(os.environ[\"PROJECT_NAME\"], os.environ[\"USER_IDEA\"])" in text
+    assert "GITHUB_STEP_SUMMARY" in text
+    assert "Submitted project name" in text
+    assert "Normalized project name" in text
 
 
 def test_user_idea_workflow_uses_dynamic_project_for_verification() -> None:
