@@ -331,17 +331,34 @@ def test_cli_publisher_rejects_missing_base_branch_before_push(tmp_path):
     workspace = workspace_manager.create_workspace("run-1")
 
     class MissingBasePublisher(FailingCommandGitHubCliPublisher):
+        def __init__(self, workspace_manager: WorkspaceManager) -> None:
+            super().__init__(workspace_manager, [])
+            self.commands: list[list[str]] = []
+
         def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            self.commands.append(command)
             if command[:2] == ["git", "ls-remote"]:
                 return subprocess.CompletedProcess(
                     command, 2, stdout="", stderr="not found"
                 )
             return super()._run(command, cwd, check=check)
 
+    publisher = MissingBasePublisher(workspace_manager)
+
     with pytest.raises(GitHubPublishError, match="base branch 'main' does not exist"):
-        MissingBasePublisher(workspace_manager, []).publish(
-            _run(), workspace, _validation(), _runner()
-        )
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+    remote_config_index = next(
+        index
+        for index, command in enumerate(publisher.commands)
+        if command[:3] == ["git", "remote", "add"]
+    )
+    base_check_index = next(
+        index
+        for index, command in enumerate(publisher.commands)
+        if command[:2] == ["git", "ls-remote"]
+    )
+    assert remote_config_index < base_check_index
 
 
 def test_cli_publisher_records_failed_push_diagnostics(tmp_path, monkeypatch):

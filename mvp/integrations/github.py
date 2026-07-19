@@ -145,8 +145,8 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
             )
 
         self._verify_repo(run.request.github_repository, workspace_path)
-        base_branch = self._resolve_base_branch(run, workspace_path)
         self._prepare_git(workspace_path, run.request.github_repository)
+        base_branch = self._resolve_base_branch(run, workspace_path)
         remote_sha = self._remote_branch_sha(
             run.request.github_repository, branch, workspace_path
         )
