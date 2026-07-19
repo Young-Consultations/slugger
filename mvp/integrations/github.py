@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
 import shutil
+import os
 import subprocess
 
 from mvp.basic_runner import BasicRunnerResult
@@ -18,6 +19,34 @@ from mvp.models import (
 )
 from mvp.project_validator import ProjectValidator
 from mvp.workspace import MvpWorkspace, WorkspaceManager
+
+
+@dataclass(frozen=True)
+class PublicationCommandDiagnostic:
+    """Sanitized bounded diagnostics for one publication command."""
+
+    phase: str
+    command: str
+    return_code: int
+    repository: str | None
+    branch: str | None
+    stdout: str
+    stderr: str
+
+
+def _bounded(value: str, limit: int = 4000) -> str:
+    value = _sanitize(value)
+    if len(value) <= limit:
+        return value
+    return value[:limit] + "\n...[truncated]"
+
+
+def _sanitize(value: str) -> str:
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+    if token:
+        value = value.replace(token, "[REDACTED]")
+    value = value.replace("https://x-access-token:", "https://[REDACTED]:")
+    return value
 
 
 class GitHubPublishError(RuntimeError):
@@ -92,6 +121,9 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
     ) -> None:
         self.workspace_manager = workspace_manager
         self.timeout_seconds = timeout_seconds
+        self.diagnostics: list[PublicationCommandDiagnostic] = []
+        self._active_repository: str | None = None
+        self._active_branch: str | None = None
 
     def publish(
         self,
@@ -103,6 +135,9 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         _ensure_publishable(validation_results, runner_result)
         workspace_path = self.workspace_manager._workspace_path(workspace)
         branch = branch_name(run.request, run.run_id)
+        self.diagnostics = []
+        self._active_repository = run.request.github_repository
+        self._active_branch = branch
         existing_pr = self._find_pr(run.request.github_repository, branch)
         if existing_pr is not None:
             return self._result_from_existing_pr(
@@ -248,9 +283,22 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                 )
 
     def _verify_repo(self, repository: str, cwd: Path) -> None:
-        self._run(
-            ["gh", "repo", "view", repository, "--json", "name,defaultBranchRef"], cwd
-        )
+        raw = self._run(
+            [
+                "gh",
+                "repo",
+                "view",
+                repository,
+                "--json",
+                "name,defaultBranchRef,viewerPermission",
+            ],
+            cwd,
+        ).stdout
+        data = json.loads(raw or "{}")
+        if data.get("viewerPermission") not in {"ADMIN", "MAINTAIN", "WRITE"}:
+            raise GitHubPublishError(
+                "SLUGGER_GITHUB_TOKEN can read the target repository but does not have push access"
+            )
 
     def _resolve_base_branch(self, run: MvpRun, cwd: Path) -> str:
         base = run.request.base_branch
@@ -267,7 +315,21 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                 cwd,
             ).stdout
             data = json.loads(raw or "{}")
-            return str(data.get("defaultBranchRef", {}).get("name") or "main")
+            default_ref = data.get("defaultBranchRef") or {}
+            if not default_ref.get("name"):
+                raise GitHubPublishError(
+                    "Target repository has no default/base branch; initialize the sandbox repository with an initial commit on main before running Codex generation."
+                )
+            return str(default_ref["name"])
+        exists = self._run(
+            ["git", "ls-remote", "--exit-code", "--heads", "origin", base],
+            cwd,
+            check=False,
+        )
+        if exists.returncode != 0:
+            raise GitHubPublishError(
+                f"Target base branch {base!r} does not exist; initialize the sandbox repository with an initial commit or choose an existing base branch before running Codex generation."
+            )
         return base
 
     def _prepare_git(self, workspace_path: Path, repository: str) -> None:
@@ -384,11 +446,50 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
             timeout=self.timeout_seconds,
             check=False,
         )
+        diagnostic = PublicationCommandDiagnostic(
+            phase=_phase_for_command(command),
+            command=_sanitize_command(command),
+            return_code=completed.returncode,
+            repository=self._active_repository,
+            branch=self._active_branch,
+            stdout=_bounded(completed.stdout),
+            stderr=_bounded(completed.stderr),
+        )
+        self.diagnostics.append(diagnostic)
+        diagnostics_path = os.environ.get("SLUGGER_PUBLICATION_DIAGNOSTICS")
+        if diagnostics_path:
+            Path(diagnostics_path).write_text(
+                json.dumps(
+                    [asdict(item) for item in self.diagnostics],
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
         if check and completed.returncode != 0:
             raise GitHubPublishError(
-                f"Command failed: {' '.join(command)}\n{completed.stderr[:1000]}"
+                f"Publication command failed during {diagnostic.phase}: {diagnostic.command}\n{diagnostic.stderr[:1000]}"
             )
         return completed
+
+
+def _phase_for_command(command: list[str]) -> str:
+    if command[:3] == ["gh", "repo", "view"]:
+        return "verify_target_repository"
+    if command[:2] == ["git", "ls-remote"]:
+        return "verify_base_branch"
+    if command[:2] == ["git", "push"]:
+        return "push_generated_branch"
+    if command[:3] == ["gh", "pr", "create"]:
+        return "create_draft_pull_request"
+    if command[:3] == ["gh", "pr", "list"]:
+        return "find_existing_pull_request"
+    return command[0] if command else "unknown"
+
+
+def _sanitize_command(command: list[str]) -> str:
+    return " ".join(_sanitize(part) for part in command)
 
 
 def branch_name(request: MvpProjectRequest, run_id: str) -> str:

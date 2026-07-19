@@ -95,7 +95,9 @@ jobs:
                   raise
 
           try:
-              fetch(f"/repos/{owner}/{name}")
+              repo_data = fetch(f"/repos/{owner}/{name}")
+              if not repo_data.get("permissions", {}).get("push"):
+                  raise SystemExit("SLUGGER_GITHUB_TOKEN can read the target repository but does not have push access; grant Contents read/write and Pull requests read/write before Codex generation.")
               fetch(f"/repos/{owner}/{name}/branches/{branch}")
               try:
                   contents = fetch(f"/repos/{owner}/{name}/contents?ref={branch}")
@@ -105,6 +107,8 @@ jobs:
                   else:
                       raise
           except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  raise SystemExit(f"Target repository base branch '{branch}' is missing or unborn; initialize the sandbox repository with an initial commit on {branch} before Codex generation.") from exc
               raise SystemExit(f"Target repository or base branch cannot be accessed before Codex generation: HTTP {exc.code}") from exc
 
           if contents and not exists(f"/repos/{owner}/{name}/contents/.slugger-run-id?ref={branch}"):
@@ -372,6 +376,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
           SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          SLUGGER_PUBLICATION_DIAGNOSTICS: publication-diagnostics.json
           TARGET_REPOSITORY: ${{ inputs.target_repository }}
         run: |
           set -euo pipefail
@@ -397,8 +402,27 @@ jobs:
           print(json.loads(Path('slugger-build-summary.json').read_text(encoding='utf-8'))['run_id'])
           PY
           )"
-          python -m cli.main mvp publish "$RUN_ID" > publication-summary.json
-          python -m json.tool publication-summary.json >/dev/null
+          set +e
+          python -m cli.main mvp publish "$RUN_ID" > publication-summary.tmp.json 2> publication-error.log
+          publish_rc=$?
+          set -e
+          if [ -s publication-summary.tmp.json ]; then
+            python -m json.tool publication-summary.tmp.json >/dev/null
+            mv publication-summary.tmp.json publication-summary.json
+          else
+            rm -f publication-summary.tmp.json
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("publication-diagnostics.json")
+          if not path.exists():
+              path.write_text("[]\n", encoding="utf-8")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          if not isinstance(data, list):
+              raise SystemExit("publication diagnostics must be a list")
+          PY
+          exit "$publish_rc"
       - name: Assemble success artifact
         if: success()
         shell: bash
@@ -440,6 +464,9 @@ jobs:
           path: |
             slugger-build-summary.json
             slugger-build-error.log
+            publication-summary.json
+            publication-error.log
+            publication-diagnostics.json
             downloaded-artifact/generated-demo/verification-evidence.json
             downloaded-artifact/generated-project-manifest.json
           if-no-files-found: ignore
@@ -506,6 +533,8 @@ jobs:
           slugger_run_id = None
           manifest_digest = None
           build = Path("certification-input/verifier-diagnostics/slugger-build-summary.json")
+          publication = Path("certification-input/verifier-diagnostics/publication-summary.json")
+          publication_diagnostics = Path("certification-input/verifier-diagnostics/publication-diagnostics.json")
           verification = Path("certification-input/verifier-diagnostics/verification-evidence.json")
           manifest_candidates = [
               Path("certification-input/verifier-diagnostics/generated-project-manifest.json"),
@@ -541,7 +570,7 @@ jobs:
               "manifest_digest": manifest_digest,
           }
           (cert / "certification-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          for src in [build, verification, *manifest_candidates]:
+          for src in [build, publication, publication_diagnostics, verification, *manifest_candidates]:
               if src.is_file():
                   shutil.copy2(src, cert / src.name)
           PY

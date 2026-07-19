@@ -125,13 +125,16 @@ class RecordingGitHubCliPublisher(GitHubCliMvpPublisher):
         super().__init__(workspace_manager)
         self.commands: list[list[str]] = []
 
-    def _run(self, command: list[str], cwd):  # type: ignore[no-untyped-def]
+    def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
         self.commands.append(command)
-        stdout = (
-            "https://github.com/owner/task-tracker/pull/1\n"
-            if command[:3] == ["gh", "pr", "create"]
-            else ""
-        )
+        if command[:4] == ["gh", "repo", "view", "owner/task-tracker"]:
+            stdout = '{"viewerPermission":"WRITE","defaultBranchRef":{"name":"main"}}'
+        elif command[:2] == ["git", "ls-remote"]:
+            stdout = "sha\trefs/heads/main\n"
+        elif command[:3] == ["gh", "pr", "create"]:
+            stdout = "https://github.com/owner/task-tracker/pull/1\n"
+        else:
+            stdout = ""
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
 
@@ -219,3 +222,154 @@ def test_cli_publisher_reuses_existing_pr_without_saved_publish_metadata(tmp_pat
     assert not any(
         command[:3] == ["gh", "pr", "create"] for command in publisher.commands
     )
+
+
+class FailingCommandGitHubCliPublisher(GitHubCliMvpPublisher):
+    def __init__(
+        self, workspace_manager: WorkspaceManager, failing_prefix: list[str]
+    ) -> None:
+        super().__init__(workspace_manager)
+        self.failing_prefix = failing_prefix
+
+    def _find_pr(self, repository: str, branch: str):  # type: ignore[no-untyped-def]
+        return None
+
+    def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+        if (
+            self.failing_prefix
+            and command[: len(self.failing_prefix)] == self.failing_prefix
+        ):
+            completed = subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="remote: denied token-secret"
+            )
+            diagnostic = __import__(
+                "mvp.integrations.github",
+                fromlist=[
+                    "PublicationCommandDiagnostic",
+                    "_phase_for_command",
+                    "_sanitize_command",
+                    "_bounded",
+                ],
+            )
+            self.diagnostics.append(
+                diagnostic.PublicationCommandDiagnostic(
+                    phase=diagnostic._phase_for_command(command),
+                    command=diagnostic._sanitize_command(command),
+                    return_code=1,
+                    repository=self._active_repository,
+                    branch=self._active_branch,
+                    stdout="",
+                    stderr=diagnostic._bounded(completed.stderr),
+                )
+            )
+            if check:
+                raise GitHubPublishError("simulated publication failure")
+            return completed
+        if command[:4] == ["gh", "repo", "view", "owner/task-tracker"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='{"viewerPermission":"WRITE","defaultBranchRef":{"name":"main"}}',
+                stderr="",
+            )
+        if command[:2] == ["git", "ls-remote"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="sha\trefs/heads/main\n", stderr=""
+            )
+        if command[:2] == ["git", "status"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout=" M README.md\n", stderr=""
+            )
+        if command[:2] == ["git", "rev-parse"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="commit-sha\n", stderr=""
+            )
+        if command[:3] == ["gh", "pr", "create"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="https://github.com/owner/task-tracker/pull/1\n",
+                stderr="",
+            )
+        if command[:3] == ["gh", "pr", "list"]:
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        if command[:3] == [
+            "gh",
+            "api",
+            "repos/owner/task-tracker/git/ref/heads/slugger/generated-task-tracker-abcdef12",
+        ]:
+            return subprocess.CompletedProcess(
+                command, 1, stdout="", stderr="not found"
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+
+def test_cli_publisher_rejects_read_only_token_before_push(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    run = _run()
+
+    class ReadOnlyPublisher(FailingCommandGitHubCliPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            if command[:4] == ["gh", "repo", "view", "owner/task-tracker"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout='{"viewerPermission":"READ","defaultBranchRef":{"name":"main"}}',
+                    stderr="",
+                )
+            return super()._run(command, cwd, check=check)
+
+    with pytest.raises(GitHubPublishError, match="does not have push access"):
+        ReadOnlyPublisher(workspace_manager, []).publish(
+            run, workspace, _validation(), _runner()
+        )
+
+
+def test_cli_publisher_rejects_missing_base_branch_before_push(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+
+    class MissingBasePublisher(FailingCommandGitHubCliPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            if command[:2] == ["git", "ls-remote"]:
+                return subprocess.CompletedProcess(
+                    command, 2, stdout="", stderr="not found"
+                )
+            return super()._run(command, cwd, check=check)
+
+    with pytest.raises(GitHubPublishError, match="base branch 'main' does not exist"):
+        MissingBasePublisher(workspace_manager, []).publish(
+            _run(), workspace, _validation(), _runner()
+        )
+
+
+def test_cli_publisher_records_failed_push_diagnostics(tmp_path, monkeypatch):
+    monkeypatch.setenv("GH_TOKEN", "token-secret")
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    publisher = FailingCommandGitHubCliPublisher(workspace_manager, ["git", "push"])
+
+    with pytest.raises(GitHubPublishError, match="simulated publication failure"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+    failed = publisher.diagnostics[-1]
+    assert failed.phase == "push_generated_branch"
+    assert failed.repository == "owner/task-tracker"
+    assert failed.branch == "slugger/generated-task-tracker-abcdef12"
+    assert "token-secret" not in failed.stderr
+
+
+def test_cli_publisher_records_failed_pr_creation_diagnostics(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    publisher = FailingCommandGitHubCliPublisher(
+        workspace_manager, ["gh", "pr", "create"]
+    )
+
+    with pytest.raises(GitHubPublishError, match="simulated publication failure"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+    assert publisher.diagnostics[-1].phase == "create_draft_pull_request"
