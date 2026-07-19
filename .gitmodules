@@ -1,0 +1,3 @@
+[submodule "slugger-generated-demos"]
+	path = slugger-generated-demos
+	url = https://github.com/mightyjoe909/slugger-generated-demos
