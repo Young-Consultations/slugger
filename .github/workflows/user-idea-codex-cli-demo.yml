@@ -12,6 +12,11 @@ on:
         required: true
         type: string
         default: user-idea-cli
+      target_repository:
+        description: Empty or Slugger-managed sandbox repository for the generated draft PR (owner/repo)
+        required: true
+        type: string
+        default: mightyjoe909/slugger-generated-demos
       retain_diagnostics:
         description: Retain diagnostic artifacts for 14 days
         required: true
@@ -253,16 +258,17 @@ jobs:
         shell: bash
         env:
           BUILD_IDEA: ${{ inputs.idea }}
-          SLUGGER_HOME: ${{ github.workspace }}/slugger-home
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
           SLUGGER_MVP_SKIP_PUBLISH: "1"
           SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
           SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
         run: |
           set -euo pipefail
           python -m cli.main mvp build \
             "$BUILD_IDEA" \
             --name "${{ needs.prepare-codex-input.outputs.project_name }}" \
-            --repo "${{ github.repository }}" \
+            --repo "$TARGET_REPOSITORY" \
             --base main \
             > slugger-build-summary.tmp.json \
             2> slugger-build-error.log
@@ -305,7 +311,7 @@ jobs:
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
           cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
-          cp -R slugger-home mvp-artifact/slugger-home
+          cp -R "${{ runner.temp }}/slugger-home" mvp-artifact/slugger-home
           cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
           python - <<'PY'
           from pathlib import Path
@@ -370,10 +376,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          SLUGGER_HOME: ${{ github.workspace }}/verified-artifact/slugger-home
-          TARGET_REPOSITORY: ${{ github.repository }}
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
         run: |
           set -euo pipefail
+          rm -rf "$SLUGGER_HOME"
+          mkdir -p "$(dirname "$SLUGGER_HOME")"
+          cp -R verified-artifact/slugger-home "$SLUGGER_HOME"
           python - <<'PY'
           import json
           from pathlib import Path

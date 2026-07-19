@@ -19,6 +19,10 @@ def test_user_idea_workflow_accepts_manual_idea_input() -> None:
     assert "normalized to lowercase kebab-case" in inputs["project_name"]["description"]
     assert "hello-codex is reserved" in inputs["project_name"]["description"]
     assert inputs["project_name"]["default"] == "user-idea-cli"
+    assert inputs["target_repository"]["required"] is True
+    assert inputs["target_repository"]["type"] == "string"
+    assert "sandbox repository" in inputs["target_repository"]["description"]
+    assert inputs["target_repository"]["default"] != "${{ github.repository }}"
     assert inputs["retain_diagnostics"]["type"] == "boolean"
 
 
@@ -43,7 +47,9 @@ def test_user_idea_workflow_renders_prompt_from_safe_inputs() -> None:
 def test_user_idea_workflow_uses_dynamic_project_for_verification() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '--name "${{ needs.prepare-codex-input.outputs.project_name }}"' in text
-    assert '--repo "${{ github.repository }}"' in text
+    assert 'TARGET_REPOSITORY: ${{ inputs.target_repository }}' in text
+    assert '--repo "$TARGET_REPOSITORY"' in text
+    assert '--repo "${{ github.repository }}"' not in text
     assert "PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}" in text
     assert "BUILD_IDEA: ${{ inputs.idea }}" in text
     assert '"$BUILD_IDEA"' in text
@@ -85,3 +91,6 @@ def test_user_idea_workflow_publishes_verified_draft_pr_with_least_privilege() -
     )
     assert "python -m cli.main mvp publish" in str(publish)
     assert "verify_protected_manifest" in str(publish)
+    assert "${{ github.workspace }}/verified-artifact/slugger-home" not in str(publish)
+    assert "${{ runner.temp }}/slugger-home" in str(publish)
+    assert "cp -R verified-artifact/slugger-home" in str(publish)
