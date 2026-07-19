@@ -4,7 +4,7 @@ Current release target: **Slugger v0.1.1**. The canonical user-facing product pa
 
 The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
 
-Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. The final same-job publication step uses `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
 
 Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
 

@@ -48,9 +48,15 @@ jobs:
       - name: Validate target repository before Codex
         shell: bash
         env:
+          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
           TARGET_REPOSITORY: ${{ inputs.target_repository }}
+          TARGET_BASE_BRANCH: main
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "SLUGGER_GITHUB_TOKEN is required to validate the target repository before Codex generation." >&2
+            exit 1
+          fi
           case "$TARGET_REPOSITORY" in
             */*) ;;
             *) echo "target_repository must use owner/repo form" >&2; exit 1 ;;
@@ -62,23 +68,47 @@ jobs:
           import urllib.request
 
           repo = os.environ["TARGET_REPOSITORY"]
+          branch = os.environ["TARGET_BASE_BRANCH"]
           owner, name = repo.split("/", 1)
           base = "https://api.github.com"
+          token = os.environ["GH_TOKEN"]
 
           def fetch(path):
               request = urllib.request.Request(
                   base + path,
-                  headers={"Accept": "application/vnd.github+json"},
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
               )
               with urllib.request.urlopen(request, timeout=15) as response:
                   return json.loads(response.read().decode("utf-8"))
 
+          def exists(path):
+              try:
+                  fetch(path)
+                  return True
+              except urllib.error.HTTPError as exc:
+                  if exc.code == 404:
+                      return False
+                  raise
+
           try:
-              data = fetch(f"/repos/{owner}/{name}")
-              branch = data.get("default_branch") or "main"
+              fetch(f"/repos/{owner}/{name}")
               fetch(f"/repos/{owner}/{name}/branches/{branch}")
+              try:
+                  contents = fetch(f"/repos/{owner}/{name}/contents?ref={branch}")
+              except urllib.error.HTTPError as exc:
+                  if exc.code in {404, 409}:
+                      contents = []
+                  else:
+                      raise
           except urllib.error.HTTPError as exc:
-              raise SystemExit(f"Target repository or base branch is not publicly accessible before Codex generation: HTTP {exc.code}") from exc
+              raise SystemExit(f"Target repository or base branch cannot be accessed before Codex generation: HTTP {exc.code}") from exc
+
+          if contents and not exists(f"/repos/{owner}/{name}/contents/.slugger-run-id?ref={branch}"):
+              raise SystemExit("Target repository is not empty and is not Slugger-managed; choose an empty sandbox repository.")
           print(f"Validated target repository {repo} and base branch {branch} before Codex generation.")
           PY
       - name: Render Codex prompt from user idea

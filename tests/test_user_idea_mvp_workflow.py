@@ -90,8 +90,10 @@ def test_user_idea_workflow_publishes_in_verifier_job_with_least_privilege() -> 
     assert "publish-verified-draft-pr" not in jobs
     assert "python -m cli.main mvp publish" in str(verify)
     assert "verify_protected_manifest" in str(verify)
+    text = WORKFLOW.read_text(encoding="utf-8")
     assert "${{ secrets.SLUGGER_GITHUB_TOKEN }}" in str(verify)
-    assert "${{ github.token }}" not in WORKFLOW.read_text(encoding="utf-8")
+    assert text.count("${{ secrets.SLUGGER_GITHUB_TOKEN }}") == 2
+    assert "${{ github.token }}" not in text
     assert "cp -R verified-artifact/slugger-home" not in str(verify)
     assert "mvp-artifact/slugger-home" not in str(verify)
 
@@ -104,6 +106,14 @@ def test_target_repository_is_validated_before_codex_generation() -> None:
     assert generate["needs"] == "prepare-codex-input"
     assert "Validate target repository before Codex" in str(prepare)
     assert "api.github.com" in str(prepare)
+    validate = next(
+        step
+        for step in prepare["steps"]
+        if step["name"] == "Validate target repository before Codex"
+    )
+    assert validate["env"]["GH_TOKEN"] == "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
+    assert validate["env"]["TARGET_BASE_BRANCH"] == "main"
+    assert "not empty and is not Slugger-managed" in str(prepare)
 
 
 def test_success_artifact_contains_only_publication_outputs() -> None:

@@ -4,7 +4,7 @@ Current release target: **Slugger v0.1.1**. The canonical user-facing product pa
 
 The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
 
-Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. The final same-job publication step uses `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
 
 Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
 
@@ -207,7 +207,7 @@ This conclusion applies to the experience of developing Slugger and does not imp
 
 ## v0.1.1 verifier and publication updates
 
-The user-idea workflow now keeps publication in the same GitHub Actions job that performs restricted verification. `SLUGGER_HOME` stays under `runner.temp`, so the SQLite run record and generated workspace path remain valid without uploading a runtime-home copy between jobs. The final publication step is the only step that receives `secrets.SLUGGER_GITHUB_TOKEN`; generated code, tests, package installation, and Docker verification run without that token.
+The user-idea workflow now keeps publication in the same GitHub Actions job that performs restricted verification. `SLUGGER_HOME` stays under `runner.temp`, so the SQLite run record and generated workspace path remain valid without uploading a runtime-home copy between jobs. Only target validation and final publication receive `secrets.SLUGGER_GITHUB_TOKEN`; generated code, tests, package installation, and Docker verification run without that token.
 
 `SLUGGER_GITHUB_TOKEN` must be a fine-grained PAT or GitHub App installation token scoped only to the configured target repository with Contents read/write, Pull requests read/write, and Metadata read. The workflow validates the target repository and default/base branch before Codex generation starts. The target must be empty or already Slugger-managed for the same deterministic run according to the publisher policy; closed or merged PRs are not duplicated and require the documented rerun/recovery policy before reuse.
 
