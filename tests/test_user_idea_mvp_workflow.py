@@ -47,7 +47,7 @@ def test_user_idea_workflow_renders_prompt_from_safe_inputs() -> None:
 def test_user_idea_workflow_uses_dynamic_project_for_verification() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '--name "${{ needs.prepare-codex-input.outputs.project_name }}"' in text
-    assert 'TARGET_REPOSITORY: ${{ inputs.target_repository }}' in text
+    assert "TARGET_REPOSITORY: ${{ inputs.target_repository }}" in text
     assert '--repo "$TARGET_REPOSITORY"' in text
     assert '--repo "${{ github.repository }}"' not in text
     assert "PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}" in text
@@ -77,20 +77,41 @@ def test_user_idea_certification_downloads_only_available_diagnostics() -> None:
     assert verifier["continue-on-error"] is True
 
 
-def test_user_idea_workflow_publishes_verified_draft_pr_with_least_privilege() -> None:
+def test_user_idea_workflow_publishes_in_verifier_job_with_least_privilege() -> None:
     data = _workflow()
     jobs = data["jobs"]
-    publish = jobs["publish-verified-draft-pr"]
-    assert publish["needs"] == ["prepare-codex-input", "verify-generated-demo"]
-    assert publish["if"] == "needs.verify-generated-demo.result == 'success'"
-    assert publish["permissions"] == {"contents": "write", "pull-requests": "write"}
+    verify = jobs["verify-generated-demo"]
+    assert verify["permissions"] == {"contents": "write", "pull-requests": "write"}
     assert all(
         job.get("permissions", {"contents": "read"}) == {"contents": "read"}
         for name, job in jobs.items()
-        if name != "publish-verified-draft-pr"
+        if name != "verify-generated-demo"
     )
-    assert "python -m cli.main mvp publish" in str(publish)
-    assert "verify_protected_manifest" in str(publish)
-    assert "${{ github.workspace }}/verified-artifact/slugger-home" not in str(publish)
-    assert "${{ runner.temp }}/slugger-home" in str(publish)
-    assert "cp -R verified-artifact/slugger-home" in str(publish)
+    assert "publish-verified-draft-pr" not in jobs
+    assert "python -m cli.main mvp publish" in str(verify)
+    assert "verify_protected_manifest" in str(verify)
+    assert "${{ secrets.SLUGGER_GITHUB_TOKEN }}" in str(verify)
+    assert "${{ github.token }}" not in WORKFLOW.read_text(encoding="utf-8")
+    assert "cp -R verified-artifact/slugger-home" not in str(verify)
+    assert "mvp-artifact/slugger-home" not in str(verify)
+
+
+def test_target_repository_is_validated_before_codex_generation() -> None:
+    data = _workflow()
+    prepare = data["jobs"]["prepare-codex-input"]
+    generate = data["jobs"]["generate-with-codex"]
+    assert "needs" not in prepare
+    assert generate["needs"] == "prepare-codex-input"
+    assert "Validate target repository before Codex" in str(prepare)
+    assert "api.github.com" in str(prepare)
+
+
+def test_success_artifact_contains_only_publication_outputs() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "publication-summary.json" in text
+    assert "mvp-artifact/slugger-home" not in text
+    assert "slugger-build-summary.json mvp-artifact" not in text
+    assert "Forbidden artifact content" in text
+    assert all(
+        forbidden in text for forbidden in [".venv", "__pycache__", ".pytest_cache"]
+    )

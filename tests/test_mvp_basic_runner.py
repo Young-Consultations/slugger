@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mvp.basic_runner import BasicRunner, _minimal_environment
 from mvp.integrations.codex import FakeMvpCodexAdapter
-from mvp.models import MvpProjectRequest
+from mvp.models import CheckResult, MvpProjectRequest
 from mvp.workspace import WorkspaceManager
 
 
@@ -117,6 +117,75 @@ def test_normal_build_preserves_broken_backend_install_failure(tmp_path: Path) -
     assert isinstance(install_check.details.get("stdout"), str)
     assert isinstance(install_check.details.get("stderr"), str)
     assert install_check.details.get("stdout") or install_check.details.get("stderr")
+
+
+def test_build_tool_verification_uses_metadata_without_importing_packages(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager, workspace = _workspace(tmp_path)
+    runner = BasicRunner(manager, timeout_seconds=180)
+    captured: dict[str, object] = {}
+
+    def fake_run_phase(name, command, workspace_path, **kwargs):
+        captured["command"] = command
+        return CheckResult(
+            name,
+            True,
+            "metadata ok",
+            {
+                "command": command,
+                "returncode": 0,
+                "stdout": '{"pip": "25.0.1", "setuptools": "80.9.0", "wheel": "0.45.1"}\n',
+                "stderr": "",
+            },
+        )
+
+    monkeypatch.setattr(runner, "_run_phase", fake_run_phase)
+
+    provision = runner._verify_build_tools(
+        workspace.path / ".venv" / "bin" / "python",
+        workspace.path,
+        {
+            "expected_versions": {
+                "pip": "25.0.1",
+                "setuptools": "80.9.0",
+                "wheel": "0.45.1",
+            }
+        },
+    )
+
+    script = captured["command"][-1]  # type: ignore[index]
+    assert "importlib.metadata" in script
+    assert "import pip" not in script
+    assert "import setuptools" not in script
+    assert provision.details["expected_versions"]["setuptools"] == "80.9.0"
+    assert provision.details["installed_versions"]["setuptools"] == "80.9.0"
+
+
+def test_failed_build_tool_provisioning_reports_structured_diagnostics(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager, workspace = _workspace(tmp_path)
+    missing_wheelhouse = tmp_path / "empty-wheelhouse"
+    missing_wheelhouse.mkdir()
+    monkeypatch.setenv("SLUGGER_WHEELHOUSE", str(missing_wheelhouse))
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    provision = next(
+        check for check in result.checks if check.name == "provision_build_tools"
+    )
+    assert not provision.passed
+    assert provision.details["expected_versions"] == {
+        "pip": "25.0.1",
+        "setuptools": "80.9.0",
+        "wheel": "0.45.1",
+    }
+    assert provision.details["failed_provisioning_command"]
+    assert isinstance(provision.details["returncode"], int)
+    assert isinstance(provision.details["stdout"], str)
+    assert isinstance(provision.details["stderr"], str)
+    assert "approved_dependency_copy" not in provision.details
 
 
 def _all_commands(result):
@@ -334,3 +403,24 @@ def test_cli_smoke_requires_meaningful_help_output(tmp_path: Path) -> None:
     smoke = next(check for check in result.checks if check.name == "cli_smoke")
     assert not smoke.passed
     assert smoke.details.get("missing_stdout")
+
+
+def test_verifier_versions_stay_aligned_across_constraints_runner_and_dockerfile() -> (
+    None
+):
+    constraints = Path("constraints-ci.txt").read_text(encoding="utf-8")
+    dockerfile = Path("docker/mvp-verifier.Dockerfile").read_text(encoding="utf-8")
+    runner_source = Path("mvp/basic_runner.py").read_text(encoding="utf-8")
+    for requirement in [
+        "pip==25.0.1",
+        "setuptools==80.9.0",
+        "wheel==0.45.1",
+        "pytest==8.3.5",
+    ]:
+        name = requirement.split("==", 1)[0]
+        assert requirement in constraints
+        assert f"{name}==" not in dockerfile
+        assert f"{name}==" not in runner_source
+    assert "--requirement /tmp/slugger-constraints-ci.txt" in dockerfile
+    assert "--constraint /tmp/slugger-constraints-ci.txt" in dockerfile
+    assert "constraints-ci.txt" in runner_source

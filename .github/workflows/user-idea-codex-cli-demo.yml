@@ -45,6 +45,42 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
+      - name: Validate target repository before Codex
+        shell: bash
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_REPOSITORY" in
+            */*) ;;
+            *) echo "target_repository must use owner/repo form" >&2; exit 1 ;;
+          esac
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ["TARGET_REPOSITORY"]
+          owner, name = repo.split("/", 1)
+          base = "https://api.github.com"
+
+          def fetch(path):
+              request = urllib.request.Request(
+                  base + path,
+                  headers={"Accept": "application/vnd.github+json"},
+              )
+              with urllib.request.urlopen(request, timeout=15) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          try:
+              data = fetch(f"/repos/{owner}/{name}")
+              branch = data.get("default_branch") or "main"
+              fetch(f"/repos/{owner}/{name}/branches/{branch}")
+          except urllib.error.HTTPError as exc:
+              raise SystemExit(f"Target repository or base branch is not publicly accessible before Codex generation: HTTP {exc.code}") from exc
+          print(f"Validated target repository {repo} and base branch {branch} before Codex generation.")
+          PY
       - name: Render Codex prompt from user idea
         id: idea_inputs
         shell: bash
@@ -223,12 +259,13 @@ jobs:
           retention-days: 3
 
   verify-generated-demo:
-    name: Validate generated CLI demo
+    name: Validate generated CLI demo and publish draft PR
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [prepare-codex-input, prepare-generated-artifact]
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - name: Check out Slugger without credentials
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -299,6 +336,39 @@ jobs:
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
           python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+      - name: Publish or update draft pull request
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
+          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "SLUGGER_GITHUB_TOKEN is required for the final publication step." >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_protected_manifest
+          verify_protected_manifest(
+              Path("downloaded-artifact/generated-demo"),
+              Path("downloaded-artifact/generated-project-manifest.json"),
+          )
+          summary = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
+          assert summary["status"] == "ready_to_publish", summary
+          assert summary["publication_skipped"] is True, summary
+          PY
+          RUN_ID="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('slugger-build-summary.json').read_text(encoding='utf-8'))['run_id'])
+          PY
+          )"
+          python -m cli.main mvp publish "$RUN_ID" > publication-summary.json
+          python -m json.tool publication-summary.json >/dev/null
       - name: Assemble success artifact
         if: success()
         shell: bash
@@ -310,9 +380,8 @@ jobs:
           cp downloaded-artifact/generated-project-manifest.json mvp-artifact/generated-project-manifest.json
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
-          cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
-          cp -R "${{ runner.temp }}/slugger-home" mvp-artifact/slugger-home
           cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          cp publication-summary.json mvp-artifact/publication-summary.json
           python - <<'PY'
           from pathlib import Path
           from mvp.inventory_manifest import verify_protected_manifest
@@ -320,8 +389,11 @@ jobs:
               Path("mvp-artifact/generated-demo"),
               Path("mvp-artifact/generated-project-manifest.json"),
           )
+          forbidden = [".venv", "__pycache__", ".pytest_cache", "slugger-home", ".git"]
+          found = [str(path) for name in forbidden for path in Path("mvp-artifact").rglob(name)]
+          if found:
+              raise SystemExit("Forbidden artifact content: " + ", ".join(sorted(found)))
           PY
-          find mvp-artifact -name '.venv' -o -name '__pycache__' -o -name '.pytest_cache' | sort
       - name: Upload success artifact
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -343,78 +415,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
 
-  publish-verified-draft-pr:
-    name: Publish verified draft PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [prepare-codex-input, verify-generated-demo]
-    if: needs.verify-generated-demo.result == 'success'
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Check out target repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          persist-credentials: true
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.11"
-      - name: Install Slugger publisher dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
-      - name: Download verified evidence artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-        with:
-          name: slugger-user-idea-cli-demo-${{ github.run_id }}
-          path: verified-artifact
-      - name: Publish or update draft pull request
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
-          TARGET_REPOSITORY: ${{ inputs.target_repository }}
-        run: |
-          set -euo pipefail
-          rm -rf "$SLUGGER_HOME"
-          mkdir -p "$(dirname "$SLUGGER_HOME")"
-          cp -R verified-artifact/slugger-home "$SLUGGER_HOME"
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          from mvp.inventory_manifest import verify_protected_manifest
-          artifact = Path("verified-artifact")
-          manifest = artifact / "generated-project-manifest.json"
-          generated = artifact / "generated-demo"
-          verify_protected_manifest(generated, manifest)
-          summary = json.loads((artifact / "slugger-build-summary.json").read_text(encoding="utf-8"))
-          assert summary["status"] == "ready_to_publish", summary
-          assert summary["publication_skipped"] is True, summary
-          print(summary["run_id"])
-          PY
-          RUN_ID="$(python - <<'PY'
-          import json
-          from pathlib import Path
-          print(json.loads(Path('verified-artifact/slugger-build-summary.json').read_text(encoding='utf-8'))['run_id'])
-          PY
-          )"
-          python -m cli.main mvp publish "$RUN_ID" > publish-summary.json
-          python -m json.tool publish-summary.json >/dev/null
-      - name: Upload publication evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: slugger-user-idea-publication-${{ github.run_id }}
-          path: |
-            publish-summary.json
-            verified-artifact/verification-evidence.json
-            verified-artifact/generated-project-manifest.json
-          if-no-files-found: error
-          retention-days: 14
-
   publish-certification-diagnostics:
     name: Publish MVP certification diagnostics
     runs-on: ubuntu-latest
@@ -425,7 +425,6 @@ jobs:
       - generate-with-codex
       - prepare-generated-artifact
       - verify-generated-demo
-      - publish-verified-draft-pr
     permissions:
       contents: read
     steps:
@@ -466,7 +465,6 @@ jobs:
               "generate-with-codex": "${{ needs.generate-with-codex.result }}",
               "prepare-generated-artifact": "${{ needs.prepare-generated-artifact.result }}",
               "verify-generated-demo": "${{ needs.verify-generated-demo.result }}",
-              "publish-verified-draft-pr": "${{ needs.publish-verified-draft-pr.result }}",
           }
           result = "passed" if all(value == "success" for value in job_results.values()) else "failed"
           failed_phase = None

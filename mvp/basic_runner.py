@@ -5,10 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
-import shutil
+import json
 import subprocess
 import sys
-import sysconfig
 import tomllib
 
 from mvp.integrations.codex import package_name_for_project
@@ -16,6 +15,10 @@ from mvp.models import CheckResult, MvpProjectRequest
 from mvp.workspace import MvpWorkspace, WorkspaceManager
 
 _OUTPUT_LIMIT = 12000
+_BUILD_TOOL_DISTRIBUTIONS = ("pip", "setuptools", "wheel")
+_VERIFIER_DISTRIBUTIONS = _BUILD_TOOL_DISTRIBUTIONS + ("pytest",)
+_CONSTRAINTS_FILE = Path(__file__).resolve().parent.parent / "constraints-ci.txt"
+_DEFAULT_WHEELHOUSE = Path("/opt/slugger-wheelhouse")
 
 
 @dataclass(frozen=True)
@@ -76,7 +79,7 @@ class BasicRunner:
             checks.append(
                 self._run_phase(
                     "install_verifier_dependencies",
-                    [str(python), "-m", "pip", "install", "pytest>=8,<10"],
+                    _pinned_install_command(python, ("pytest",)),
                     workspace_path,
                 )
             )
@@ -173,43 +176,22 @@ class BasicRunner:
         return BasicRunnerResult(tuple(checks))
 
     def _provision_build_tools(self, python: Path, workspace_path: Path) -> CheckResult:
-        command = [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "pip==25.0.1",
-            "setuptools==80.9.0",
-            "wheel==0.45.1",
-        ]
+        expected = _expected_distribution_versions(_BUILD_TOOL_DISTRIBUTIONS)
+        command = _pinned_install_command(python, _BUILD_TOOL_DISTRIBUTIONS)
         result = self._run_phase("provision_build_tools", command, workspace_path)
+        details = _build_tool_details(expected, result.details)
         if result.passed:
-            return self._verify_build_tools(python, workspace_path, result.details)
-        fallback_details = dict(result.details)
-        if _copy_approved_build_tools(str(python)):
-            fallback_details["approved_dependency_copy"] = "pip,setuptools,wheel"
-            verified = self._verify_build_tools(
-                python, workspace_path, fallback_details
-            )
-            if verified.passed:
-                return CheckResult(
-                    "provision_build_tools",
-                    True,
-                    "Approved Python build tools copied into clean verifier venv",
-                    verified.details,
-                )
-            return verified
-        fallback_details["diagnostic"] = (
-            "Required Python build tools are unavailable. Ensure the verifier image "
-            "or approved wheelhouse provides pip, setuptools, and wheel versions "
-            "allowed by constraints-ci.txt before offline verification."
+            return self._verify_build_tools(python, workspace_path, details)
+        details["diagnostic"] = (
+            "Required Python build tools are unavailable. Ensure the restricted "
+            "verifier image contains /opt/slugger-wheelhouse with exact versions "
+            "pinned by constraints-ci.txt."
         )
         return CheckResult(
             "provision_build_tools",
             False,
             "Required Python build tools are unavailable in verifier environment",
-            fallback_details,
+            details,
         )
 
     def _verify_build_tools(
@@ -220,18 +202,38 @@ class BasicRunner:
             [
                 str(python),
                 "-c",
-                "import pip, setuptools, wheel; "
-                "print('pip=' + getattr(pip, '__version__', 'unknown')); "
-                "print('setuptools=' + getattr(setuptools, '__version__', 'unknown')); "
-                "print('wheel=' + getattr(wheel, '__version__', 'unknown'))",
+                (
+                    "import importlib.metadata as m, json; "
+                    "names = ('pip', 'setuptools', 'wheel'); "
+                    "print(json.dumps({n: m.version(n) for n in names}, sort_keys=True))"
+                ),
             ],
             workspace_path,
         )
         merged = dict(details)
         merged["verification"] = verify.details
-        if not verify.passed:
+        installed: dict[str, str] = {}
+        if verify.passed:
+            try:
+                installed = json.loads(str(verify.details.get("stdout", "{}")))
+            except json.JSONDecodeError:
+                verify = CheckResult(
+                    verify.name, False, "Invalid metadata JSON", verify.details
+                )
+        merged["installed_versions"] = installed
+        raw_expected = merged.get("expected_versions", {})
+        expected = raw_expected if isinstance(raw_expected, dict) else {}
+        missing = [name for name in expected if name not in installed]
+        mismatched = {
+            name: {"expected": version, "installed": installed.get(name)}
+            for name, version in expected.items()
+            if installed.get(name) != version
+        }
+        merged["missing_distributions"] = missing
+        merged["version_mismatches"] = mismatched
+        if not verify.passed or missing or mismatched:
             merged["diagnostic"] = (
-                "Verifier venv is missing pip, setuptools, or wheel after provisioning."
+                "Verifier venv build-tool metadata did not match pinned versions."
             )
             return CheckResult(
                 "provision_build_tools",
@@ -239,11 +241,10 @@ class BasicRunner:
                 "Required Python build tools are unavailable in verifier environment",
                 merged,
             )
-        merged["build_tools"] = verify.details.get("stdout", "")
         return CheckResult(
             "provision_build_tools",
             True,
-            "Python build tools are available in verifier environment",
+            "Python build tools match pinned verifier metadata",
             merged,
         )
 
@@ -275,16 +276,6 @@ class BasicRunner:
             "stderr": completed.stderr[:_OUTPUT_LIMIT],
         }
         if completed.returncode != 0:
-            if name == "install_verifier_dependencies" and _copy_approved_pytest(
-                command[0]
-            ):
-                details["approved_dependency_copy"] = "pytest"
-                return CheckResult(
-                    name,
-                    True,
-                    "Approved verifier pytest dependency copied into clean venv",
-                    details,
-                )
             return CheckResult(
                 name,
                 False,
@@ -357,134 +348,42 @@ def _declares_pytest_extra(workspace_path: Path) -> bool:
     return bool(test_extra)
 
 
-def _copy_approved_build_tools(venv_python: str) -> bool:
-    return _copy_approved_packages(venv_python, ("pip", "setuptools", "wheel"))
+def _expected_distribution_versions(names: tuple[str, ...]) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for line in _CONSTRAINTS_FILE.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "==" not in stripped:
+            continue
+        name, version = stripped.split("==", 1)
+        if name in names:
+            versions[name] = version
+    missing = [name for name in names if name not in versions]
+    if missing:
+        raise RuntimeError(f"Missing exact verifier constraints: {', '.join(missing)}")
+    return versions
 
 
-def _copy_approved_pytest(venv_python: str) -> bool:
-    return _copy_approved_packages(
-        venv_python,
-        (
-            "pytest",
-            "_pytest",
-            "pluggy",
-            "iniconfig",
-            "packaging",
-            "pygments",
-            "setuptools",
-            "wheel",
-            "py",
-        ),
-    )
+def _pinned_install_command(python: Path, names: tuple[str, ...]) -> list[str]:
+    versions = _expected_distribution_versions(names)
+    command = [str(python), "-m", "pip", "install", "--upgrade"]
+    wheelhouse = Path(os.environ.get("SLUGGER_WHEELHOUSE", str(_DEFAULT_WHEELHOUSE)))
+    if wheelhouse.is_dir():
+        command.extend(["--no-index", "--find-links", str(wheelhouse)])
+    command.extend(["--constraint", str(_CONSTRAINTS_FILE)])
+    command.extend(f"{name}=={versions[name]}" for name in names)
+    return command
 
 
-def _copy_approved_packages(venv_python: str, approved: tuple[str, ...]) -> bool:
-    try:
-        purelib_text = subprocess.check_output(
-            [
-                venv_python,
-                "-c",
-                "import sysconfig; print(sysconfig.get_path('purelib'))",
-            ],
-            text=True,
-        ).strip()
-        purelib = Path(purelib_text)
-        purelib.mkdir(parents=True, exist_ok=True)
-        host_purelib = Path(sysconfig.get_path("purelib"))
-        for name in approved:
-            try:
-                module = __import__(name)
-            except Exception:
-                continue
-            source = Path(module.__file__ or "")
-            source = source.parent if source.name == "__init__.py" else source
-            target = purelib / source.name
-            if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink()
-            if source.is_dir():
-                shutil.copytree(source, target)
-            elif source.is_file():
-                shutil.copy2(source, target)
-        for pattern in (
-            "pip-*.dist-info",
-            "pytest-*.dist-info",
-            "pluggy-*.dist-info",
-            "iniconfig-*.dist-info",
-            "packaging-*.dist-info",
-            "Pygments-*.dist-info",
-            "setuptools-*.dist-info",
-            "wheel-*.dist-info",
-            "py-*.dist-info",
-        ):
-            for dist in host_purelib.glob(pattern):
-                target = purelib / dist.name
-                if target.exists():
-                    shutil.rmtree(target)
-                shutil.copytree(dist, target)
-        _write_setuptools_build_meta_shim(purelib)
-        wheel_package = purelib / "wheel"
-        wheel_package.mkdir(exist_ok=True)
-        (wheel_package / "__init__.py").write_text(
-            "__version__ = '0+slugger-verifier-shim'\n", encoding="utf-8"
-        )
-        return True
-    except Exception:
-        return False
-
-
-def _write_setuptools_build_meta_shim(purelib: Path) -> None:
-    package = purelib / "setuptools"
-    package.mkdir(exist_ok=True)
-    (package / "__init__.py").write_text(
-        "__version__ = '0+slugger-verifier-shim'\n", encoding="utf-8"
-    )
-    shim = """
-from __future__ import annotations
-from pathlib import Path
-import base64, hashlib, re, zipfile
-
-def _meta():
-    text = Path("pyproject.toml").read_text(encoding="utf-8")
-    name = re.search(r"(?m)^name\\s*=\\s*[\\\"']([^\\\"']+)", text).group(1)
-    version_match = re.search(r"(?m)^version\\s*=\\s*[\\\"']([^\\\"']+)", text)
-    version = version_match.group(1) if version_match else "0.0.0"
-    return name, version, name.replace("-", "_")
-
-def _wheel_text():
-    return "Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n"
-
-def _hash(data: bytes) -> str:
-    return "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode("ascii")
-
-def _dist_info(dist, version):
-    return f"{dist}-{version}.dist-info"
-
-def _metadata(name, version):
-    return f"Metadata-Version: 2.1\\nName: {name}\\nVersion: {version}\\n"
-
-def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
-    name, version, dist = _meta()
-    wheel_name = f"{dist}-{version}-py3-none-any.whl"
-    records = [(f"{dist}.pth", (str(Path.cwd() / "src") + "\\n").encode()), (f"{_dist_info(dist, version)}/METADATA", _metadata(name, version).encode()), (f"{_dist_info(dist, version)}/WHEEL", _wheel_text().encode())]
-    record_name = f"{_dist_info(dist, version)}/RECORD"
-    with zipfile.ZipFile(Path(wheel_directory) / wheel_name, "w", zipfile.ZIP_DEFLATED) as z:
-        lines=[]
-        for n,d in records:
-            z.writestr(n,d); lines.append(f"{n},{_hash(d)},{len(d)}")
-        lines.append(f"{record_name},,"); z.writestr(record_name, "\\n".join(lines)+"\\n")
-    return wheel_name
-
-def prepare_metadata_for_build_editable(metadata_directory, config_settings=None):
-    name, version, dist = _meta()
-    info = Path(metadata_directory) / _dist_info(dist, version); info.mkdir(parents=True, exist_ok=True)
-    (info/"METADATA").write_text(_metadata(name, version), encoding="utf-8")
-    (info/"WHEEL").write_text(_wheel_text(), encoding="utf-8")
-    return info.name
-
-def get_requires_for_build_editable(config_settings=None): return []
-def _supported_features(): return ["build_editable"]
-"""
-    (package / "build_meta.py").write_text(shim.lstrip(), encoding="utf-8")
+def _build_tool_details(
+    expected: dict[str, str], provisioning_details: dict[str, object]
+) -> dict[str, object]:
+    return {
+        "expected_versions": expected,
+        "installed_versions": {},
+        "missing_distributions": [],
+        "failed_provisioning_command": provisioning_details.get("command"),
+        "returncode": provisioning_details.get("returncode"),
+        "stdout": provisioning_details.get("stdout", ""),
+        "stderr": provisioning_details.get("stderr", ""),
+        "provisioning": provisioning_details,
+    }
