@@ -350,12 +350,14 @@ jobs:
       contents: read
     steps:
       - name: Download generated artifact diagnostics
+        if: needs.prepare-generated-artifact.result == 'success'
         continue-on-error: true
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: generated-demo-${{ github.run_id }}
           path: certification-input/generated-artifact
       - name: Download verifier diagnostics
+        if: needs.verify-generated-demo.result != 'skipped'
         continue-on-error: true
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:

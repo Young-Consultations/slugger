@@ -49,3 +49,16 @@ def test_user_idea_workflow_uses_dynamic_project_for_verification() -> None:
     assert "\"$BUILD_IDEA\"" in text
     assert "python -m ${{ needs.prepare-codex-input.outputs.package_name }}.main --help" in text
     assert "slugger-user-idea-cli-demo-${{ github.run_id }}" in text
+
+
+def test_user_idea_certification_downloads_only_available_diagnostics() -> None:
+    data = _workflow()
+    steps = data["jobs"]["publish-certification-diagnostics"]["steps"]
+    generated = next(
+        step for step in steps if step["name"] == "Download generated artifact diagnostics"
+    )
+    verifier = next(step for step in steps if step["name"] == "Download verifier diagnostics")
+    assert generated["if"] == "needs.prepare-generated-artifact.result == 'success'"
+    assert verifier["if"] == "needs.verify-generated-demo.result != 'skipped'"
+    assert generated["continue-on-error"] is True
+    assert verifier["continue-on-error"] is True
