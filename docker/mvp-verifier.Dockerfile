@@ -4,11 +4,21 @@ ENV PYTHONNOUSERSITE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN python -m pip install --no-cache-dir setuptools==70.3.0 wheel==0.43.0 pytest==8.3.5 \
+COPY constraints-ci.txt /tmp/slugger-constraints-ci.txt
+RUN python -m pip download \
+        --only-binary=:all: \
+        --dest /opt/slugger-wheelhouse \
+        --requirement /tmp/slugger-constraints-ci.txt \
+    && python -m pip install \
+        --no-index \
+        --find-links /opt/slugger-wheelhouse \
+        --constraint /tmp/slugger-constraints-ci.txt \
+        pip setuptools wheel pytest \
     && groupadd --gid 1000 verifier \
     && useradd --uid 1000 --gid 1000 --create-home --home-dir /home/verifier verifier
 
-ENV PIP_NO_INDEX=1
+ENV PIP_NO_INDEX=1 \
+    SLUGGER_WHEELHOUSE=/opt/slugger-wheelhouse
 
 WORKDIR /slugger
 USER 1000:1000

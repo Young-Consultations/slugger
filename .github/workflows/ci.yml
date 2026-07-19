@@ -106,36 +106,3 @@ jobs:
           assert not any(state.is_relative_to(root) for root in site_roots), data
           print(data)
           PY
-
-  real-codex:
-    name: Real Codex integration (protected manual)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: mvp-integration
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: python -m pip install --upgrade pip && pip install -c constraints-ci.txt -e ".[test]"
-      - run: slugger mvp build "Create a CLI task tracker with add, list, and done commands" --name task-tracker --repo "$SLUGGER_GITHUB_SANDBOX" --base main
-        env:
-          SLUGGER_GITHUB_SANDBOX: ${{ secrets.SLUGGER_GITHUB_SANDBOX }}
-          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
-
-  real-github-sandbox:
-    name: Real GitHub sandbox publication (protected manual)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: mvp-integration
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: python -m pip install --upgrade pip && pip install -c constraints-ci.txt -e ".[test]"
-      - run: python -m pytest tests/test_mvp_github_publisher.py -q
-      - run: slugger mvp publish "$SLUGGER_MVP_RUN_ID"
-        env:
-          SLUGGER_MVP_RUN_ID: ${{ secrets.SLUGGER_MVP_RUN_ID }}
-          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}

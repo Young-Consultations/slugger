@@ -1,3 +1,15 @@
+## Project status for v0.1.1
+
+Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+
+The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
+
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
+
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+
+Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+
 # Slugger MVP Certification Evidence
 
 Status: **not 100% certified in this environment**. Offline MVP acceptance, package build, and recoverable publication code paths are evidenced here. Real Codex generation, real GitHub sandbox publication, and green protected CI require credentials and repository administrator controls that were not available to this local agent run.
@@ -137,3 +149,7 @@ Review the generated files before committing. Do not commit API keys, GitHub tok
 ## Action pin update process
 
 All third-party actions in `.github/workflows/real-codex-cli-demo.yml` are pinned to immutable commit SHAs with release comments. To update an action, resolve the desired release tag to a commit SHA, review the upstream release notes and diff, update the `uses:` SHA plus the human-readable comment, run workflow tests and `actionlint`, and record the reviewed SHA in the next certification summary.
+
+## v0.1.1 certification status note
+
+Do not mark v0.1.1 certified until the required Python 3.11 and Python 3.13 CI jobs, golden MVP acceptance, package verification, and one protected manual user-idea publication run have passed. The protected run must demonstrate one generated branch, one draft PR, idempotent rerun behavior, uploaded publication evidence, triggered generated-PR checks, and no publication-token leakage in logs.

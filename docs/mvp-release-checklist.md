@@ -1,3 +1,15 @@
+## Project status for v0.1.1
+
+Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+
+The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
+
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
+
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+
+Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+
 # MVP Release Checklist
 
 Use this checklist before tagging the first Slugger MVP release.
@@ -20,7 +32,7 @@ Use this checklist before tagging the first Slugger MVP release.
 
 - The supported MVP release path is the manual GitHub Actions workflow only; local Codex runs remain developer diagnostics.
 - The generated demo is intentionally constrained to a dependency-minimal Python CLI named `hello-codex`.
-- The workflow does not publish generated code to another repository or open a generated-code pull request.
+- General CI does not publish generated code. The user-idea workflow publishes only after all MVP gates pass and only to an empty or Slugger-managed sandbox target repository.
 - Real Codex output is non-deterministic; the verifier rejects outputs that do not satisfy the documented contract.
 - Container verification requires Docker availability on the GitHub-hosted runner.
 
@@ -55,3 +67,10 @@ Use this checklist before tagging the first Slugger MVP release.
 ### Post-certified-commit changes
 
 Commits `f74ed2f` and `e481f81` (merged after certified commit `685ae1b`) add consulting operating system templates — documentation only, no product code changes. Release continues as approved.
+
+## v0.1.1 release checks to keep open
+
+- Confirm `constraints-ci.txt`, `mvp/basic_runner.py`, and `docker/mvp-verifier.Dockerfile` agree on verifier tool versions through the automated consistency test.
+- Confirm the user-idea success artifact contains only the generated demo, manifest, generation summary, verification evidence, publication summary, and artifact README.
+- Confirm same-job publication works without transferring a complete `SLUGGER_HOME` between jobs.
+- Confirm `SLUGGER_GITHUB_TOKEN` has only target-repository Contents read/write, Pull requests read/write, and Metadata read permissions.

@@ -1,3 +1,15 @@
+## Project status for v0.1.1
+
+Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+
+The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
+
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
+
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+
+Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+
 # Slugger MVP: Idea to Runnable Python Draft PR
 
 The MVP path is Slugger's primary documented capability. It turns one product idea into a small runnable Python CLI project in an isolated workspace, validates the generated files, installs the generated project, runs tests and a smoke command, and publishes the result as one draft GitHub pull request.
@@ -192,3 +204,13 @@ For the remainder of the Slugger MVP:
 * Human and independent AI review will remain required before merging significant changes.
 
 This conclusion applies to the experience of developing Slugger and does not imply that GitHub Agents are unsuitable for every project or task.
+
+## v0.1.1 verifier and publication updates
+
+The user-idea workflow now keeps publication in the same GitHub Actions job that performs restricted verification. `SLUGGER_HOME` stays under `runner.temp`, so the SQLite run record and generated workspace path remain valid without uploading a runtime-home copy between jobs. Only target validation and final publication receive `secrets.SLUGGER_GITHUB_TOKEN`; generated code, tests, package installation, and Docker verification run without that token.
+
+`SLUGGER_GITHUB_TOKEN` must be a fine-grained PAT or GitHub App installation token scoped only to the configured target repository with Contents read/write, Pull requests read/write, and Metadata read. The workflow validates the target repository and default/base branch before Codex generation starts. The target must be empty or already Slugger-managed for the same deterministic run according to the publisher policy; closed or merged PRs are not duplicated and require the documented rerun/recovery policy before reuse.
+
+Restricted verification uses the offline wheelhouse at `/opt/slugger-wheelhouse`. The Docker image downloads exact wheels from `constraints-ci.txt` at image build time, and the generated-project venv installs `pip`, `setuptools`, `wheel`, and `pytest` with `--no-index`, `--find-links`, and the same constraints. Missing wheelhouse entries produce a controlled provisioning failure instead of copying host site-packages or creating a synthetic build backend.
+
+The success artifact is intentionally small: `generated-demo/`, `generated-project-manifest.json`, `generation-summary.json`, `verification-evidence.json`, `publication-summary.json`, and `MVP_ARTIFACT_README.md`. Runtime homes, virtual environments, caches, temporary Git data, complete logs, and environment dumps are excluded.
