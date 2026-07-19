@@ -1,6 +1,44 @@
 import pytest
 
-from mvp.prompt_renderer import prompt_inputs, render_demo_prompt
+from mvp.prompt_renderer import (
+    normalize_project_name,
+    prompt_inputs,
+    render_demo_prompt,
+    validate_project_name,
+)
+
+
+@pytest.mark.parametrize(
+    "submitted,normalized",
+    [
+        ("Todo-cli", "todo-cli"),
+        ("Todo CLI", "todo-cli"),
+        ("todo_cli", "todo-cli"),
+        ("todo--cli", "todo-cli"),
+        ("  inventory report  ", "inventory-report"),
+    ],
+)
+def test_normalize_project_name_accepts_human_friendly_names(
+    submitted: str, normalized: str
+) -> None:
+    assert normalize_project_name(submitted) == normalized
+
+
+@pytest.mark.parametrize(
+    "submitted,match",
+    [
+        ("", "empty"),
+        ("   ", "empty"),
+        ("!!!", "lowercase kebab-case"),
+        ("hello_codex", "reserved"),
+        ("9bad", "lowercase kebab-case"),
+    ],
+)
+def test_normalize_project_name_rejects_unusable_names(
+    submitted: str, match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        normalize_project_name(submitted)
 
 
 @pytest.mark.parametrize(
@@ -27,6 +65,14 @@ def test_render_demo_prompt_materializes_inputs(name: str, package: str) -> None
 def test_render_demo_prompt_rejects_invalid_names(name: str) -> None:
     with pytest.raises(ValueError):
         render_demo_prompt(project_name=name, demo_description="ok")
+
+
+@pytest.mark.parametrize("name", ["BadName", "bad_name"])
+def test_validate_project_name_rejects_non_normalized_internal_names(
+    name: str,
+) -> None:
+    with pytest.raises(ValueError):
+        validate_project_name(name)
 
 
 def test_render_demo_prompt_rejects_reserved_canonical_name() -> None:
