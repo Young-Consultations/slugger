@@ -315,6 +315,35 @@ def test_real_pytest_runs_class_based_tests(tmp_path: Path) -> None:
     assert "failed" in tests.details.get("stdout", "")
 
 
+def test_cli_smoke_accepts_standard_argparse_module_help_without_project_name(
+    tmp_path: Path,
+) -> None:
+    manager, workspace = _workspace(tmp_path)
+    (workspace.path / "src" / "task_tracker" / "main.py").write_text(
+        "from __future__ import annotations\n"
+        "import argparse\n\n"
+        "def build_parser():\n"
+        "    parser = argparse.ArgumentParser(description='Task tracker CLI')\n"
+        "    parser.add_argument('--version', action='store_true')\n"
+        "    return parser\n\n"
+        "def main(argv=None):\n"
+        "    build_parser().parse_args(argv)\n"
+        "    return 0\n\n"
+        "if __name__ == '__main__':\n"
+        "    raise SystemExit(main())\n",
+        encoding="utf-8",
+    )
+    (workspace.path / "tests" / "test_main.py").write_text(
+        "def test_ok():\n    assert True\n", encoding="utf-8"
+    )
+
+    result = BasicRunner(manager, timeout_seconds=180).run(_request(), workspace)
+
+    smoke = next(check for check in result.checks if check.name == "cli_smoke")
+    assert smoke.passed
+    assert "usage" in smoke.details.get("stdout", "")
+
+
 def test_cli_smoke_requires_meaningful_help_output(tmp_path: Path) -> None:
     manager, workspace = _workspace(tmp_path)
     (workspace.path / "src" / "task_tracker" / "main.py").write_text(

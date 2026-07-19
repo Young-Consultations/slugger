@@ -138,7 +138,7 @@ class BasicRunner:
                     "cli_smoke",
                     [str(python), "-m", f"{package}.main", "--help"],
                     workspace_path,
-                    require_stdout=("usage", request.project_name),
+                    require_stdout=("usage",),
                 )
             )
         else:
