@@ -89,7 +89,7 @@ def test_restricted_verification_uses_sanitized_artifact_not_build_workspace() -
     assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
     assert "PROJECT_NAME: hello-codex" in text
     assert '--project-name "$PROJECT_NAME"' in text
-    assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' in text
+    assert '--evidence-file "$WORKSPACE_ROOT/verification-evidence.json"' in text
     assert 'print(data["workspace_path"])' not in text
     assert 'print(Path(data["workspace_path"]).parent)' not in text
 

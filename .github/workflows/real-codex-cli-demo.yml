@@ -278,7 +278,7 @@ jobs:
           # virtualenv symlinks, which are intentionally outside the protected manifest.
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
-          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$WORKSPACE_ROOT/verification-evidence.json"
       - name: Assemble success artifact
         if: success()
         shell: bash
@@ -291,7 +291,7 @@ jobs:
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
           cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
-          cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          cp downloaded-artifact/verification-evidence.json mvp-artifact/verification-evidence.json
           python - <<'PY'
           from pathlib import Path
           from mvp.inventory_manifest import verify_protected_manifest
@@ -317,7 +317,7 @@ jobs:
           path: |
             slugger-build-summary.json
             slugger-build-error.log
-            downloaded-artifact/generated-demo/verification-evidence.json
+            downloaded-artifact/verification-evidence.json
             downloaded-artifact/generated-project-manifest.json
           if-no-files-found: ignore
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}

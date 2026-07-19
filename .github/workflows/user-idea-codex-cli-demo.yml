@@ -369,7 +369,7 @@ jobs:
           # virtualenv symlinks, which are intentionally outside the protected manifest.
           PROJECT_DIR="downloaded-artifact/generated-demo"
           WORKSPACE_ROOT="downloaded-artifact"
-          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$PROJECT_DIR/verification-evidence.json"
+          python -m cli.main mvp verify-existing --container --project-dir "$PROJECT_DIR" --project-name "$PROJECT_NAME" --workspace-root "$WORKSPACE_ROOT" --evidence-file "$WORKSPACE_ROOT/verification-evidence.json"
       - name: Publish or update draft pull request
         if: success()
         shell: bash
@@ -380,11 +380,29 @@ jobs:
           TARGET_REPOSITORY: ${{ inputs.target_repository }}
         run: |
           set -euo pipefail
+          : > publication-error.log
+          write_publication_diagnostic() {
+            local phase="$1"
+            local message="$2"
+            PHASE="$phase" MESSAGE="$message" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          diagnostic = {
+              "phase": os.environ["PHASE"],
+              "message": os.environ["MESSAGE"][:500],
+          }
+          Path("publication-diagnostics.json").write_text(json.dumps([diagnostic], indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          }
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "SLUGGER_GITHUB_TOKEN is required for the final publication step." >&2
+            message="SLUGGER_GITHUB_TOKEN is required for the final publication step."
+            echo "$message" >&2
+            echo "$message" > publication-error.log
+            write_publication_diagnostic "pre_publication_token" "$message"
             exit 1
           fi
-          python - <<'PY'
+          if ! python - <<'PY' 2>> publication-error.log
           import json
           from pathlib import Path
           from mvp.inventory_manifest import verify_protected_manifest
@@ -396,6 +414,10 @@ jobs:
           assert summary["status"] == "ready_to_publish", summary
           assert summary["publication_skipped"] is True, summary
           PY
+          then
+            write_publication_diagnostic "pre_publication_manifest" "Pre-publication manifest or summary check failed. See publication-error.log."
+            exit 1
+          fi
           RUN_ID="$(python - <<'PY'
           import json
           from pathlib import Path
@@ -434,7 +456,7 @@ jobs:
           cp downloaded-artifact/generated-project-manifest.json mvp-artifact/generated-project-manifest.json
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
-          cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
+          cp downloaded-artifact/verification-evidence.json mvp-artifact/verification-evidence.json
           cp publication-summary.json mvp-artifact/publication-summary.json
           python - <<'PY'
           from pathlib import Path
@@ -467,7 +489,7 @@ jobs:
             publication-summary.json
             publication-error.log
             publication-diagnostics.json
-            downloaded-artifact/generated-demo/verification-evidence.json
+            downloaded-artifact/verification-evidence.json
             downloaded-artifact/generated-project-manifest.json
           if-no-files-found: ignore
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
