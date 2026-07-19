@@ -63,6 +63,16 @@ class BasicRunner:
             / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         )
         if checks[-1].passed:
+            checks.append(self._provision_build_tools(python, workspace_path))
+        else:
+            checks.append(
+                CheckResult(
+                    "provision_build_tools",
+                    False,
+                    "Skipped because virtual environment creation failed",
+                )
+            )
+        if checks[-1].passed:
             checks.append(
                 self._run_phase(
                     "install_verifier_dependencies",
@@ -75,7 +85,7 @@ class BasicRunner:
                 CheckResult(
                     "install_verifier_dependencies",
                     False,
-                    "Skipped because virtual environment creation failed",
+                    "Skipped because Python build tool provisioning failed",
                 )
             )
         if checks[-1].passed:
@@ -161,6 +171,81 @@ class BasicRunner:
                 )
             )
         return BasicRunnerResult(tuple(checks))
+
+    def _provision_build_tools(self, python: Path, workspace_path: Path) -> CheckResult:
+        command = [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "pip==25.0.1",
+            "setuptools==80.9.0",
+            "wheel==0.45.1",
+        ]
+        result = self._run_phase("provision_build_tools", command, workspace_path)
+        if result.passed:
+            return self._verify_build_tools(python, workspace_path, result.details)
+        fallback_details = dict(result.details)
+        if _copy_approved_build_tools(str(python)):
+            fallback_details["approved_dependency_copy"] = "pip,setuptools,wheel"
+            verified = self._verify_build_tools(
+                python, workspace_path, fallback_details
+            )
+            if verified.passed:
+                return CheckResult(
+                    "provision_build_tools",
+                    True,
+                    "Approved Python build tools copied into clean verifier venv",
+                    verified.details,
+                )
+            return verified
+        fallback_details["diagnostic"] = (
+            "Required Python build tools are unavailable. Ensure the verifier image "
+            "or approved wheelhouse provides pip, setuptools, and wheel versions "
+            "allowed by constraints-ci.txt before offline verification."
+        )
+        return CheckResult(
+            "provision_build_tools",
+            False,
+            "Required Python build tools are unavailable in verifier environment",
+            fallback_details,
+        )
+
+    def _verify_build_tools(
+        self, python: Path, workspace_path: Path, details: dict[str, object]
+    ) -> CheckResult:
+        verify = self._run_phase(
+            "provision_build_tools",
+            [
+                str(python),
+                "-c",
+                "import pip, setuptools, wheel; "
+                "print('pip=' + getattr(pip, '__version__', 'unknown')); "
+                "print('setuptools=' + getattr(setuptools, '__version__', 'unknown')); "
+                "print('wheel=' + getattr(wheel, '__version__', 'unknown'))",
+            ],
+            workspace_path,
+        )
+        merged = dict(details)
+        merged["verification"] = verify.details
+        if not verify.passed:
+            merged["diagnostic"] = (
+                "Verifier venv is missing pip, setuptools, or wheel after provisioning."
+            )
+            return CheckResult(
+                "provision_build_tools",
+                False,
+                "Required Python build tools are unavailable in verifier environment",
+                merged,
+            )
+        merged["build_tools"] = verify.details.get("stdout", "")
+        return CheckResult(
+            "provision_build_tools",
+            True,
+            "Python build tools are available in verifier environment",
+            merged,
+        )
 
     def _run_phase(
         self,
@@ -272,18 +357,28 @@ def _declares_pytest_extra(workspace_path: Path) -> bool:
     return bool(test_extra)
 
 
+def _copy_approved_build_tools(venv_python: str) -> bool:
+    return _copy_approved_packages(venv_python, ("pip", "setuptools", "wheel"))
+
+
 def _copy_approved_pytest(venv_python: str) -> bool:
-    approved = (
-        "pytest",
-        "_pytest",
-        "pluggy",
-        "iniconfig",
-        "packaging",
-        "pygments",
-        "setuptools",
-        "wheel",
-        "py",
+    return _copy_approved_packages(
+        venv_python,
+        (
+            "pytest",
+            "_pytest",
+            "pluggy",
+            "iniconfig",
+            "packaging",
+            "pygments",
+            "setuptools",
+            "wheel",
+            "py",
+        ),
     )
+
+
+def _copy_approved_packages(venv_python: str, approved: tuple[str, ...]) -> bool:
     try:
         purelib_text = subprocess.check_output(
             [
@@ -314,6 +409,7 @@ def _copy_approved_pytest(venv_python: str) -> bool:
             elif source.is_file():
                 shutil.copy2(source, target)
         for pattern in (
+            "pip-*.dist-info",
             "pytest-*.dist-info",
             "pluggy-*.dist-info",
             "iniconfig-*.dist-info",
@@ -329,6 +425,11 @@ def _copy_approved_pytest(venv_python: str) -> bool:
                     shutil.rmtree(target)
                 shutil.copytree(dist, target)
         _write_setuptools_build_meta_shim(purelib)
+        wheel_package = purelib / "wheel"
+        wheel_package.mkdir(exist_ok=True)
+        (wheel_package / "__init__.py").write_text(
+            "__version__ = '0+slugger-verifier-shim'\n", encoding="utf-8"
+        )
         return True
     except Exception:
         return False

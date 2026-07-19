@@ -1,4 +1,7 @@
 # Keep CI reproducible and avoid surprise breakage from new major/minor tool releases.
+pip==25.0.1
+setuptools==80.9.0
+wheel==0.45.1
 pytest>=8.0,<9.1
 ruff>=0.4,<0.16
 mypy>=1.11,<1.21

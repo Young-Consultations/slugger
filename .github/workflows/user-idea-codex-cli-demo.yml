@@ -253,7 +253,7 @@ jobs:
         shell: bash
         env:
           BUILD_IDEA: ${{ inputs.idea }}
-          SLUGGER_HOME: ${{ runner.temp }}/slugger-home
+          SLUGGER_HOME: ${{ github.workspace }}/slugger-home
           SLUGGER_MVP_SKIP_PUBLISH: "1"
           SLUGGER_MVP_ARTIFACT_DIR: ${{ github.workspace }}/downloaded-artifact/generated-demo
           SLUGGER_MVP_ARTIFACT_MANIFEST: ${{ github.workspace }}/downloaded-artifact/generated-project-manifest.json
@@ -262,7 +262,7 @@ jobs:
           python -m cli.main mvp build \
             "$BUILD_IDEA" \
             --name "${{ needs.prepare-codex-input.outputs.project_name }}" \
-            --repo "local/${{ needs.prepare-codex-input.outputs.project_name }}" \
+            --repo "${{ github.repository }}" \
             --base main \
             > slugger-build-summary.tmp.json \
             2> slugger-build-error.log
@@ -305,6 +305,7 @@ jobs:
           cp downloaded-artifact/generation-summary.json mvp-artifact/generation-summary.json
           cp downloaded-artifact/MVP_ARTIFACT_README.md mvp-artifact/MVP_ARTIFACT_README.md
           cp slugger-build-summary.json mvp-artifact/slugger-build-summary.json
+          cp -R slugger-home mvp-artifact/slugger-home
           cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json
           python - <<'PY'
           from pathlib import Path
@@ -336,6 +337,75 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ inputs.retain_diagnostics && 14 || 3 }}
 
+  publish-verified-draft-pr:
+    name: Publish verified draft PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [prepare-codex-input, verify-generated-demo]
+    if: needs.verify-generated-demo.result == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out target repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - name: Install Slugger publisher dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Download verified evidence artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: slugger-user-idea-cli-demo-${{ github.run_id }}
+          path: verified-artifact
+      - name: Publish or update draft pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLUGGER_HOME: ${{ github.workspace }}/verified-artifact/slugger-home
+          TARGET_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from mvp.inventory_manifest import verify_protected_manifest
+          artifact = Path("verified-artifact")
+          manifest = artifact / "generated-project-manifest.json"
+          generated = artifact / "generated-demo"
+          verify_protected_manifest(generated, manifest)
+          summary = json.loads((artifact / "slugger-build-summary.json").read_text(encoding="utf-8"))
+          assert summary["status"] == "ready_to_publish", summary
+          assert summary["publication_skipped"] is True, summary
+          print(summary["run_id"])
+          PY
+          RUN_ID="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('verified-artifact/slugger-build-summary.json').read_text(encoding='utf-8'))['run_id'])
+          PY
+          )"
+          python -m cli.main mvp publish "$RUN_ID" > publish-summary.json
+          python -m json.tool publish-summary.json >/dev/null
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: slugger-user-idea-publication-${{ github.run_id }}
+          path: |
+            publish-summary.json
+            verified-artifact/verification-evidence.json
+            verified-artifact/generated-project-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
   publish-certification-diagnostics:
     name: Publish MVP certification diagnostics
     runs-on: ubuntu-latest
@@ -346,6 +416,7 @@ jobs:
       - generate-with-codex
       - prepare-generated-artifact
       - verify-generated-demo
+      - publish-verified-draft-pr
     permissions:
       contents: read
     steps:
@@ -386,6 +457,7 @@ jobs:
               "generate-with-codex": "${{ needs.generate-with-codex.result }}",
               "prepare-generated-artifact": "${{ needs.prepare-generated-artifact.result }}",
               "verify-generated-demo": "${{ needs.verify-generated-demo.result }}",
+              "publish-verified-draft-pr": "${{ needs.publish-verified-draft-pr.result }}",
           }
           result = "passed" if all(value == "success" for value in job_results.values()) else "failed"
           failed_phase = None

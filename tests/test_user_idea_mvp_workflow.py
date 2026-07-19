@@ -43,9 +43,7 @@ def test_user_idea_workflow_renders_prompt_from_safe_inputs() -> None:
 def test_user_idea_workflow_uses_dynamic_project_for_verification() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '--name "${{ needs.prepare-codex-input.outputs.project_name }}"' in text
-    assert (
-        '--repo "local/${{ needs.prepare-codex-input.outputs.project_name }}"' in text
-    )
+    assert '--repo "${{ github.repository }}"' in text
     assert "PROJECT_NAME: ${{ needs.prepare-codex-input.outputs.project_name }}" in text
     assert "BUILD_IDEA: ${{ inputs.idea }}" in text
     assert '"$BUILD_IDEA"' in text
@@ -71,3 +69,19 @@ def test_user_idea_certification_downloads_only_available_diagnostics() -> None:
     assert verifier["if"] == "needs.verify-generated-demo.result != 'skipped'"
     assert generated["continue-on-error"] is True
     assert verifier["continue-on-error"] is True
+
+
+def test_user_idea_workflow_publishes_verified_draft_pr_with_least_privilege() -> None:
+    data = _workflow()
+    jobs = data["jobs"]
+    publish = jobs["publish-verified-draft-pr"]
+    assert publish["needs"] == ["prepare-codex-input", "verify-generated-demo"]
+    assert publish["if"] == "needs.verify-generated-demo.result == 'success'"
+    assert publish["permissions"] == {"contents": "write", "pull-requests": "write"}
+    assert all(
+        job.get("permissions", {"contents": "read"}) == {"contents": "read"}
+        for name, job in jobs.items()
+        if name != "publish-verified-draft-pr"
+    )
+    assert "python -m cli.main mvp publish" in str(publish)
+    assert "verify_protected_manifest" in str(publish)

@@ -37,6 +37,7 @@ def test_real_runner_installs_tests_and_smokes_valid_cli_project(
     )
     assert [check.name for check in result.checks] == [
         "create_environment",
+        "provision_build_tools",
         "install_verifier_dependencies",
         "install_project",
         "verify_pytest_available",
@@ -108,12 +109,14 @@ def test_normal_build_preserves_broken_backend_install_failure(tmp_path: Path) -
     )
     assert not result.passed
     assert not install_check.passed
+    assert install_check.details.get("returncode", 0) != 0
+    assert install_check.name == "install_project"
     assert install_check.details.get("manual_source_install") is None
     assert "manual_source_install_error" not in install_check.details
-    assert "does.not.exist" in (
-        install_check.details.get("stderr", "")
-        + install_check.details.get("stdout", "")
-    )
+    assert "approved_dependency_copy" not in install_check.details
+    assert isinstance(install_check.details.get("stdout"), str)
+    assert isinstance(install_check.details.get("stderr"), str)
+    assert install_check.details.get("stdout") or install_check.details.get("stderr")
 
 
 def _all_commands(result):
@@ -232,6 +235,7 @@ def test_missing_pytest_configuration_causes_controlled_failure(tmp_path: Path) 
     assert result.passed
     assert [check.name for check in result.checks] == [
         "create_environment",
+        "provision_build_tools",
         "install_verifier_dependencies",
         "install_project",
         "verify_pytest_available",

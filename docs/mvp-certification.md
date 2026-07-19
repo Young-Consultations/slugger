@@ -1,3 +1,15 @@
+## Project status for v0.1.1
+
+Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+
+The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
+
+Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. The publication job uses the repository `GITHUB_TOKEN` with job-scoped `contents: write` and `pull-requests: write`; earlier jobs remain `contents: read`.
+
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+
+Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+
 # Slugger MVP Certification Evidence
 
 Status: **not 100% certified in this environment**. Offline MVP acceptance, package build, and recoverable publication code paths are evidenced here. Real Codex generation, real GitHub sandbox publication, and green protected CI require credentials and repository administrator controls that were not available to this local agent run.
