@@ -1,14 +1,14 @@
-## Project status for v0.1.1
+## Project status for v0.1.2
 
-Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+Current release target: **Slugger v0.1.2**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
 
 The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
 
 Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
 
-Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<stable-identity-prefix>` branch, and at most one Slugger-managed draft PR per logical request. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns use a stable publication identity independent of workflow and Slugger run IDs, validate machine-readable PR ownership markers, safely migrate a matching legacy run-ID draft PR, update the existing branch/PR with latest verified output, remove stale Slugger-owned generated files, recover safely from create races, and fail closed when duplicate matching drafts or mismatched PR markers are detected.
 
-Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+Known limitations: v0.1.2 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
 
 # MVP Release Checklist
 
@@ -74,3 +74,30 @@ Commits `f74ed2f` and `e481f81` (merged after certified commit `685ae1b`) add co
 - Confirm the user-idea success artifact contains only the generated demo, manifest, generation summary, verification evidence, publication summary, and artifact README.
 - Confirm same-job publication works without transferring a complete `SLUGGER_HOME` between jobs.
 - Confirm `SLUGGER_GITHUB_TOKEN` has only target-repository Contents read/write, Pull requests read/write, and Metadata read permissions.
+
+## v0.1.2 release checks
+
+- [x] Issue #63 implementation is merged on `main` and preserves manifest verification, restricted verification, token isolation, inventory/path safety, target-repository policy, and same-job publication boundaries.
+- [x] Publication identity is deterministic across workflow and Slugger run IDs and uses the stable branch form `slugger/generated-<project>-<stable-identity-prefix>`.
+- [x] Repeated logical requests validate machine-readable Slugger ownership markers and update one matching draft PR instead of creating one PR per run.
+- [x] Legacy run-ID draft branches can be discovered and safely updated when exactly one matching Slugger-owned draft PR exists.
+- [x] Duplicate matching drafts, non-draft PRs, closed PRs, merged PRs, foreign PRs, wrong-base PRs, and marker-mismatched PRs are not silently reused.
+- [x] Stale Slugger-owned generated files are removed from prior inventories while unrelated files are protected.
+- [x] Concurrent PR creation is race-safe through re-query and validated reuse.
+- [x] Diagnostics and `publication-summary.json` report discovery, reuse/update behavior, duplicate detection, branch updates, PR updates, and race recovery.
+- [x] Release automation verifies this checklist, package version `0.1.2`, CI/release checks, build artifacts, annotated tag safety, and idempotent GitHub Release creation before publishing.
+
+## v0.1.2 certification record
+
+- Release version: `v0.1.2`
+- Certification workflow run: `29717362202`
+- Certified branch: `main`
+- Certified commit: `59a4142979a24a10ff697730c8ef49ec6c2030ee`
+- Slugger run ID: `20f3c537bcf6480a9080d457f9414616`
+- Manifest digest: `df3decd17b1ca9df01bb5e6cf41c2f82d1a5815ce0fd3b9dc0dac24e94b69daa`
+- Certification artifact: `slugger-user-idea-codex-certification-29717362202`
+- Certification artifact digest: `sha256:33c201af38a00d8058ea8e048cbf7dbbdc7b93468e48fb8049e230cbc237f231`
+- Verifier diagnostics: `verifier-diagnostics-29717362202`
+- Success artifact: `slugger-user-idea-cli-demo-29717362202`
+- Updated existing draft PR: `mightyjoe909/slugger-generated-demos#2`
+- Release decision: approved after this release PR merges to `main` and required checks pass.
