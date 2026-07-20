@@ -19,7 +19,19 @@ Examples lower the barrier to adoption by showing how to invoke agents, define w
 - `custom_agent/` — how to implement and register a custom agent
 - `custom_provider/` — how to configure an alternative AI provider
 - `workflow_customization/` — how to define a custom workflow in YAML
-- `plugin_development/` — how to package and distribute a Slugger plugin
+
+## Running examples
+
+Each runnable example provides a `run.py` entrypoint and can be launched from its directory:
+
+```bash
+cd examples/hello_world && python run.py
+cd ../custom_agent && python run.py
+cd ../custom_provider && python run.py
+cd ../workflow_customization && python run.py
+```
+
+All samples use deterministic local implementations so they can run without API keys.
 
 ## Related
 

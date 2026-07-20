@@ -1,0 +1,14 @@
+name: sample-custom-workflow
+version: 1.0.0
+description: Demonstrates a small customized workflow definition.
+tags: [example, customization]
+steps:
+  - name: plan
+    agent: product_vision_agent
+    description: Capture the product direction.
+    outputs: [product_vision]
+  - name: specify
+    agent: requirements_agent
+    description: Convert the direction into requirements.
+    inputs: [product_vision]
+    outputs: [requirements]
