@@ -10,6 +10,7 @@ import os
 import subprocess
 import hashlib
 import re
+import tempfile
 
 from mvp.basic_runner import BasicRunnerResult
 from mvp.models import (
@@ -415,9 +416,13 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
             ],
             cwd,
         )
-        self._run(["git", "checkout", "-B", head, f"origin/{head}"], cwd)
-        self._remove_stale_inventory_files(cwd, existing_pr, run)
-        self._stage_inventory(cwd, run.inventory)
+        with tempfile.TemporaryDirectory(prefix="slugger-generated-") as snapshot_dir:
+            snapshot_path = Path(snapshot_dir)
+            self._snapshot_inventory_files(cwd, snapshot_path, run.inventory)
+            self._run(["git", "checkout", "-B", head, f"origin/{head}"], cwd)
+            self._restore_inventory_files(cwd, snapshot_path, run.inventory)
+            self._remove_stale_inventory_files(cwd, existing_pr, run)
+            self._stage_inventory(cwd, run.inventory)
         status = self._run(["git", "status", "--porcelain"], cwd).stdout
         commit_sha = remote_sha
         if status.strip():
@@ -662,6 +667,62 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                 )
             paths.append(file.path)
         self._run(["git", "add", "--", *paths], workspace_path)
+
+    def _snapshot_inventory_files(
+        self,
+        workspace_path: Path,
+        snapshot_path: Path,
+        inventory: GeneratedProjectInventory | None,
+    ) -> None:
+        if inventory is None:
+            raise GitHubPublishError(
+                "Refusing to publish without a generated-file inventory"
+            )
+        for file in inventory.files:
+            relative_path = Path(file.path)
+            WorkspaceManager._validate_relative_path(relative_path)
+            source = self.workspace_manager.resolve_generated_path(
+                workspace_path, file.path
+            )
+            if not source.is_file():
+                raise GitHubPublishError(
+                    f"Recorded generated file is missing: {file.path}"
+                )
+            destination = (snapshot_path / relative_path).resolve(strict=False)
+            if not destination.is_relative_to(snapshot_path.resolve(strict=True)):
+                raise GitHubPublishError(
+                    f"Recorded generated file path escapes snapshot: {file.path}"
+                )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+
+    def _restore_inventory_files(
+        self,
+        workspace_path: Path,
+        snapshot_path: Path,
+        inventory: GeneratedProjectInventory | None,
+    ) -> None:
+        if inventory is None:
+            raise GitHubPublishError(
+                "Refusing to publish without a generated-file inventory"
+            )
+        for file in inventory.files:
+            relative_path = Path(file.path)
+            WorkspaceManager._validate_relative_path(relative_path)
+            source = (snapshot_path / relative_path).resolve(strict=False)
+            if not source.is_relative_to(snapshot_path.resolve(strict=True)):
+                raise GitHubPublishError(
+                    f"Snapshot generated file path escapes snapshot: {file.path}"
+                )
+            if not source.is_file():
+                raise GitHubPublishError(
+                    f"Snapshot of generated file is missing: {file.path}"
+                )
+            destination = self.workspace_manager.resolve_generated_path(
+                workspace_path, file.path
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
 
     def _run(
         self, command: list[str], cwd: Path, *, check: bool = True

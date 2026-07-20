@@ -249,6 +249,35 @@ def test_cli_publisher_reuses_existing_pr_without_saved_publish_metadata(tmp_pat
     )
 
 
+def test_cli_publisher_preserves_generated_inventory_before_existing_branch_checkout(
+    tmp_path,
+):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text(
+        "fresh generated readme", encoding="utf-8"
+    )
+    run = _run()
+
+    class OverwritingCheckoutPublisher(ExistingPrGitHubCliPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            completed = super()._run(command, cwd, check=check)
+            if command[:3] == ["git", "checkout", "-B"]:
+                (workspace.path / "README.md").write_text(
+                    "old branch readme", encoding="utf-8"
+                )
+            return completed
+
+    publisher = OverwritingCheckoutPublisher(workspace_manager)
+
+    publisher.publish(run, workspace, _validation(), _runner())
+
+    assert (workspace.path / "README.md").read_text(encoding="utf-8") == (
+        "fresh generated readme"
+    )
+    assert ["git", "add", "--", "README.md"] in publisher.commands
+
+
 class FailingCommandGitHubCliPublisher(GitHubCliMvpPublisher):
     def __init__(
         self, workspace_manager: WorkspaceManager, failing_prefix: list[str]
