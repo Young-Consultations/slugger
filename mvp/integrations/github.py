@@ -8,6 +8,8 @@ import json
 import shutil
 import os
 import subprocess
+import hashlib
+import re
 
 from mvp.basic_runner import BasicRunnerResult
 from mvp.models import (
@@ -74,6 +76,7 @@ class FakeMvpGitHubPublisher(MvpGitHubPublisher):
 
     fail: bool = False
     publish_count: int = 0
+    _published: dict[str, GitHubPublishResult] = None  # type: ignore[assignment]
 
     def publish(
         self,
@@ -83,6 +86,8 @@ class FakeMvpGitHubPublisher(MvpGitHubPublisher):
         runner_result: BasicRunnerResult,
     ) -> GitHubPublishResult:
         _ensure_publishable(validation_results, runner_result)
+        if self._published is None:
+            self._published = {}
         if run.github_publish_result is not None:
             return GitHubPublishResult(
                 branch=run.github_publish_result.branch,
@@ -94,8 +99,22 @@ class FakeMvpGitHubPublisher(MvpGitHubPublisher):
             )
         if self.fail:
             raise GitHubPublishError("Fake GitHub publication failed")
+        identity = publication_identity(run.request, run.prompt_hash)
+        branch = branch_name(run.request, run.prompt_hash)
+        if identity in self._published:
+            previous = self._published[identity]
+            result = GitHubPublishResult(
+                branch=previous.branch,
+                pull_request_url=previous.pull_request_url,
+                draft=True,
+                existing=True,
+                commit_sha="fake-" + run.run_id[:12],
+                pull_request_number=previous.pull_request_number,
+            )
+            run.github_publish_result = result
+            self._published[identity] = result
+            return result
         self.publish_count += 1
-        branch = branch_name(run.request, run.run_id)
         result = GitHubPublishResult(
             branch=branch,
             pull_request_url=f"https://github.com/{run.request.github_repository}/pull/{run.run_id}",
@@ -105,6 +124,7 @@ class FakeMvpGitHubPublisher(MvpGitHubPublisher):
             pull_request_number=1,
         )
         run.github_publish_result = result
+        self._published[identity] = result
         return result
 
 
@@ -134,14 +154,25 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
     ) -> GitHubPublishResult:
         _ensure_publishable(validation_results, runner_result)
         workspace_path = self.workspace_manager._workspace_path(workspace)
-        branch = branch_name(run.request, run.run_id)
+        identity = publication_identity(run.request, run.prompt_hash)
+        branch = branch_name(run.request, run.prompt_hash)
         self.diagnostics = []
         self._active_repository = run.request.github_repository
         self._active_branch = branch
-        existing_pr = self._find_pr(run.request.github_repository, branch)
+        existing_pr = self._find_matching_pr(run, branch, identity, workspace_path)
         if existing_pr is not None:
-            return self._result_from_existing_pr(
-                run, branch, existing_pr, workspace_path
+            self._verify_repo(run.request.github_repository, workspace_path)
+            self._prepare_git(workspace_path, run.request.github_repository)
+            base_branch = self._resolve_base_branch(run, workspace_path)
+            return self._update_existing_pr(
+                run,
+                branch,
+                identity,
+                existing_pr,
+                workspace_path,
+                validation_results,
+                runner_result,
+                base_branch,
             )
 
         self._verify_repo(run.request.github_repository, workspace_path)
@@ -164,10 +195,17 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                 workspace_path,
             )
             self._verify_remote_inventory_tree(workspace_path, run, f"origin/{branch}")
-            existing_pr = self._find_pr(run.request.github_repository, branch)
+            existing_pr = self._find_matching_pr(run, branch, identity, workspace_path)
             if existing_pr is not None:
-                return self._result_from_existing_pr(
-                    run, branch, existing_pr, workspace_path
+                return self._update_existing_pr(
+                    run,
+                    branch,
+                    identity,
+                    existing_pr,
+                    workspace_path,
+                    validation_results,
+                    runner_result,
+                    base_branch,
                 )
             commit_sha = remote_sha
         else:
@@ -196,10 +234,10 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                     ["git", "rev-parse", "HEAD"], workspace_path
                 ).stdout.strip()
             self._run(["git", "push", "-u", "origin", branch], workspace_path)
-        existing_pr = self._find_pr(run.request.github_repository, branch)
+        existing_pr = self._find_matching_pr(run, branch, identity, workspace_path)
         pr_existed_before_create = existing_pr is not None
         if existing_pr is None:
-            body = pr_body(run, validation_results, runner_result)
+            body = pr_body(run, validation_results, runner_result, identity)
             completed = self._run(
                 [
                     "gh",
@@ -218,12 +256,36 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
                     body,
                 ],
                 workspace_path,
+                check=False,
             )
+            if completed.returncode != 0:
+                existing_pr = self._find_matching_pr(
+                    run, branch, identity, workspace_path
+                )
+                if existing_pr is None:
+                    raise GitHubPublishError(
+                        "Draft pull request creation failed and no matching Slugger draft PR was found after race recovery"
+                    )
+                return self._update_existing_pr(
+                    run,
+                    branch,
+                    identity,
+                    existing_pr,
+                    workspace_path,
+                    validation_results,
+                    runner_result,
+                    base_branch,
+                )
             url = completed.stdout.strip().splitlines()[-1]
-            existing_pr = self._find_pr(run.request.github_repository, branch) or {
+            existing_pr = self._find_matching_pr(
+                run, branch, identity, workspace_path
+            ) or {
                 "url": url,
                 "number": 0,
                 "isDraft": True,
+                "headRefName": branch,
+                "baseRefName": base_branch,
+                "body": body,
             }
         if not bool(existing_pr.get("isDraft", True)):
             raise GitHubPublishError("Published pull request is not draft")
@@ -256,6 +318,175 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
             commit_sha=commit_sha,
             pull_request_number=int(str(existing_pr["number"])),
         )
+
+    def _find_matching_pr(
+        self, run: MvpRun, branch: str, identity: str, cwd: Path
+    ) -> dict[str, object] | None:
+        matches = self._list_identity_prs(run, branch, identity, cwd)
+        if len(matches) > 1:
+            summary = ", ".join(
+                f"#{pr.get('number')} {pr.get('url')}" for pr in matches[:5]
+            )
+            raise GitHubPublishError(
+                f"Multiple open Slugger draft pull requests match publication identity {identity[:12]}: {summary}. Close duplicates manually before retrying."
+            )
+        return matches[0] if matches else None
+
+    def _list_identity_prs(
+        self, run: MvpRun, branch: str, identity: str, cwd: Path
+    ) -> list[dict[str, object]]:
+        prs: list[dict[str, object]] = []
+        direct = self._find_pr(run.request.github_repository, branch)
+        if direct is not None:
+            prs.append(direct)
+        command = [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            run.request.github_repository,
+            "--state",
+            "open",
+            "--json",
+            "number,url,isDraft,headRefName,baseRefName,body",
+        ]
+        try:
+            completed = self._run(command, cwd, check=False)
+        except TypeError:
+            completed = self._run(command, cwd)  # type: ignore[call-arg]
+        if completed.returncode == 0:
+            for pr in json.loads(completed.stdout or "[]"):
+                if pr.get("number") not in {item.get("number") for item in prs}:
+                    prs.append(pr)
+        matches: list[dict[str, object]] = []
+        for pr in prs:
+            if not self._valid_slugger_pr(run, branch, identity, pr):
+                continue
+            matches.append(pr)
+        return matches
+
+    def _valid_slugger_pr(
+        self, run: MvpRun, branch: str, identity: str, pr: dict[str, object]
+    ) -> bool:
+        if not bool(pr.get("isDraft", False)):
+            return False
+        base = str(pr.get("baseRefName") or run.request.base_branch)
+        if base != run.request.base_branch and run.request.base_branch != "default":
+            return False
+        head = str(pr.get("headRefName") or branch)
+        marker = parse_publication_marker(str(pr.get("body") or ""))
+        if marker:
+            return (
+                marker.get("repository") == run.request.github_repository
+                and marker.get("base_branch") == run.request.base_branch
+                and marker.get("project_name") == run.request.project_name
+                and marker.get("publication_identity") == identity
+                and head.startswith("slugger/generated-")
+            )
+        return (
+            head.startswith(f"slugger/generated-{run.request.project_name}-")
+            and f"Project name: {run.request.project_name}" in str(pr.get("body") or "")
+            and f"Prompt hash: {run.prompt_hash}" in str(pr.get("body") or "")
+        )
+
+    def _update_existing_pr(
+        self,
+        run: MvpRun,
+        branch: str,
+        identity: str,
+        existing_pr: dict[str, object],
+        cwd: Path,
+        validation_results: tuple[CheckResult, ...],
+        runner_result: BasicRunnerResult,
+        base_branch: str,
+    ) -> GitHubPublishResult:
+        head = str(existing_pr.get("headRefName") or branch)
+        remote_sha = self._remote_branch_sha(run.request.github_repository, head, cwd)
+        if remote_sha is None:
+            raise GitHubPublishError("Existing Slugger draft PR head branch is missing")
+        self._run(
+            [
+                "git",
+                "fetch",
+                "origin",
+                f"refs/heads/{head}:refs/remotes/origin/{head}",
+                "--depth",
+                "1",
+            ],
+            cwd,
+        )
+        self._run(["git", "checkout", "-B", head, f"origin/{head}"], cwd)
+        self._remove_stale_inventory_files(cwd, existing_pr, run)
+        self._stage_inventory(cwd, run.inventory)
+        status = self._run(["git", "status", "--porcelain"], cwd).stdout
+        commit_sha = remote_sha
+        if status.strip():
+            self._run(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    f"Update generated {run.request.project_name} project",
+                ],
+                cwd,
+            )
+            commit_sha = self._run(["git", "rev-parse", "HEAD"], cwd).stdout.strip()
+            self._run(
+                [
+                    "git",
+                    "push",
+                    f"--force-with-lease={head}:{remote_sha}",
+                    "origin",
+                    f"HEAD:{head}",
+                ],
+                cwd,
+            )
+        body = pr_body(run, validation_results, runner_result, identity)
+        self._run(
+            [
+                "gh",
+                "pr",
+                "edit",
+                str(existing_pr["number"]),
+                "--repo",
+                run.request.github_repository,
+                "--title",
+                f"Add generated {run.request.project_name} project",
+                "--body",
+                body,
+            ],
+            cwd,
+        )
+        result = GitHubPublishResult(
+            branch=head,
+            pull_request_url=str(existing_pr["url"]),
+            draft=True,
+            existing=True,
+            commit_sha=commit_sha,
+            pull_request_number=int(str(existing_pr["number"])),
+        )
+        run.github_publish_result = result
+        return result
+
+    def _remove_stale_inventory_files(
+        self, cwd: Path, existing_pr: dict[str, object], run: MvpRun
+    ) -> None:
+        marker = parse_publication_marker(str(existing_pr.get("body") or ""))
+        raw_old_paths = marker.get("inventory_paths", []) if marker else []
+        old_paths = (
+            {str(path) for path in raw_old_paths}
+            if isinstance(raw_old_paths, list)
+            else set()
+        )
+        new_paths = {
+            file.path for file in (run.inventory.files if run.inventory else ())
+        }
+        for path in sorted(old_paths - new_paths):
+            if path.startswith("/") or ".." in Path(path).parts:
+                raise GitHubPublishError(
+                    "Unsafe stale inventory path in existing PR marker"
+                )
+            self._run(["git", "rm", "-f", "--", path], cwd, check=False)
 
     def _verify_remote_inventory_tree(
         self, workspace_path: Path, run: MvpRun, treeish: str
@@ -384,7 +615,7 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
             "--state",
             "open",
             "--json",
-            "number,url,isDraft",
+            "number,url,isDraft,headRefName,baseRefName,body",
         ]
         try:
             completed = self._run(command, Path.cwd(), check=False)
@@ -492,22 +723,85 @@ def _sanitize_command(command: list[str]) -> str:
     return " ".join(_sanitize(part) for part in command)
 
 
-def branch_name(request: MvpProjectRequest, run_id: str) -> str:
-    return f"slugger/generated-{request.project_name}-{run_id[:8]}"
+MARKER_START = "<!-- slugger-publication:"
+MARKER_END = "-->"
+
+
+def _normalized(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def publication_identity(
+    request: MvpProjectRequest, prompt_hash: str | None = None
+) -> str:
+    prompt_component = (
+        prompt_hash
+        or hashlib.sha256(_normalized(request.idea).encode("utf-8")).hexdigest()
+    )
+    payload = {
+        "repository": request.github_repository.lower(),
+        "base_branch": request.base_branch,
+        "project_name": request.project_name,
+        "template": request.template,
+        "prompt": prompt_component,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def branch_name(request: MvpProjectRequest, run_id: str | None = None) -> str:
+    return f"slugger/generated-{request.project_name}-{publication_identity(request, run_id)[:12]}"
+
+
+def publication_marker(run: MvpRun, identity: str) -> str:
+    marker = {
+        "schema": "slugger-publication-v1",
+        "repository": run.request.github_repository,
+        "base_branch": run.request.base_branch,
+        "project_name": run.request.project_name,
+        "template": run.request.template,
+        "publication_identity": identity,
+        "prompt_hash": run.prompt_hash,
+        "inventory_hash": run.inventory.inventory_hash if run.inventory else None,
+        "inventory_paths": [
+            file.path for file in (run.inventory.files if run.inventory else ())
+        ],
+        "slugger_run_id": run.run_id,
+    }
+    return f"{MARKER_START}{json.dumps(marker, sort_keys=True)}{MARKER_END}"
+
+
+def parse_publication_marker(body: str) -> dict[str, object]:
+    start = body.find(MARKER_START)
+    if start == -1:
+        return {}
+    start += len(MARKER_START)
+    end = body.find(MARKER_END, start)
+    if end == -1:
+        return {}
+    try:
+        data = json.loads(body[start:end].strip())
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def pr_body(
     run: MvpRun,
     validation_results: tuple[CheckResult, ...],
     runner_result: BasicRunnerResult,
+    identity: str | None = None,
 ) -> str:
     inventory_lines = []
     if run.inventory is not None:
         inventory_lines = [
             f"- `{file.path}` ({file.size_bytes} bytes)" for file in run.inventory.files
         ]
+    identity = identity or publication_identity(run.request, run.prompt_hash)
     return "\n".join(
         [
+            publication_marker(run, identity),
             f"Original idea: {run.request.idea}",
             f"Project name: {run.request.project_name}",
             f"Template: {run.request.template}",
