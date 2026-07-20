@@ -260,12 +260,15 @@ def test_cli_publisher_preserves_generated_inventory_before_existing_branch_chec
     run = _run()
 
     class OverwritingCheckoutPublisher(ExistingPrGitHubCliPublisher):
+        def __init__(self, workspace_manager: WorkspaceManager) -> None:
+            super().__init__(workspace_manager)
+            self.checkout_cwds = []
+
         def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
             completed = super()._run(command, cwd, check=check)
             if command[:3] == ["git", "checkout", "-B"]:
-                (workspace.path / "README.md").write_text(
-                    "old branch readme", encoding="utf-8"
-                )
+                self.checkout_cwds.append(cwd)
+                (cwd / "README.md").write_text("old branch readme", encoding="utf-8")
             return completed
 
     publisher = OverwritingCheckoutPublisher(workspace_manager)
@@ -276,6 +279,8 @@ def test_cli_publisher_preserves_generated_inventory_before_existing_branch_chec
         "fresh generated readme"
     )
     assert ["git", "add", "--", "README.md"] in publisher.commands
+    assert publisher.checkout_cwds
+    assert workspace.path not in publisher.checkout_cwds
 
 
 class FailingCommandGitHubCliPublisher(GitHubCliMvpPublisher):
@@ -583,3 +588,56 @@ def test_cli_publisher_recovers_create_race_by_reusing_draft(tmp_path):
 
     assert result.existing is True
     assert result.pull_request_number == 8
+
+
+def test_cli_publisher_rejects_symlink_inventory_artifact(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "target.txt").write_text("target", encoding="utf-8")
+    (workspace.path / "README.md").symlink_to(workspace.path / "target.txt")
+    publisher = RecordingGitHubCliPublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="must not be a symlink"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+
+class PublicationWorkspaceRecordingPublisher(ExistingPrGitHubCliPublisher):
+    def __init__(self, workspace_manager: WorkspaceManager) -> None:
+        super().__init__(workspace_manager)
+        self.publication_cwds = []
+
+    def _prepare_git(self, workspace_path, repository):  # type: ignore[no-untyped-def]
+        self.publication_cwds.append(workspace_path)
+        return super()._prepare_git(workspace_path, repository)
+
+
+def test_cli_publisher_cleans_publication_workspace_after_success(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    publisher = PublicationWorkspaceRecordingPublisher(workspace_manager)
+
+    publisher.publish(_run(), workspace, _validation(), _runner())
+
+    assert publisher.publication_cwds
+    assert all(not path.exists() for path in publisher.publication_cwds)
+
+
+def test_cli_publisher_cleans_publication_workspace_after_failure(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+
+    class FailingAfterPreparePublisher(PublicationWorkspaceRecordingPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            if command[:2] == ["git", "fetch"]:
+                raise GitHubPublishError("simulated fetch failure")
+            return super()._run(command, cwd, check=check)
+
+    publisher = FailingAfterPreparePublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="simulated fetch failure"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+    assert publisher.publication_cwds
+    assert all(not path.exists() for path in publisher.publication_cwds)
