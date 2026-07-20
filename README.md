@@ -8,17 +8,17 @@ The AI Software Factory for turning ideas into runnable Python project drafts.
 
 What is Slugger?
 
-## Project status for v0.1.1
+## Project status for v0.1.2
 
-Current release target: **Slugger v0.1.1**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+Current release target: **Slugger v0.1.2**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
 
 The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
 
 Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
 
-Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<run>` branch, and one draft PR. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns reuse persisted run evidence, deterministic branch naming, and existing draft PR detection to avoid duplicate PRs.
+Expected outputs are a sanitized generated Python CLI project, a protected artifact manifest, restricted-verifier evidence, a deterministic `slugger/generated-<project>-<stable-identity-prefix>` branch, and at most one Slugger-managed draft PR per logical request. Publication is skipped/blocked when generation, validation, installation, tests, restricted verification, manifest validation, or path-safety checks fail. Reruns use a stable publication identity independent of workflow and Slugger run IDs, validate machine-readable PR ownership markers, safely migrate a matching legacy run-ID draft PR, update the existing branch/PR with latest verified output, remove stale Slugger-owned generated files, recover safely from create races, and fail closed when duplicate matching drafts or mismatched PR markers are detected.
 
-Known limitations: v0.1.1 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
+Known limitations: v0.1.2 supports constrained dependency-minimal Python CLI projects; generated code still requires human review; real Codex/GitHub publication requires protected GitHub Actions credentials; broader AI-SDLC packages remain experimental candidates for later extraction in v0.2.0 or later.
 
 
 Slugger is an open, extensible, Python-based AI Software Factory. Its primary supported path is the MVP build command: give Slugger one idea for a small Python CLI project and it creates an isolated workspace, asks Codex to generate the project, validates the output, installs it in its own virtual environment, runs tests and a CLI smoke check, and opens one draft GitHub pull request with the generated files.
@@ -281,7 +281,7 @@ python -m pytest tests/test_mvp_*.py tests/mvp -q
 - Artifact manifest mismatch: rerun the workflow; do not manually edit files inside the artifact.
 - Docker unavailable: GitHub-hosted Ubuntu runners provide Docker; local workflow emulation must provide Docker for container verification.
 
-See [docs/mvp-release-checklist.md](docs/mvp-release-checklist.md) before tagging `v0.1.1`.
+See [docs/mvp-release-checklist.md](docs/mvp-release-checklist.md) before tagging `v0.1.2`.
 
 ### User-idea publication credentials
 

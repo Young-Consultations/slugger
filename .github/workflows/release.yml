@@ -5,78 +5,100 @@ on:
   push:
     branches: [main]
     paths:
+      - pyproject.toml
+      - CHANGELOG.md
       - docs/mvp-release-checklist.md
+      - .github/workflows/release.yml
 
 permissions:
   contents: write
 
+env:
+  RELEASE_VERSION: "0.1.2"
+  RELEASE_TAG: "v0.1.2"
+  CERTIFIED_RUN_ID: "29717362202"
+  CERTIFIED_COMMIT: "59a4142979a24a10ff697730c8ef49ec6c2030ee"
+
 jobs:
-  publish-v0-1-0:
-    name: Publish Slugger v0.1.0
+  publish:
+    name: Publish Slugger v0.1.2
     runs-on: ubuntu-latest
-    # Only run once when the completed checklist lands on main
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check checklist is complete
-        id: check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check release inputs and checklist
         run: |
+          set -euo pipefail
           if grep -q -- '- \[ \]' docs/mvp-release-checklist.md; then
-            echo "Checklist has open items — skipping release."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Checklist is fully complete."
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Release checklist has open items." >&2
+            exit 1
           fi
+          python -c "import tomllib; from pathlib import Path; version = tomllib.loads(Path('pyproject.toml').read_text())['project']['version']; assert version == '0.1.2', f'pyproject version {version!r} does not match 0.1.2'; checklist = Path('docs/mvp-release-checklist.md').read_text(); required = ['29717362202', '59a4142979a24a10ff697730c8ef49ec6c2030ee', 'slugger-user-idea-codex-certification-29717362202']; missing = [item for item in required if item not in checklist]; assert not missing, f'release checklist is missing certified evidence: {missing}'"
 
-      - name: Create annotated tag v0.1.0
-        if: steps.check.outputs.release == 'true'
+      - name: Run release verification
         run: |
-          if git ls-remote --tags origin | grep -q 'refs/tags/v0.1.0'; then
-            echo "Tag v0.1.0 already exists — skipping tag creation."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a v0.1.0 HEAD -m "Slugger MVP v0.1.0"
-            git push origin refs/tags/v0.1.0
-            echo "Tag v0.1.0 created and pushed."
-          fi
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m compileall mvp cli
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy mvp cli
+          python -m pytest tests/test_mvp_github_publisher.py -q
+          python -m pytest tests/test_user_idea_mvp_workflow.py tests/test_mvp_workflow_security.py -q
+          python -m pytest tests/test_mvp_*.py -q
+          python -m pytest -q
+          python -m build
+          python scripts/verify_package_version.py 0.1.2
 
-      - name: Publish GitHub Release v0.1.0
-        if: steps.check.outputs.release == 'true'
+      - name: Refuse mismatched existing tag or release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "Release v0.1.0 already exists — skipping."
+          set -euo pipefail
+          remote_tag_sha="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | awk '{print $1}')"
+          if [ -n "$remote_tag_sha" ] && [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then
+            echo "Tag ${RELEASE_TAG} already points to ${remote_tag_sha}, not release commit ${GITHUB_SHA}." >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName,targetCommitish >/tmp/release.json 2>/dev/null; then
+            target="$(python -c "import json; print(json.load(open('/tmp/release.json')).get('targetCommitish', ''))")"
+            if [ "$target" != "$GITHUB_SHA" ] && [ "$target" != "$RELEASE_TAG" ]; then
+              echo "Release ${RELEASE_TAG} already exists with target ${target}, not ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Create annotated tag
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "Tag ${RELEASE_TAG} already exists locally at the release commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Slugger ${RELEASE_TAG}"
+          fi
+          git push origin "refs/tags/${RELEASE_TAG}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists for this commit."
             exit 0
           fi
-          gh release create v0.1.0 \
+          gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Slugger v0.1.0" \
-            --notes "## Slugger v0.1.0 is the first certified MVP release of the AI Software Factory.
-                ### MVP capabilities
-                - Generates a constrained Python CLI project using real Codex.
-                - Uses a protected GitHub Actions environment for Codex credentials.
-                - Sanitizes generated files and verifies a SHA-256 protected manifest.
-                - Validates packaging, dependencies, project structure, and source safety.
-                - Installs generated projects in an isolated environment.
-                - Runs generated pytest tests and deterministic smoke checks.
-                - Verifies generated code in a restricted, network-disabled container.
-                - Produces downloadable success and certification artifacts.
-                ### Certified execution
-                - Workflow run: \`29601077462\`
-                - Certified branch: \`main\`
-                - Certified commit: \`685ae1b63313f3401d8876f9210f09c21186b7f0\`
-                - Success artifact: \`slugger-mvp-cli-demo-29601077462\`
-                - Certification artifact: \`slugger-codex-certification-29601077462\`
-                - Manual release validation: completed and attested by the repository owner
-                ### Known limitations
-                - The MVP supports a constrained Python CLI generation path.
-                - The canonical release-validation workflow is manually triggered.
-                - Generated code requires human review before production use.
-                - Additional templates, automatic release assets, and policy packs are deferred."
-          echo "GitHub Release v0.1.0 published."
+            --verify-tag \
+            --title "Slugger v0.1.2" \
+            --notes-file CHANGELOG.md
