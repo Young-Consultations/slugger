@@ -63,7 +63,7 @@ def test_fake_publisher_creates_one_draft_pr_and_is_idempotent(tmp_path):
     first = publisher.publish(run, tmp_path, _validation(), _runner())
     second = publisher.publish(run, tmp_path, _validation(), _runner())
 
-    assert first.branch == "slugger/generated-task-tracker-abcdef12"
+    assert first.branch == branch_name(_request(), None)
     assert first.draft is True
     assert first.existing is False
     assert second.pull_request_url == first.pull_request_url
@@ -113,11 +113,19 @@ def test_pr_body_includes_required_audit_sections():
     assert "Known limitations:" in body
 
 
-def test_branch_name_uses_project_and_short_run_id():
+def test_branch_name_uses_deterministic_publication_identity():
     assert (
         branch_name(_request(), "1234567890")
-        == "slugger/generated-task-tracker-12345678"
+        == "slugger/generated-task-tracker-165b46bd7115"
     )
+    other = MvpProjectRequest(
+        idea="Different idea",
+        project_name="task-tracker",
+        template="cli",
+        github_repository="owner/task-tracker",
+        base_branch="main",
+    )
+    assert branch_name(other) != branch_name(_request())
 
 
 class RecordingGitHubCliPublisher(GitHubCliMvpPublisher):
@@ -196,6 +204,9 @@ class ExistingPrGitHubCliPublisher(GitHubCliMvpPublisher):
             "url": "https://github.com/owner/task-tracker/pull/7",
             "number": 7,
             "isDraft": True,
+            "headRefName": branch,
+            "baseRefName": "main",
+            "body": pr_body(_run(), _validation(), _runner()),
         }
 
     def _remote_branch_sha(self, repository: str, branch: str, cwd):  # type: ignore[no-untyped-def]
@@ -203,12 +214,26 @@ class ExistingPrGitHubCliPublisher(GitHubCliMvpPublisher):
 
     def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
         self.commands.append(command)
+        if command[:4] == ["gh", "repo", "view", "owner/task-tracker"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='{"viewerPermission":"WRITE","defaultBranchRef":{"name":"main"}}',
+                stderr="",
+            )
+        if command[:2] == ["git", "ls-remote"]:
+            return subprocess.CompletedProcess(
+                command, 0, stdout="sha\trefs/heads/main\n", stderr=""
+            )
+        if command[:2] == ["git", "status"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
 
 def test_cli_publisher_reuses_existing_pr_without_saved_publish_metadata(tmp_path):
     workspace_manager = WorkspaceManager(tmp_path / "workspaces")
     workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
     run = _run()
     publisher = ExistingPrGitHubCliPublisher(workspace_manager)
 
@@ -218,10 +243,44 @@ def test_cli_publisher_reuses_existing_pr_without_saved_publish_metadata(tmp_pat
     assert result.pull_request_number == 7
     assert result.commit_sha == "remote-sha"
     assert result.existing is True
-    assert not any(command[:2] == ["git", "push"] for command in publisher.commands)
+    assert any(command[:3] == ["gh", "pr", "edit"] for command in publisher.commands)
     assert not any(
         command[:3] == ["gh", "pr", "create"] for command in publisher.commands
     )
+
+
+def test_cli_publisher_preserves_generated_inventory_before_existing_branch_checkout(
+    tmp_path,
+):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text(
+        "fresh generated readme", encoding="utf-8"
+    )
+    run = _run()
+
+    class OverwritingCheckoutPublisher(ExistingPrGitHubCliPublisher):
+        def __init__(self, workspace_manager: WorkspaceManager) -> None:
+            super().__init__(workspace_manager)
+            self.checkout_cwds = []
+
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            completed = super()._run(command, cwd, check=check)
+            if command[:3] == ["git", "checkout", "-B"]:
+                self.checkout_cwds.append(cwd)
+                (cwd / "README.md").write_text("old branch readme", encoding="utf-8")
+            return completed
+
+    publisher = OverwritingCheckoutPublisher(workspace_manager)
+
+    publisher.publish(run, workspace, _validation(), _runner())
+
+    assert (workspace.path / "README.md").read_text(encoding="utf-8") == (
+        "fresh generated readme"
+    )
+    assert ["git", "add", "--", "README.md"] in publisher.commands
+    assert publisher.checkout_cwds
+    assert workspace.path not in publisher.checkout_cwds
 
 
 class FailingCommandGitHubCliPublisher(GitHubCliMvpPublisher):
@@ -293,11 +352,9 @@ class FailingCommandGitHubCliPublisher(GitHubCliMvpPublisher):
             )
         if command[:3] == ["gh", "pr", "list"]:
             return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
-        if command[:3] == [
-            "gh",
-            "api",
-            "repos/owner/task-tracker/git/ref/heads/slugger/generated-task-tracker-abcdef12",
-        ]:
+        if command[:2] == ["gh", "api"] and command[2].startswith(
+            "repos/owner/task-tracker/git/ref/heads/slugger/generated-task-tracker-"
+        ):
             return subprocess.CompletedProcess(
                 command, 1, stdout="", stderr="not found"
             )
@@ -374,7 +431,7 @@ def test_cli_publisher_records_failed_push_diagnostics(tmp_path, monkeypatch):
     failed = publisher.diagnostics[-1]
     assert failed.phase == "push_generated_branch"
     assert failed.repository == "owner/task-tracker"
-    assert failed.branch == "slugger/generated-task-tracker-abcdef12"
+    assert failed.branch == branch_name(_request(), None)
     assert "token-secret" not in failed.stderr
 
 
@@ -386,7 +443,201 @@ def test_cli_publisher_records_failed_pr_creation_diagnostics(tmp_path):
         workspace_manager, ["gh", "pr", "create"]
     )
 
-    with pytest.raises(GitHubPublishError, match="simulated publication failure"):
+    with pytest.raises(GitHubPublishError, match="race recovery"):
         publisher.publish(_run(), workspace, _validation(), _runner())
 
-    assert publisher.diagnostics[-1].phase == "create_draft_pull_request"
+    assert any(
+        diagnostic.phase == "create_draft_pull_request"
+        for diagnostic in publisher.diagnostics
+    )
+
+
+def test_fake_publisher_reuses_one_draft_for_independent_runs(tmp_path):
+    first = _run()
+    first.run_id = "111111111111"
+    second = _run()
+    second.run_id = "222222222222"
+    second.inventory = GeneratedProjectInventory(
+        files=(GeneratedFile("README.md", "d" * 64, 20),), inventory_hash="e" * 64
+    )
+    publisher = FakeMvpGitHubPublisher()
+
+    first_result = publisher.publish(first, tmp_path, _validation(), _runner())
+    second_result = publisher.publish(second, tmp_path, _validation(), _runner())
+
+    assert first_result.branch == second_result.branch
+    assert first_result.pull_request_url == second_result.pull_request_url
+    assert second_result.existing is True
+    assert second_result.commit_sha == "fake-222222222222"
+    assert publisher.publish_count == 1
+
+
+def test_cli_publisher_detects_duplicate_matching_drafts(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    run = _run()
+    body = pr_body(run, _validation(), _runner())
+
+    class DuplicatePublisher(RecordingGitHubCliPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            self.commands.append(command)
+            if command[:3] == ["gh", "pr", "list"] and "--head" not in command:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout=(
+                        '[{"number":1,"url":"https://github.com/owner/task-tracker/pull/1",'
+                        '"isDraft":true,"headRefName":"slugger/generated-task-tracker-old1",'
+                        '"baseRefName":"main","body":'
+                        + __import__("json").dumps(body)
+                        + '},{"number":2,"url":"https://github.com/owner/task-tracker/pull/2",'
+                        '"isDraft":true,"headRefName":"slugger/generated-task-tracker-old2",'
+                        '"baseRefName":"main","body":'
+                        + __import__("json").dumps(body)
+                        + "}]"
+                    ),
+                    stderr="",
+                )
+            if command[:3] == ["gh", "pr", "list"]:
+                return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+            return super()._run(command, cwd, check=check)
+
+    publisher = DuplicatePublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="Multiple open Slugger draft"):
+        publisher.publish(run, workspace, _validation(), _runner())
+
+    assert not any(
+        command[:3] == ["gh", "pr", "create"] for command in publisher.commands
+    )
+
+
+def test_cli_publisher_removes_stale_slugger_inventory_only(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    run = _run()
+    old_run = _run()
+    old_run.inventory = GeneratedProjectInventory(
+        files=(
+            GeneratedFile("README.md", "a" * 64, 10),
+            GeneratedFile("stale.txt", "f" * 64, 5),
+        ),
+        inventory_hash="9" * 64,
+    )
+    existing = {
+        "url": "https://github.com/owner/task-tracker/pull/7",
+        "number": 7,
+        "isDraft": True,
+        "headRefName": branch_name(run.request, run.prompt_hash),
+        "baseRefName": "main",
+        "body": pr_body(old_run, _validation(), _runner()),
+    }
+
+    class StalePublisher(ExistingPrGitHubCliPublisher):
+        def _find_pr(self, repository: str, branch: str):  # type: ignore[no-untyped-def]
+            return existing
+
+    publisher = StalePublisher(workspace_manager)
+    publisher.publish(run, workspace, _validation(), _runner())
+
+    assert ["git", "rm", "-f", "--", "stale.txt"] in publisher.commands
+    assert not any("untracked.txt" in command for command in publisher.commands)
+
+
+def test_cli_publisher_recovers_create_race_by_reusing_draft(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    run = _run()
+    body = pr_body(run, _validation(), _runner())
+
+    class RacePublisher(FailingCommandGitHubCliPublisher):
+        def __init__(self, workspace_manager: WorkspaceManager) -> None:
+            super().__init__(workspace_manager, ["gh", "pr", "create"])
+            self.created = False
+
+        def _remote_branch_sha(self, repository: str, branch: str, cwd):  # type: ignore[no-untyped-def]
+            return "remote-sha" if self.created else None
+
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            if command[:3] == ["gh", "pr", "create"]:
+                self.created = True
+                return subprocess.CompletedProcess(
+                    command, 1, stdout="", stderr="already exists"
+                )
+            if (
+                self.created
+                and command[:3] == ["gh", "pr", "list"]
+                and "--head" not in command
+            ):
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    stdout='[{"number":8,"url":"https://github.com/owner/task-tracker/pull/8","isDraft":true,"headRefName":"'
+                    + branch_name(run.request, run.prompt_hash)
+                    + '","baseRefName":"main","body":'
+                    + __import__("json").dumps(body)
+                    + "}]",
+                    stderr="",
+                )
+            return super()._run(command, cwd, check=check)
+
+    publisher = RacePublisher(workspace_manager)
+    result = publisher.publish(run, workspace, _validation(), _runner())
+
+    assert result.existing is True
+    assert result.pull_request_number == 8
+
+
+def test_cli_publisher_rejects_symlink_inventory_artifact(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "target.txt").write_text("target", encoding="utf-8")
+    (workspace.path / "README.md").symlink_to(workspace.path / "target.txt")
+    publisher = RecordingGitHubCliPublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="must not be a symlink"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+
+class PublicationWorkspaceRecordingPublisher(ExistingPrGitHubCliPublisher):
+    def __init__(self, workspace_manager: WorkspaceManager) -> None:
+        super().__init__(workspace_manager)
+        self.publication_cwds = []
+
+    def _prepare_git(self, workspace_path, repository):  # type: ignore[no-untyped-def]
+        self.publication_cwds.append(workspace_path)
+        return super()._prepare_git(workspace_path, repository)
+
+
+def test_cli_publisher_cleans_publication_workspace_after_success(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    publisher = PublicationWorkspaceRecordingPublisher(workspace_manager)
+
+    publisher.publish(_run(), workspace, _validation(), _runner())
+
+    assert publisher.publication_cwds
+    assert all(not path.exists() for path in publisher.publication_cwds)
+
+
+def test_cli_publisher_cleans_publication_workspace_after_failure(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+
+    class FailingAfterPreparePublisher(PublicationWorkspaceRecordingPublisher):
+        def _run(self, command: list[str], cwd, *, check: bool = True):  # type: ignore[no-untyped-def]
+            if command[:2] == ["git", "fetch"]:
+                raise GitHubPublishError("simulated fetch failure")
+            return super()._run(command, cwd, check=check)
+
+    publisher = FailingAfterPreparePublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="simulated fetch failure"):
+        publisher.publish(_run(), workspace, _validation(), _runner())
+
+    assert publisher.publication_cwds
+    assert all(not path.exists() for path in publisher.publication_cwds)
