@@ -125,3 +125,29 @@ def test_success_artifact_contains_only_publication_outputs() -> None:
     assert all(
         forbidden in text for forbidden in [".venv", "__pycache__", ".pytest_cache"]
     )
+
+
+def test_restricted_verification_evidence_stays_outside_generated_tree() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'PROJECT_DIR="downloaded-artifact/generated-demo"' in text
+    assert 'WORKSPACE_ROOT="downloaded-artifact"' in text
+    assert '--evidence-file "$WORKSPACE_ROOT/verification-evidence.json"' in text
+    assert '--evidence-file "$PROJECT_DIR/verification-evidence.json"' not in text
+    assert (
+        "cp downloaded-artifact/verification-evidence.json mvp-artifact/verification-evidence.json"
+        in text
+    )
+    assert "downloaded-artifact/verification-evidence.json" in text
+    assert "downloaded-artifact/generated-demo/verification-evidence.json" not in text
+
+
+def test_pre_publication_failures_emit_sanitized_diagnostics() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert ": > publication-error.log" in text
+    assert "write_publication_diagnostic" in text
+    assert 'write_publication_diagnostic "pre_publication_token"' in text
+    assert 'write_publication_diagnostic "pre_publication_manifest"' in text
+    assert "Pre-publication manifest or summary check failed" in text
+    assert "publication-diagnostics.json" in text

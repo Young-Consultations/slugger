@@ -47,7 +47,7 @@ def test_mvp_success_artifact_keeps_generated_demo_manifest_clean() -> None:
 
     assert "rm -f mvp-artifact/generated-demo/verification-evidence.json" in text
     assert (
-        "cp downloaded-artifact/generated-demo/verification-evidence.json mvp-artifact/verification-evidence.json"
+        "cp downloaded-artifact/verification-evidence.json mvp-artifact/verification-evidence.json"
         in text
     )
     assert "verify_protected_manifest(" in text
