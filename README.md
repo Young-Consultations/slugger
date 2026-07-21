@@ -12,7 +12,7 @@ What is Slugger?
 
 Current release target: **Slugger v0.1.2**. Slugger documents exactly three distinct operational paths:
 
-1. **User-facing generation workflow — User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`): accepts a user idea, generates a constrained Python CLI, validates and verifies it, and opens a draft PR in `Young-Consultations/slugger-generated-demos`.
+1. **User-facing generation workflow — User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`): accepts a user idea, generates a constrained Python CLI, validates and verifies it, and opens a draft PR in the separate `Young-Consultations/slugger-generated-demos` repository.
 2. **Certification workflow — Canonical Real Codex Slugger MVP Demo** (`.github/workflows/real-codex-cli-demo.yml`): runs the fixed deterministic certification scenario and produces release evidence; it is not the normal user-facing workflow.
 3. **Release workflow** (`.github/workflows/release.yml`): validates release evidence, builds the package, and creates the version tag and GitHub Release.
 

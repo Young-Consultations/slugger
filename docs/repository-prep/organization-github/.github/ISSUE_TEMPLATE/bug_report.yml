@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a focused Slugger defect
+title: "bug: "
+labels: ["type:defect"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide minimal steps, commands, inputs, and relevant output.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Describe user, security, architecture, workflow, or generated-code impact.
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security confirmation
+      options:
+        - label: This report does not publicly disclose a vulnerability, secret, token, private key, or sensitive data.
+          required: true

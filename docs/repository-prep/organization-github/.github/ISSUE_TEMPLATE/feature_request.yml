@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a focused Slugger improvement
+title: "feature: "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or maintainer problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Keep the request aligned with the focused MVP path.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: Tests, smoke checks, or documentation updates needed.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundary checks
+      options:
+        - label: This does not introduce a second MVP execution path.
+          required: true
+        - label: This does not require generated code to be automatically merged.
+          required: true
