@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -641,3 +643,111 @@ def test_cli_publisher_cleans_publication_workspace_after_failure(tmp_path):
 
     assert publisher.publication_cwds
     assert all(not path.exists() for path in publisher.publication_cwds)
+
+
+def test_publication_marker_uses_organization_target_repository() -> None:
+    from mvp.integrations.github import (
+        parse_publication_marker,
+        publication_identity,
+        publication_marker,
+    )
+
+    run = _run()
+    run.request = replace(
+        run.request, github_repository="Young-Consultations/slugger-generated-demos"
+    )
+    identity = publication_identity(run.request, run.prompt_hash)
+
+    marker = parse_publication_marker(publication_marker(run, identity))
+
+    assert marker["repository"] == "Young-Consultations/slugger-generated-demos"
+    assert marker["publication_identity"] == identity
+
+
+def test_former_namespace_marker_is_not_organization_owned() -> None:
+    from mvp.integrations.github import publication_identity, publication_marker
+
+    run = _run()
+    run.request = replace(
+        run.request, github_repository="Young-Consultations/slugger-generated-demos"
+    )
+    identity = publication_identity(run.request, run.prompt_hash)
+    old_run = _run()
+    old_run.request = replace(
+        old_run.request, github_repository="mighty" + "joe909/slugger-generated-demos"
+    )
+    old_body = publication_marker(old_run, identity)
+    publisher = RecordingGitHubCliPublisher(WorkspaceManager(Path("/tmp") / "unused"))
+
+    assert not publisher._valid_slugger_pr(
+        run,
+        branch_name(run.request, run.prompt_hash),
+        identity,
+        {
+            "isDraft": True,
+            "headRefName": branch_name(run.request, run.prompt_hash),
+            "baseRefName": "main",
+            "body": old_body,
+        },
+    )
+
+
+def test_publication_identity_is_independent_of_run_id() -> None:
+    from mvp.integrations.github import publication_identity
+
+    first = _run()
+    first.run_id = "111"
+    second = _run()
+    second.run_id = "222"
+
+    assert publication_identity(
+        first.request, first.prompt_hash
+    ) == publication_identity(second.request, second.prompt_hash)
+
+
+def test_cli_publisher_fails_closed_on_mismatched_repository_marker(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    run = _run()
+    from mvp.integrations.github import publication_identity
+
+    branch = branch_name(run.request, run.prompt_hash)
+    identity = publication_identity(run.request, run.prompt_hash)
+    old_run = _run()
+    old_run.request = replace(
+        old_run.request, github_repository="other-owner/task-tracker"
+    )
+    publisher = RecordingGitHubCliPublisher(workspace_manager)
+
+    assert not publisher._valid_slugger_pr(
+        run,
+        branch,
+        identity,
+        {
+            "isDraft": True,
+            "headRefName": branch,
+            "baseRefName": "main",
+            "body": pr_body(old_run, _validation(), _runner()),
+        },
+    )
+
+
+def test_cli_publisher_rejects_matching_non_draft_pr(tmp_path):
+    workspace_manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = workspace_manager.create_workspace("run-1")
+    (workspace.path / "README.md").write_text("generated readme", encoding="utf-8")
+    run = _run()
+
+    class NonDraftPublisher(ExistingPrGitHubCliPublisher):
+        def _find_pr(self, repository: str, branch: str):  # type: ignore[no-untyped-def]
+            pr = super()._find_pr(repository, branch)
+            pr["isDraft"] = False
+            return pr
+
+    publisher = NonDraftPublisher(workspace_manager)
+
+    with pytest.raises(GitHubPublishError, match="not draft"):
+        publisher.publish(run, workspace, _validation(), _runner())
+
+    assert not any(
+        command[:3] == ["gh", "pr", "create"] for command in publisher.commands
+    )

@@ -382,9 +382,35 @@ class GitHubCliMvpPublisher(MvpGitHubPublisher):
         matches: list[dict[str, object]] = []
         for pr in prs:
             if not self._valid_slugger_pr(run, branch, identity, pr):
+                if self._matching_slugger_pr_collision(run, branch, identity, pr):
+                    raise GitHubPublishError(
+                        "Matching Slugger-managed pull request is not draft; close it, convert it to draft manually, or regenerate on a new logical request before retrying."
+                    )
                 continue
             matches.append(pr)
         return matches
+
+    def _matching_slugger_pr_collision(
+        self, run: MvpRun, branch: str, identity: str, pr: dict[str, object]
+    ) -> bool:
+        if bool(pr.get("isDraft", False)):
+            return False
+        head = str(pr.get("headRefName") or branch)
+        marker = parse_publication_marker(str(pr.get("body") or ""))
+        if marker:
+            return (
+                str(marker.get("repository") or "").lower()
+                == run.request.github_repository.lower()
+                and marker.get("base_branch") == run.request.base_branch
+                and marker.get("project_name") == run.request.project_name
+                and marker.get("publication_identity") == identity
+                and head.startswith("slugger/generated-")
+            )
+        return (
+            head.startswith(f"slugger/generated-{run.request.project_name}-")
+            and f"Project name: {run.request.project_name}" in str(pr.get("body") or "")
+            and f"Prompt hash: {run.prompt_hash}" in str(pr.get("body") or "")
+        )
 
     def _valid_slugger_pr(
         self, run: MvpRun, branch: str, identity: str, pr: dict[str, object]

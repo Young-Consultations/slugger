@@ -472,7 +472,21 @@ def _session_id_from_output(*chunks: str) -> str | None:
 
 def _fixture_files(request: MvpProjectRequest, package_name: str) -> dict[str, str]:
     return {
-        "README.md": f"# {request.project_name}\n\n{request.idea}\n",
+        "README.md": (
+            f"# {request.project_name}\n\n"
+            f"{request.idea}\n\n"
+            "## Fresh checkout\n\n"
+            "```bash\n"
+            "python -m venv .venv\n"
+            ". .venv/bin/activate\n"
+            "python -m pip install --upgrade pip\n"
+            "python -m pip install -e '.[test]'\n"
+            "python -m pytest -q\n"
+            f"python -m {package_name}.main --help\n"
+            "```\n\n"
+            "On Windows, activate the virtual environment with "
+            "`.venv\\Scripts\\activate` before running the pip, pytest, and CLI commands.\n"
+        ),
         "pyproject.toml": (
             "[build-system]\nrequires = []\nbuild-backend = 'slugger_mvp_backend'\nbackend-path = ['.']\n\n"
             "[project]\n"

@@ -2,7 +2,7 @@
 
 - Workflow: Real Codex CLI Demo
 - Workflow run ID: 29460251536
-- Run URL: https://github.com/mightyjoe909/slugger/actions/runs/29460251536
+- Run URL: https://github.com/Young-Consultations/slugger/actions/runs/29460251536
 - Commit SHA: a1c14bff01a0e81c67ab5bd5fb613a1e6cec4918
 - Branch: main
 - Run date: 2026-07-16

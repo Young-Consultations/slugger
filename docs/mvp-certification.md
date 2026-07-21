@@ -1,8 +1,12 @@
 ## Project status for v0.1.2
 
-Current release target: **Slugger v0.1.2**. The canonical user-facing product path is **User idea → Codex generation → validation → isolated installation/tests → restricted verification → generated Git branch → idempotent draft pull request → evidence artifact**.
+Current release target: **Slugger v0.1.2**. Slugger documents exactly three distinct operational paths:
 
-The user-facing GitHub Actions workflow is **User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`). General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications. **Canonical Real Codex Slugger MVP Demo** remains an internal, non-user-facing certification workflow for the fixed `hello-codex` scenario.
+1. **User-facing generation workflow — User Idea Codex Slugger MVP Demo** (`.github/workflows/user-idea-codex-cli-demo.yml`): accepts a user idea, generates a constrained Python CLI, validates and verifies it, and opens a draft PR in `Young-Consultations/slugger-generated-demos`.
+2. **Certification workflow — Canonical Real Codex Slugger MVP Demo** (`.github/workflows/real-codex-cli-demo.yml`): runs the fixed deterministic certification scenario and produces release evidence; it is not the normal user-facing workflow.
+3. **Release workflow** (`.github/workflows/release.yml`): validates release evidence, builds the package, and creates the version tag and GitHub Release.
+
+General **CI** is limited to deterministic tests, quality checks, packaging, and golden acceptance tests; it does not publish generated applications.
 
 Required secrets and permissions: `OPENAI_API_KEY` is required only in the protected Codex generation environment. Target validation and the final same-job publication step use `SLUGGER_GITHUB_TOKEN` scoped only to the target repository with Contents read/write, Pull requests read/write, and Metadata read; non-publication jobs remain `contents: read`.
 

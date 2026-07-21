@@ -34,7 +34,7 @@ def _request() -> MvpProjectRequest:
         idea=GOLDEN_IDEA,
         project_name="task-tracker",
         template="cli",
-        github_repository="mightyjoe909/task-tracker",
+        github_repository="Young-Consultations/task-tracker",
     )
 
 
@@ -224,7 +224,7 @@ def test_golden_task_tracker_build_completes_and_publishes_one_draft_pr(
         "slugger/generated-task-tracker-"
     )
     assert run.github_publish_result.pull_request_url.startswith(
-        "https://github.com/mightyjoe909/task-tracker/pull/"
+        "https://github.com/Young-Consultations/task-tracker/pull/"
     )
 
     runner_result = BasicRunner(_workspace_manager).run(_request(), workspace)

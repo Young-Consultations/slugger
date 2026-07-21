@@ -22,6 +22,10 @@ def test_user_idea_workflow_accepts_manual_idea_input() -> None:
     assert inputs["target_repository"]["required"] is True
     assert inputs["target_repository"]["type"] == "string"
     assert "sandbox repository" in inputs["target_repository"]["description"]
+    assert (
+        inputs["target_repository"]["default"]
+        == "Young-Consultations/slugger-generated-demos"
+    )
     assert inputs["target_repository"]["default"] != "${{ github.repository }}"
     assert inputs["retain_diagnostics"]["type"] == "boolean"
 
