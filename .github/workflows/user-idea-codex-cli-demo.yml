@@ -16,7 +16,7 @@ on:
         description: Empty or Slugger-managed sandbox repository for the generated draft PR (owner/repo)
         required: true
         type: string
-        default: mightyjoe909/slugger-generated-demos
+        default: Young-Consultations/slugger-generated-demos
       retain_diagnostics:
         description: Retain diagnostic artifacts for 14 days
         required: true

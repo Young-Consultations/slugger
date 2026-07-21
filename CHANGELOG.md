@@ -21,7 +21,7 @@
 - Certification artifact digest: `sha256:33c201af38a00d8058ea8e048cbf7dbbdc7b93468e48fb8049e230cbc237f231`
 - Verifier diagnostics: `verifier-diagnostics-29717362202`
 - Success artifact: `slugger-user-idea-cli-demo-29717362202`
-- Updated existing draft PR: `mightyjoe909/slugger-generated-demos#2`
+- Updated existing draft PR: `Young-Consultations/slugger-generated-demos#2`
 
 ### Known limitations
 

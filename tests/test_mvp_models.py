@@ -24,14 +24,14 @@ def test_project_request_accepts_valid_cli_request() -> None:
         idea="Create a CLI task tracker",
         project_name="task-tracker",
         template="cli",
-        github_repository="mightyjoe909/task-tracker",
+        github_repository="Young-Consultations/task-tracker",
         base_branch="main",
     )
 
     assert request.idea == "Create a CLI task tracker"
     assert request.project_name == "task-tracker"
     assert request.template == "cli"
-    assert request.github_repository == "mightyjoe909/task-tracker"
+    assert request.github_repository == "Young-Consultations/task-tracker"
     assert request.base_branch == "main"
 
 

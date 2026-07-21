@@ -31,7 +31,7 @@ def _request() -> MvpProjectRequest:
         idea="Create a CLI task tracker with add, list, and done commands",
         project_name="task-tracker",
         template="cli",
-        github_repository="mightyjoe909/task-tracker",
+        github_repository="Young-Consultations/task-tracker",
     )
 
 
@@ -488,3 +488,28 @@ def test_artifact_adapter_rejects_manifest_tampering(tmp_path: Path) -> None:
             ),
             workspace,
         )
+
+
+def test_generated_readme_contract_installs_before_module_execution(
+    tmp_path: Path,
+) -> None:
+    manager = WorkspaceManager(tmp_path / "workspaces")
+    workspace = manager.create_workspace("run-readme")
+    result = FakeMvpCodexAdapter(manager).generate_project(_request(), workspace)
+    readme = (workspace.path / "README.md").read_text(encoding="utf-8")
+
+    required = [
+        "python -m venv .venv",
+        ". .venv/bin/activate",
+        "python -m pip install --upgrade pip",
+        "python -m pip install -e '.[test]'",
+        "python -m pytest -q",
+        "python -m task_tracker.main --help",
+    ]
+    for item in required:
+        assert item in readme
+    assert r".venv\Scripts\activate" in readme
+    assert readme.index("python -m pip install -e '.[test]'") < readme.index(
+        "python -m task_tracker.main --help"
+    )
+    assert "README.md" in {file.path for file in result.inventory.files}

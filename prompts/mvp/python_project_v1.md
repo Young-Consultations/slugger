@@ -11,6 +11,7 @@ Requirements:
 - Include one pytest test that proves `python -m {package_name}.main greet Joseph` emits exactly `Hello, Joseph!`.
 - Declare pytest as an installable test dependency, preferably with `[project.optional-dependencies]` and `test = ["pytest>=8,<10"]`, so `pip install .[test]` makes `python -m pytest` available in a fresh virtual environment.
 - Include a package entry point that can be executed with `python -m <package_name>.main`.
+- The generated README must include fresh-checkout instructions in this order: `python -m venv .venv`, `. .venv/bin/activate`, a Windows activation equivalent such as `.venv\\Scripts\\activate`, `python -m pip install --upgrade pip`, `python -m pip install -e '.[test]'`, `python -m pytest -q`, and `python -m <package_name>.main --help`. Installation must appear before module execution.
 - Use `argparse` for the demo CLI.
 - Ensure `python -m <package_name>.main --help` exits with status zero.
 - Display conventional usage output for `--help`.
