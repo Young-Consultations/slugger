@@ -1,0 +1,10 @@
+name: portfolio_task
+description: portfolio_task intake
+title: "portfolio_task: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true

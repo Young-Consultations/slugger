@@ -1,2 +1,7 @@
-# Repository-wide ownership is assigned to the Young-Consultations maintainer team.
+# Placeholder: create the @Young-Consultations/maintainers team in GitHub and grant repository access.
 * @Young-Consultations/maintainers
+/.github/ @Young-Consultations/maintainers
+/.github/workflows/ @Young-Consultations/maintainers
+/mvp/ @Young-Consultations/maintainers
+/scripts/ @Young-Consultations/maintainers
+/pyproject.toml @Young-Consultations/maintainers

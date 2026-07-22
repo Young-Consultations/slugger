@@ -1,0 +1,10 @@
+name: decision
+description: decision intake
+title: "decision: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true

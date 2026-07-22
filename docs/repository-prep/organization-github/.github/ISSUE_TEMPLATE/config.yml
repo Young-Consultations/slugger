@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private vulnerability reporting
+    url: https://github.com/Young-Consultations/slugger/security/advisories/new
+    about: Do not report security issues publicly. Use private vulnerability reporting when available.

@@ -1,0 +1,10 @@
+name: research
+description: research intake
+title: "research: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
