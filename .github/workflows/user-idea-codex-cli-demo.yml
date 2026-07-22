@@ -22,6 +22,79 @@ on:
         required: true
         type: boolean
         default: false
+      source_issue_number:
+        description: Optional Slugger source issue number for reusable issue automation
+        required: false
+        type: string
+        default: ""
+      source_issue_url:
+        description: Optional Slugger source issue URL for reusable issue automation
+        required: false
+        type: string
+        default: ""
+      request_identity:
+        description: Optional deterministic issue request identity
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      idea:
+        description: User idea for the generated Python CLI project
+        required: true
+        type: string
+      project_name:
+        description: Human-friendly project name; normalized to lowercase kebab-case (hello-codex is reserved)
+        required: true
+        type: string
+        default: user-idea-cli
+      target_repository:
+        description: Empty or Slugger-managed sandbox repository for the generated draft PR (owner/repo)
+        required: true
+        type: string
+        default: Young-Consultations/slugger-generated-demos
+      retain_diagnostics:
+        description: Retain diagnostic artifacts for 14 days
+        required: true
+        type: boolean
+        default: false
+      source_issue_number:
+        description: Optional Slugger source issue number for reusable issue automation
+        required: false
+        type: string
+        default: ""
+      source_issue_url:
+        description: Optional Slugger source issue URL for reusable issue automation
+        required: false
+        type: string
+        default: ""
+      request_identity:
+        description: Optional deterministic issue request identity
+        required: false
+        type: string
+        default: ""
+    outputs:
+      generated_branch:
+        description: Generated branch name
+        value: ${{ jobs.verify-generated-demo.outputs.generated_branch }}
+      draft_pull_request_url:
+        description: Draft pull request URL
+        value: ${{ jobs.verify-generated-demo.outputs.draft_pull_request_url }}
+      slugger_run_id:
+        description: Slugger run ID
+        value: ${{ jobs.verify-generated-demo.outputs.slugger_run_id }}
+      validation_result:
+        description: Validation gate result
+        value: ${{ jobs.verify-generated-demo.outputs.validation_result }}
+      test_result:
+        description: Test gate result
+        value: ${{ jobs.verify-generated-demo.outputs.test_result }}
+      smoke_result:
+        description: Smoke gate result
+        value: ${{ jobs.verify-generated-demo.outputs.smoke_result }}
+      manifest_digest:
+        description: Protected manifest digest
+        value: ${{ jobs.verify-generated-demo.outputs.manifest_digest }}
 
 concurrency:
   group: user-idea-codex-cli-demo-${{ github.ref }}
@@ -300,6 +373,14 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      generated_branch: ${{ steps.publication_outputs.outputs.generated_branch }}
+      draft_pull_request_url: ${{ steps.publication_outputs.outputs.draft_pull_request_url }}
+      slugger_run_id: ${{ steps.publication_outputs.outputs.slugger_run_id }}
+      validation_result: ${{ steps.publication_outputs.outputs.validation_result }}
+      test_result: ${{ steps.publication_outputs.outputs.test_result }}
+      smoke_result: ${{ steps.publication_outputs.outputs.smoke_result }}
+      manifest_digest: ${{ steps.publication_outputs.outputs.manifest_digest }}
     steps:
       - name: Check out Slugger without credentials
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -445,6 +526,31 @@ jobs:
               raise SystemExit("publication diagnostics must be a list")
           PY
           exit "$publish_rc"
+      - name: Export publication outputs
+        id: publication_outputs
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          build = json.loads(Path("slugger-build-summary.json").read_text(encoding="utf-8"))
+          publication = json.loads(Path("publication-summary.json").read_text(encoding="utf-8"))
+          manifest = json.loads(Path("downloaded-artifact/generated-project-manifest.json").read_text(encoding="utf-8"))
+          values = {
+              "generated_branch": publication.get("branch") or publication.get("head_branch") or "",
+              "draft_pull_request_url": publication.get("pull_request_url") or publication.get("pr_url") or "",
+              "slugger_run_id": build.get("run_id", ""),
+              "validation_result": str(build.get("validation_passed", "")).lower(),
+              "test_result": str(build.get("test_passed", "")).lower(),
+              "smoke_result": str(build.get("smoke_passed", "")).lower(),
+              "manifest_digest": manifest.get("artifact_digest", ""),
+          }
+          with Path(__import__("os").environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              for key, value in values.items():
+                  out.write(f"{key}={value}\n")
+          PY
       - name: Assemble success artifact
         if: success()
         shell: bash

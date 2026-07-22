@@ -74,6 +74,8 @@ def validate_workflows() -> None:
             fail(f"Unsafe pull_request_target trigger found: {path.relative_to(ROOT)}")
         for line in text.splitlines():
             match = USES.search(line)
+            if match and match.group(1).startswith("./.github/workflows/"):
+                continue
             if match and not PINNED.search(line):
                 fail(f"Unpinned action in {path.relative_to(ROOT)}: {line.strip()}")
 
