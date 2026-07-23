@@ -188,6 +188,35 @@ jobs:
               raise SystemExit("Target repository is not empty and is not Slugger-managed; choose an empty sandbox repository.")
           print(f"Validated target repository {repo} and base branch {branch} before Codex generation.")
           PY
+
+          echo "::add-mask::${GH_TOKEN}"
+          check_dir="$RUNNER_TEMP/slugger-push-check"
+          askpass="$RUNNER_TEMP/slugger-git-askpass.sh"
+          rm -rf "$check_dir"
+          cleanup_push_check() {
+            rm -f "$askpass"
+            rm -rf "$check_dir"
+          }
+          trap cleanup_push_check EXIT
+          cat > "$askpass" <<'EOF'
+          #!/usr/bin/env sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) printf '\n' ;;
+          esac
+          EOF
+          chmod 700 "$askpass"
+          git init "$check_dir" >/dev/null
+          git -C "$check_dir" remote add origin "https://github.com/${TARGET_REPOSITORY}.git"
+          GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git -C "$check_dir" fetch --depth=1 origin "$TARGET_BASE_BRANCH"
+          git -C "$check_dir" checkout --detach FETCH_HEAD
+          permission_branch="slugger-permission-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git -C "$check_dir" push --dry-run origin "HEAD:refs/heads/${permission_branch}"; then
+            echo "SLUGGER_GITHUB_TOKEN can read the target repository but cannot push a branch. Grant Contents read/write access to the target repository before Codex generation." >&2
+            exit 1
+          fi
+          echo "Validated SLUGGER_GITHUB_TOKEN git push --dry-run permission for disposable branch refs/heads/${permission_branch}."
       - name: Render Codex prompt from user idea
         id: idea_inputs
         shell: bash
