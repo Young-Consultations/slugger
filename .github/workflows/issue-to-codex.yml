@@ -94,22 +94,30 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           error_summary="$(head -c 500 issue-bridge-error.txt 2>/dev/null || true)"
           gh issue edit "$ISSUE_NUMBER" --add-label codex-failed
-          cat > issue-comment.md <<EOF
-          ### Slugger Codex automation failed
+          ERROR_SUMMARY="$error_summary" python - <<'PY'
+          import os
+          from pathlib import Path
 
-          - Workflow run URL: $WORKFLOW_RUN_URL
-          - Failed phase: preflight-validation
-          - Sanitized error summary: ${error_summary:-Validation failed before Codex generation.}
-          - Codex generation started: no
-          - Publication occurred: no
-          - Recommended corrective action: fix the synchronized issue contract or approval configuration, then apply a new explicit codex-ready label.
-          EOF
+          summary = os.environ.get("ERROR_SUMMARY") or "Validation failed before Codex generation."
+          lines = [
+              "### Slugger Codex automation failed",
+              "",
+              f"- Workflow run URL: {os.environ['WORKFLOW_RUN_URL']}",
+              "- Failed phase: preflight-validation",
+              f"- Sanitized error summary: {summary}",
+              "- Codex generation started: no",
+              "- Publication occurred: no",
+              "- Recommended corrective action: fix the synchronized issue contract or approval configuration, then apply a new explicit codex-ready label.",
+          ]
+          Path("issue-comment.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
           gh issue comment "$ISSUE_NUMBER" --body-file issue-comment.md
       - name: Stop after failed validation
         if: steps.contract.outcome != 'success'
@@ -118,6 +126,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh issue edit "${{ github.event.issue.number }}" --add-label codex-running
 
   run-canonical-codex:
@@ -150,6 +159,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TARGET_REPOSITORY: ${{ needs.preflight.outputs.target_repository }}
@@ -163,40 +173,76 @@ jobs:
           SMOKE_RESULT: ${{ needs.run-canonical-codex.outputs.smoke_result }}
           MANIFEST_DIGEST: ${{ needs.run-canonical-codex.outputs.manifest_digest }}
         run: |
-          set -euo pipefail
-          gh issue edit "$ISSUE_NUMBER" --remove-label codex-running || true
+          set -uo pipefail
+          successes=0
+          failures=0
+          run_report_action() {
+            local description="$1"
+            shift
+            echo "Reporting action: ${description}"
+            if "$@"; then
+              successes=$((successes + 1))
+            else
+              rc=$?
+              failures=$((failures + 1))
+              echo "Reporting action failed (${description}) with exit code ${rc}." >&2
+            fi
+          }
+
+          run_report_action "remove codex-running label" gh issue edit "$ISSUE_NUMBER" --remove-label codex-running
+
           if [ "$CODEX_RESULT" = "success" ]; then
-            gh issue edit "$ISSUE_NUMBER" --add-label codex-complete
-            cat > issue-comment.md <<EOF
-            ### Slugger Codex automation complete
-
-            - Workflow run URL: $WORKFLOW_RUN_URL
-            - Slugger run ID: ${SLUGGER_RUN_ID:-unavailable}
-            - Target repository: $TARGET_REPOSITORY
-            - Generated branch: ${GENERATED_BRANCH:-unavailable}
-            - Draft pull request URL: ${DRAFT_PR_URL:-unavailable}
-            - Validation result: ${VALIDATION_RESULT:-unavailable}
-            - Test result: ${TEST_RESULT:-unavailable}
-            - Smoke result: ${SMOKE_RESULT:-unavailable}
-            - Manifest digest: ${MANIFEST_DIGEST:-unavailable}
-            - Completion status: codex-complete
-
-            Slugger request identity: $REQUEST_IDENTITY
-            EOF
-            gh issue comment "$ISSUE_NUMBER" --body-file issue-comment.md
+            RESULT_LABEL="codex-complete"
           else
-            gh issue edit "$ISSUE_NUMBER" --add-label codex-failed
-            cat > issue-comment.md <<EOF
-            ### Slugger Codex automation failed
+            RESULT_LABEL="codex-failed"
+          fi
+          run_report_action "add ${RESULT_LABEL} label" gh issue edit "$ISSUE_NUMBER" --add-label "$RESULT_LABEL"
 
-            - Workflow run URL: $WORKFLOW_RUN_URL
-            - Failed phase: canonical-user-idea-workflow
-            - Sanitized error summary: Canonical reusable workflow concluded with $CODEX_RESULT.
-            - Codex generation started: see canonical workflow job results
-            - Publication occurred: no confirmed successful publication
-            - Recommended corrective action: inspect sanitized workflow diagnostics, correct configuration or generated project failures, then apply a new explicit codex-ready approval.
+          python - <<'PY'
+          import os
+          from pathlib import Path
 
-            Slugger request identity: $REQUEST_IDENTITY
-            EOF
-            gh issue comment "$ISSUE_NUMBER" --body-file issue-comment.md
+          def value(name: str, default: str = "unavailable") -> str:
+              return os.environ.get(name) or default
+
+          if os.environ["CODEX_RESULT"] == "success":
+              lines = [
+                  "### Slugger Codex automation complete",
+                  "",
+                  f"- Workflow run URL: {value('WORKFLOW_RUN_URL')}",
+                  f"- Slugger run ID: {value('SLUGGER_RUN_ID')}",
+                  f"- Target repository: {value('TARGET_REPOSITORY')}",
+                  f"- Generated branch: {value('GENERATED_BRANCH')}",
+                  f"- Draft pull request URL: {value('DRAFT_PR_URL')}",
+                  f"- Validation result: {value('VALIDATION_RESULT')}",
+                  f"- Test result: {value('TEST_RESULT')}",
+                  f"- Smoke result: {value('SMOKE_RESULT')}",
+                  f"- Manifest digest: {value('MANIFEST_DIGEST')}",
+                  "- Completion status: codex-complete",
+                  "",
+                  f"Slugger request identity: {value('REQUEST_IDENTITY')}",
+              ]
+          else:
+              lines = [
+                  "### Slugger Codex automation failed",
+                  "",
+                  f"- Workflow run URL: {value('WORKFLOW_RUN_URL')}",
+                  "- Failed phase: canonical-user-idea-workflow",
+                  f"- Sanitized error summary: Canonical reusable workflow concluded with {value('CODEX_RESULT', 'unknown')}.",
+                  "- Codex generation started: see canonical workflow job results",
+                  "- Publication occurred: no confirmed successful publication",
+                  "- Recommended corrective action: inspect sanitized workflow diagnostics, correct configuration or generated project failures, then apply a new explicit codex-ready approval.",
+                  "",
+                  f"Slugger request identity: {value('REQUEST_IDENTITY')}",
+              ]
+          Path("issue-comment.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          run_report_action "post result comment" gh issue comment "$ISSUE_NUMBER" --body-file issue-comment.md
+
+          if [ "$successes" -eq 0 ]; then
+            echo "Every Slugger issue reporting action failed." >&2
+            exit 1
+          fi
+          if [ "$failures" -gt 0 ]; then
+            echo "${failures} Slugger issue reporting action(s) failed after ${successes} succeeded." >&2
           fi

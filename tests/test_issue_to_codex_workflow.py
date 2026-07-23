@@ -99,8 +99,9 @@ def test_issue_workflow_prevents_duplicates_and_updates_state_labels() -> None:
     assert "An active or completed execution already exists" in text
     assert "--add-label codex-running" in text
     assert "--remove-label codex-running" in text
-    assert "--add-label codex-complete" in text
-    assert "--add-label codex-failed" in text
+    assert 'RESULT_LABEL="codex-complete"' in text
+    assert 'RESULT_LABEL="codex-failed"' in text
+    assert '--add-label "$RESULT_LABEL"' in text
     assert "--add-label codex-ready" not in text
 
 
@@ -122,6 +123,42 @@ def test_issue_workflow_reuses_canonical_user_idea_workflow() -> None:
     assert call["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
     assert "openai/codex-action" not in str(data["jobs"]["preflight"])
     assert "openai/codex-action" not in str(data["jobs"]["report-result"])
+
+
+def test_report_result_uses_explicit_repo_context_without_checkout() -> None:
+    data = _workflow(ISSUE_WORKFLOW)
+    report = data["jobs"]["report-result"]
+    assert all(
+        step.get("uses") != "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd"
+        for step in report["steps"]
+    )
+    step = report["steps"][0]
+    assert step["env"]["GH_REPO"] == "${{ github.repository }}"
+    assert "GH_REPO" in str(step)
+    assert "gh issue edit" in step["run"]
+    assert "gh issue comment" in step["run"]
+
+
+def test_report_result_has_no_malformed_heredoc_and_best_effort_actions() -> None:
+    data = _workflow(ISSUE_WORKFLOW)
+    run = data["jobs"]["report-result"]["steps"][0]["run"]
+    assert "cat > issue-comment.md <<EOF" not in run
+    assert "run_report_action" in run
+    assert "--remove-label codex-running" in run
+    assert '--add-label "$RESULT_LABEL"' in run
+    assert "codex-complete" in run
+    assert "codex-failed" in run
+    assert "Every Slugger issue reporting action failed." in run
+
+
+def test_report_result_success_and_failure_comments_are_markdown() -> None:
+    run = _workflow(ISSUE_WORKFLOW)["jobs"]["report-result"]["steps"][0]["run"]
+    assert "### Slugger Codex automation complete" in run
+    assert "### Slugger Codex automation failed" in run
+    assert "- Workflow run URL:" in run
+    assert "- Completion status: codex-complete" in run
+    assert "- Failed phase: canonical-user-idea-workflow" in run
+    assert "Slugger request identity:" in run
 
 
 def test_result_comments_are_bounded_and_secret_safe() -> None:

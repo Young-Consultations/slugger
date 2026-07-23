@@ -120,6 +120,49 @@ def test_target_repository_is_validated_before_codex_generation() -> None:
     assert "not empty and is not Slugger-managed" in str(prepare)
 
 
+def test_target_repository_validation_performs_real_dry_run_push_before_codex() -> None:
+    data = _workflow()
+    prepare = data["jobs"]["prepare-codex-input"]
+    generate = data["jobs"]["generate-with-codex"]
+    validate = next(
+        step
+        for step in prepare["steps"]
+        if step["name"] == "Validate target repository before Codex"
+    )
+    run = validate["run"]
+    assert generate["needs"] == "prepare-codex-input"
+    assert "Run Codex generation" in str(generate)
+    assert 'GIT_TERMINAL_PROMPT=0 git -C "$check_dir" fetch --depth=1 origin' in run
+    assert 'git -C "$check_dir" push --dry-run' in run
+    assert "HEAD:refs/heads/${permission_branch}" in run
+    assert "slugger-permission-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in run
+    assert "HEAD:refs/heads/main" not in run
+    assert "push --dry-run" in run and " git push origin " not in run
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert text.index("push --dry-run") < text.index("Run Codex generation")
+
+
+def test_push_permission_check_uses_isolated_credentials_and_no_openai_secret() -> None:
+    validate = next(
+        step
+        for step in _workflow()["jobs"]["prepare-codex-input"]["steps"]
+        if step["name"] == "Validate target repository before Codex"
+    )
+    run = validate["run"]
+    assert "OPENAI_API_KEY" not in str(validate)
+    assert "GIT_ASKPASS" in run
+    assert "GIT_TERMINAL_PROMPT=0" in run
+    assert "::add-mask::${GH_TOKEN}" in run
+    assert 'remote add origin "https://github.com/${TARGET_REPOSITORY}.git"' in run
+    assert "https://x-access-token" not in run
+    assert "${GH_TOKEN}@" not in run
+    assert 'rm -f "$askpass"' in run
+    assert (
+        "SLUGGER_GITHUB_TOKEN can read the target repository but cannot push a branch"
+        in run
+    )
+
+
 def test_success_artifact_contains_only_publication_outputs() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "publication-summary.json" in text
