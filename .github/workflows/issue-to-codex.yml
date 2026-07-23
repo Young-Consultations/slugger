@@ -192,6 +192,13 @@ jobs:
           run_report_action "remove codex-running label" gh issue edit "$ISSUE_NUMBER" --remove-label codex-running
 
           if [ "$CODEX_RESULT" = "success" ]; then
+            if [ -z "${GENERATED_BRANCH:-}" ] || [ -z "${DRAFT_PR_URL:-}" ]; then
+              echo "Canonical workflow succeeded but generated_branch or draft_pull_request_url was empty." >&2
+              CODEX_RESULT="output_contract_failure"
+            fi
+          fi
+
+          if [ "$CODEX_RESULT" = "success" ]; then
             RESULT_LABEL="codex-complete"
           else
             RESULT_LABEL="codex-failed"
