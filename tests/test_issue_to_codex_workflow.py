@@ -179,3 +179,46 @@ def test_manual_dispatch_and_workflow_call_share_user_idea_jobs() -> None:
     assert data[True]["workflow_call"]["inputs"]["idea"]["required"] is True
     assert "generate-with-codex" in data["jobs"]
     assert "openai/codex-action" in USER_IDEA_WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_caller_passes_canonical_outputs_to_report_result() -> None:
+    data = _workflow(ISSUE_WORKFLOW)
+    env = data["jobs"]["report-result"]["steps"][0]["env"]
+    assert (
+        env["GENERATED_BRANCH"]
+        == "${{ needs.run-canonical-codex.outputs.generated_branch }}"
+    )
+    assert (
+        env["DRAFT_PR_URL"]
+        == "${{ needs.run-canonical-codex.outputs.draft_pull_request_url }}"
+    )
+    assert (
+        env["SLUGGER_RUN_ID"]
+        == "${{ needs.run-canonical-codex.outputs.slugger_run_id }}"
+    )
+    assert (
+        env["VALIDATION_RESULT"]
+        == "${{ needs.run-canonical-codex.outputs.validation_result }}"
+    )
+    assert env["TEST_RESULT"] == "${{ needs.run-canonical-codex.outputs.test_result }}"
+    assert (
+        env["SMOKE_RESULT"] == "${{ needs.run-canonical-codex.outputs.smoke_result }}"
+    )
+    assert (
+        env["MANIFEST_DIGEST"]
+        == "${{ needs.run-canonical-codex.outputs.manifest_digest }}"
+    )
+
+
+def test_success_report_requires_publication_outputs_before_complete_comment() -> None:
+    run = _workflow(ISSUE_WORKFLOW)["jobs"]["report-result"]["steps"][0]["run"]
+    assert 'if [ "$CODEX_RESULT" = "success" ]; then' in run
+    assert '[ -z "${GENERATED_BRANCH:-}" ] || [ -z "${DRAFT_PR_URL:-}" ]' in run
+    assert (
+        "Canonical workflow succeeded but generated_branch or draft_pull_request_url was empty."
+        in run
+    )
+    assert 'CODEX_RESULT="output_contract_failure"' in run
+    assert "### Slugger Codex automation complete" in run
+    assert "f\"- Generated branch: {value('GENERATED_BRANCH')}\"" in run
+    assert "f\"- Draft pull request URL: {value('DRAFT_PR_URL')}\"" in run

@@ -198,3 +198,64 @@ def test_pre_publication_failures_emit_sanitized_diagnostics() -> None:
     assert 'write_publication_diagnostic "pre_publication_manifest"' in text
     assert "Pre-publication manifest or summary check failed" in text
     assert "publication-diagnostics.json" in text
+
+
+def test_publication_outputs_map_cli_summary_to_job_outputs() -> None:
+    data = _workflow()
+    verify = data["jobs"]["verify-generated-demo"]
+    assert verify["outputs"] == {
+        "generated_branch": "${{ steps.publication_outputs.outputs.generated_branch }}",
+        "draft_pull_request_url": "${{ steps.publication_outputs.outputs.draft_pull_request_url }}",
+        "slugger_run_id": "${{ steps.publication_outputs.outputs.slugger_run_id }}",
+        "validation_result": "${{ steps.publication_outputs.outputs.validation_result }}",
+        "test_result": "${{ steps.publication_outputs.outputs.test_result }}",
+        "smoke_result": "${{ steps.publication_outputs.outputs.smoke_result }}",
+        "manifest_digest": "${{ steps.publication_outputs.outputs.manifest_digest }}",
+    }
+    export = next(
+        step for step in verify["steps"] if step["name"] == "Export publication outputs"
+    )
+    run = export["run"]
+    assert export["id"] == "publication_outputs"
+    assert 'publication.get("github_branch")' in run
+    assert 'publication.get("draft_pr_url")' in run
+    assert 'publication.get("branch")' in run
+    assert 'publication.get("pull_request_url")' in run
+    assert 'publication.get("status") == "completed"' in run
+    assert "Publication completed but required output(s) were empty" in run
+    assert "GITHUB_OUTPUT" in run
+    assert "<<{delimiter}" in run
+
+
+def test_workflow_call_outputs_expose_publication_and_gate_outputs() -> None:
+    outputs = _workflow()[True]["workflow_call"]["outputs"]
+    assert outputs == {
+        "generated_branch": {
+            "description": "Generated branch name",
+            "value": "${{ jobs.verify-generated-demo.outputs.generated_branch }}",
+        },
+        "draft_pull_request_url": {
+            "description": "Draft pull request URL",
+            "value": "${{ jobs.verify-generated-demo.outputs.draft_pull_request_url }}",
+        },
+        "slugger_run_id": {
+            "description": "Slugger run ID",
+            "value": "${{ jobs.verify-generated-demo.outputs.slugger_run_id }}",
+        },
+        "validation_result": {
+            "description": "Validation gate result",
+            "value": "${{ jobs.verify-generated-demo.outputs.validation_result }}",
+        },
+        "test_result": {
+            "description": "Test gate result",
+            "value": "${{ jobs.verify-generated-demo.outputs.test_result }}",
+        },
+        "smoke_result": {
+            "description": "Smoke gate result",
+            "value": "${{ jobs.verify-generated-demo.outputs.smoke_result }}",
+        },
+        "manifest_digest": {
+            "description": "Protected manifest digest",
+            "value": "${{ jobs.verify-generated-demo.outputs.manifest_digest }}",
+        },
+    }
