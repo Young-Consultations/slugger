@@ -75,18 +75,22 @@ class OrchestrationState:
 
     orchestration_id: str
     root_input: dict[str, Any]
+    steps: list[str] | None = None
     children: list[ChildExecution] = field(default_factory=list)
     final_result: dict[str, Any] | None = None
+    result_delivered: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "orchestration_id": self.orchestration_id,
             "root_input": self.root_input,
+            "steps": self.steps,
             "children": [
                 {"key": child.key, "execution_input": child.execution_input, "result": child.result}
                 for child in self.children
             ],
             "final_result": self.final_result,
+            "result_delivered": self.result_delivered,
         }
 
     @classmethod
@@ -94,8 +98,10 @@ class OrchestrationState:
         return cls(
             orchestration_id=str(value["orchestration_id"]),
             root_input=dict(value["root_input"]),
+            steps=list(value["steps"]) if value.get("steps") is not None else None,
             children=[ChildExecution(**dict(item)) for item in value.get("children", [])],
             final_result=dict(value["final_result"]) if value.get("final_result") else None,
+            result_delivered=bool(value.get("result_delivered", False)),
         )
 
 
@@ -206,12 +212,18 @@ class ContractOrchestrator:
         root = self.ingest(payload, kind=kind)
         orchestration_id = str(root.payload["execution_id"])
         state = self.state_store.load(orchestration_id) or OrchestrationState(orchestration_id, root.to_dict())
+        requested = list(steps or [str(root.payload["instructions"])])
+        if state.steps is None:
+            state.steps = requested
+            self.state_store.save(state)
+        elif requested != state.steps:
+            raise ContractError("steps do not match the persisted orchestration plan")
         if state.final_result is not None:
             self.validator("execution_result", state.final_result)
+            self._deliver_result(root, state)
             return ExecutionResult(state.final_result)
-        requested = list(steps or [str(root.payload["instructions"])])
         by_key = {child.key: child for child in state.children}
-        for index, instruction in enumerate(requested):
+        for index, instruction in enumerate(state.steps):
             candidate = self._child(root, instruction, index)
             child = by_key.get(candidate.key)
             if child is None:
@@ -228,11 +240,23 @@ class ContractOrchestrator:
                 self.state_store.save(state)
             if not self.is_success(child.result):
                 break
+        if any(child.result is None for child in state.children):
+            raise ContractError("cannot finalize while a persisted child is unresolved")
         state.final_result = self._aggregate(root, state.children)
         self.validator("execution_result", state.final_result)
         self.state_store.save(state)
-        self.post_result(root.payload["source_issue"], state.final_result)
+        self._deliver_result(root, state)
         return ExecutionResult(state.final_result)
+
+    def _deliver_result(self, root: ExecutionInput, state: OrchestrationState) -> None:
+        """Post a persisted result until delivery has been acknowledged locally."""
+
+        if state.result_delivered:
+            return
+        assert state.final_result is not None
+        self.post_result(root.payload["source_issue"], state.final_result)
+        state.result_delivered = True
+        self.state_store.save(state)
 
     def _aggregate(self, root: ExecutionInput, children: Sequence[ChildExecution]) -> dict[str, Any]:
         results = [child.result for child in children if child.result is not None]

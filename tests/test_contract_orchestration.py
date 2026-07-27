@@ -122,6 +122,42 @@ def test_resume_does_not_duplicate_completed_children_or_post(harness, canonical
     assert len(posted) == 1
 
 
+def test_resume_retries_result_delivery_after_post_failure(harness, canonical_input):
+    service, executed, posted = harness
+    attempts = 0
+
+    def transient_failure(issue, result):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary posting failure")
+        posted.append((deepcopy(issue), deepcopy(result)))
+
+    service.post_result = transient_failure
+    with pytest.raises(RuntimeError, match="temporary posting failure"):
+        service.run(canonical_input)
+
+    result = service.run(canonical_input).to_dict()
+    assert attempts == 2
+    assert len(executed) == 1
+    assert posted == [(canonical_input["source_issue"], result)]
+
+
+def test_resume_rejects_a_changed_step_plan(harness, canonical_input):
+    service, executed, _ = harness
+
+    def interrupt(_value):
+        raise RuntimeError("worker stopped")
+
+    service.execute = interrupt
+    with pytest.raises(RuntimeError, match="worker stopped"):
+        service.run(canonical_input, steps=["one", "two"])
+
+    with pytest.raises(ContractError, match="persisted orchestration plan"):
+        service.run(canonical_input, steps=["one"])
+    assert executed == []
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
