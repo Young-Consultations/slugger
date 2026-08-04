@@ -86,7 +86,11 @@ class OrchestrationState:
             "root_input": self.root_input,
             "steps": self.steps,
             "children": [
-                {"key": child.key, "execution_input": child.execution_input, "result": child.result}
+                {
+                    "key": child.key,
+                    "execution_input": child.execution_input,
+                    "result": child.result,
+                }
                 for child in self.children
             ],
             "final_result": self.final_result,
@@ -99,8 +103,12 @@ class OrchestrationState:
             orchestration_id=str(value["orchestration_id"]),
             root_input=dict(value["root_input"]),
             steps=list(value["steps"]) if value.get("steps") is not None else None,
-            children=[ChildExecution(**dict(item)) for item in value.get("children", [])],
-            final_result=dict(value["final_result"]) if value.get("final_result") else None,
+            children=[
+                ChildExecution(**dict(item)) for item in value.get("children", [])
+            ],
+            final_result=dict(value["final_result"])
+            if value.get("final_result")
+            else None,
             result_delivered=bool(value.get("result_delivered", False)),
         )
 
@@ -113,17 +121,25 @@ class JsonStateStore:
 
     def load(self, orchestration_id: str) -> OrchestrationState | None:
         path = self.directory / f"{orchestration_id}.json"
-        return OrchestrationState.from_dict(json.loads(path.read_text())) if path.exists() else None
+        return (
+            OrchestrationState.from_dict(json.loads(path.read_text()))
+            if path.exists()
+            else None
+        )
 
     def save(self, state: OrchestrationState) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
         destination = self.directory / f"{state.orchestration_id}.json"
         temporary = destination.with_suffix(".tmp")
-        temporary.write_text(json.dumps(state.to_dict(), sort_keys=True), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(state.to_dict(), sort_keys=True), encoding="utf-8"
+        )
         temporary.replace(destination)
 
 
-def migrate_legacy_input(payload: Mapping[str, Any], *, contract_version: str) -> dict[str, Any]:
+def migrate_legacy_input(
+    payload: Mapping[str, Any], *, contract_version: str
+) -> dict[str, Any]:
     """Translate the former Slugger MVP input once, before the production path.
 
     ``idea``, ``project_name`` and ``github_repository`` are deprecated.  The
@@ -141,9 +157,16 @@ def migrate_legacy_input(payload: Mapping[str, Any], *, contract_version: str) -
     source_url = payload.get("source_issue_url", "")
     return {
         "contract_version": contract_version,
-        "execution_id": str(payload.get("request_identity", payload.get("run_id", "legacy"))),
-        "correlation_id": str(payload.get("correlation_id", payload.get("request_identity", "legacy"))),
-        "source_issue": {"url": source_url, "number": payload.get("source_issue_number")},
+        "execution_id": str(
+            payload.get("request_identity", payload.get("run_id", "legacy"))
+        ),
+        "correlation_id": str(
+            payload.get("correlation_id", payload.get("request_identity", "legacy"))
+        ),
+        "source_issue": {
+            "url": source_url,
+            "number": payload.get("source_issue_number"),
+        },
         "approval_status": payload.get("approval_status", "approved"),
         "executor": payload.get("executor", "codex"),
         "priority": payload.get("priority", "normal"),
@@ -159,11 +182,17 @@ def migrate_legacy_input(payload: Mapping[str, Any], *, contract_version: str) -
 class ContractOrchestrator:
     """A single orchestration path around canonical inputs and results."""
 
-    def __init__(self, *, contract_version: str, validator: CanonicalValidator,
-                 registered_repositories: set[str], state_store: JsonStateStore,
-                 execute: Callable[[Mapping[str, Any]], Mapping[str, Any]],
-                 is_success: Callable[[Mapping[str, Any]], bool],
-                 post_result: Callable[[Mapping[str, Any], Mapping[str, Any]], None]) -> None:
+    def __init__(
+        self,
+        *,
+        contract_version: str,
+        validator: CanonicalValidator,
+        registered_repositories: set[str],
+        state_store: JsonStateStore,
+        execute: Callable[[Mapping[str, Any]], Mapping[str, Any]],
+        is_success: Callable[[Mapping[str, Any]], bool],
+        post_result: Callable[[Mapping[str, Any], Mapping[str, Any]], None],
+    ) -> None:
         self.contract_version = contract_version
         self.validator = validator
         self.registered_repositories = registered_repositories
@@ -172,7 +201,9 @@ class ContractOrchestrator:
         self.is_success = is_success
         self.post_result = post_result
 
-    def ingest(self, payload: Mapping[str, Any], *, kind: str = "execution_input") -> ExecutionInput:
+    def ingest(
+        self, payload: Mapping[str, Any], *, kind: str = "execution_input"
+    ) -> ExecutionInput:
         value = migrate_legacy_input(payload, contract_version=self.contract_version)
         if value.get("contract_version") != self.contract_version:
             raise ContractError("unsupported contract_version")
@@ -198,8 +229,12 @@ class ContractOrchestrator:
         if value.get("draft_only") is not True:
             raise ContractError("draft_only must be true")
 
-    def _child(self, root: ExecutionInput, instruction: str, index: int) -> ChildExecution:
-        key = hashlib.sha256(f"{root.payload['execution_id']}:{index}:{instruction}".encode()).hexdigest()[:24]
+    def _child(
+        self, root: ExecutionInput, instruction: str, index: int
+    ) -> ChildExecution:
+        key = hashlib.sha256(
+            f"{root.payload['execution_id']}:{index}:{instruction}".encode()
+        ).hexdigest()[:24]
         value = root.to_dict()
         value["execution_id"] = key
         value["parent_execution_id"] = root.payload["execution_id"]
@@ -207,11 +242,18 @@ class ContractOrchestrator:
         self.validator("execution_input", value)
         return ChildExecution(key, value)
 
-    def run(self, payload: Mapping[str, Any], *, steps: Sequence[str] | None = None,
-            kind: str = "execution_input") -> ExecutionResult:
+    def run(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        steps: Sequence[str] | None = None,
+        kind: str = "execution_input",
+    ) -> ExecutionResult:
         root = self.ingest(payload, kind=kind)
         orchestration_id = str(root.payload["execution_id"])
-        state = self.state_store.load(orchestration_id) or OrchestrationState(orchestration_id, root.to_dict())
+        state = self.state_store.load(orchestration_id) or OrchestrationState(
+            orchestration_id, root.to_dict()
+        )
         requested = list(steps or [str(root.payload["instructions"])])
         if state.steps is None:
             state.steps = requested
@@ -258,17 +300,24 @@ class ContractOrchestrator:
         state.result_delivered = True
         self.state_store.save(state)
 
-    def _aggregate(self, root: ExecutionInput, children: Sequence[ChildExecution]) -> dict[str, Any]:
+    def _aggregate(
+        self, root: ExecutionInput, children: Sequence[ChildExecution]
+    ) -> dict[str, Any]:
         results = [child.result for child in children if child.result is not None]
-        failed = next((result for result in results if not self.is_success(result)), None)
+        failed = next(
+            (result for result in results if not self.is_success(result)), None
+        )
         result = deepcopy(failed or results[-1]) if results else {}
-        result.update({
-            "contract_version": self.contract_version,
-            "execution_id": root.payload["execution_id"],
-            "correlation_id": root.correlation_id,
-            "source_issue": deepcopy(root.payload["source_issue"]),
-            "status": (failed or results[-1])["status"],
-            "summary": f"Orchestration completed {len(results)} of {len(children)} child executions."
-            if not failed else f"Orchestration stopped after child failure ({len(results)} attempted).",
-        })
+        result.update(
+            {
+                "contract_version": self.contract_version,
+                "execution_id": root.payload["execution_id"],
+                "correlation_id": root.correlation_id,
+                "source_issue": deepcopy(root.payload["source_issue"]),
+                "status": (failed or results[-1])["status"],
+                "summary": f"Orchestration completed {len(results)} of {len(children)} child executions."
+                if not failed
+                else f"Orchestration stopped after child failure ({len(results)} attempted).",
+            }
+        )
         return result

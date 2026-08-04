@@ -4,14 +4,45 @@ from copy import deepcopy
 
 import pytest
 
-from orchestrator.contract_orchestration import ContractError, ContractOrchestrator, JsonStateStore
+from orchestrator.contract_orchestration import (
+    ContractError,
+    ContractOrchestrator,
+    JsonStateStore,
+)
 
 
 VERSION = "1.0.0"
 REQUIRED = {
-    "execution_input": {"contract_version", "execution_id", "correlation_id", "source_issue", "executor", "target_repository", "dependencies", "draft_only", "instructions"},
-    "execution_result": {"contract_version", "execution_id", "correlation_id", "source_issue", "status", "summary"},
-    "task": {"contract_version", "task_id", "correlation_id", "source_issue", "executor", "target_repository", "dependencies", "draft_only", "instructions"},
+    "execution_input": {
+        "contract_version",
+        "execution_id",
+        "correlation_id",
+        "source_issue",
+        "executor",
+        "target_repository",
+        "dependencies",
+        "draft_only",
+        "instructions",
+    },
+    "execution_result": {
+        "contract_version",
+        "execution_id",
+        "correlation_id",
+        "source_issue",
+        "status",
+        "summary",
+    },
+    "task": {
+        "contract_version",
+        "task_id",
+        "correlation_id",
+        "source_issue",
+        "executor",
+        "target_repository",
+        "dependencies",
+        "draft_only",
+        "instructions",
+    },
 }
 
 
@@ -27,7 +58,11 @@ def canonical_input():
         "contract_version": VERSION,
         "execution_id": "exec-1",
         "correlation_id": "corr-9",
-        "source_issue": {"repository": "Young-Consultations/portfolio-tasks", "number": 42, "url": "https://example.test/issues/42"},
+        "source_issue": {
+            "repository": "Young-Consultations/portfolio-tasks",
+            "number": 42,
+            "url": "https://example.test/issues/42",
+        },
         "approval_status": "approved",
         "executor": "codex",
         "priority": "p1",
@@ -62,12 +97,16 @@ def harness(tmp_path):
         state_store=JsonStateStore(tmp_path),
         execute=execute,
         is_success=lambda result: result["status"] == "succeeded",
-        post_result=lambda issue, result: posted.append((deepcopy(issue), deepcopy(result))),
+        post_result=lambda issue, result: posted.append(
+            (deepcopy(issue), deepcopy(result))
+        ),
     )
     return service, executed, posted
 
 
-def test_valid_input_and_single_step_produce_final_canonical_result(harness, canonical_input):
+def test_valid_input_and_single_step_produce_final_canonical_result(
+    harness, canonical_input
+):
     service, executed, posted = harness
     result = service.run(canonical_input).to_dict()
     assert len(executed) == 1
@@ -104,7 +143,15 @@ def test_child_failure_is_aggregated_and_stops_sequence(harness, canonical_input
 
     def fail(value):
         executed.append(value)
-        return {"contract_version": VERSION, "execution_id": value["execution_id"], "correlation_id": value["correlation_id"], "source_issue": value["source_issue"], "status": "failed", "summary": "no", "failure_category": "execution"}
+        return {
+            "contract_version": VERSION,
+            "execution_id": value["execution_id"],
+            "correlation_id": value["correlation_id"],
+            "source_issue": value["source_issue"],
+            "status": "failed",
+            "summary": "no",
+            "failure_category": "execution",
+        }
 
     service.execute = fail
     result = service.run(canonical_input, steps=["first", "never"]).to_dict()
@@ -182,8 +229,12 @@ def test_task_ingestion_uses_same_execution_path(harness, canonical_input):
 
 def test_legacy_input_has_one_deprecated_migration(harness):
     legacy = {
-        "idea": "Build it", "project_name": "demo", "github_repository": "Young-Consultations/slugger",
-        "request_identity": "old-1", "source_issue_number": 8, "source_issue_url": "https://example.test/8",
+        "idea": "Build it",
+        "project_name": "demo",
+        "github_repository": "Young-Consultations/slugger",
+        "request_identity": "old-1",
+        "source_issue_number": 8,
+        "source_issue_url": "https://example.test/8",
     }
     with pytest.deprecated_call(match="legacy fields"):
         result = harness[0].run(legacy)
@@ -193,6 +244,12 @@ def test_legacy_input_has_one_deprecated_migration(harness):
 
 def test_no_alternate_external_vocabulary(harness, canonical_input):
     result = harness[0].run(canonical_input).to_dict()
-    forbidden = {"run_status", "github_repository", "agent", "error_type", "slugger_correlation_id"}
+    forbidden = {
+        "run_status",
+        "github_repository",
+        "agent",
+        "error_type",
+        "slugger_correlation_id",
+    }
     assert forbidden.isdisjoint(result)
     assert forbidden.isdisjoint(harness[1][0])
