@@ -136,7 +136,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    secrets: inherit
+    secrets:
+      SLUGGER_GITHUB_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
     with:
       idea: ${{ needs.preflight.outputs.idea }}
       project_name: ${{ needs.preflight.outputs.project_name }}

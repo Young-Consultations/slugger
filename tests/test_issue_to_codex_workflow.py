@@ -162,14 +162,20 @@ def test_report_result_success_and_failure_comments_are_markdown() -> None:
 
 
 def test_result_comments_are_bounded_and_secret_safe() -> None:
-    text = ISSUE_WORKFLOW.read_text(encoding="utf-8")
-    assert "Workflow run URL" in text
-    assert "Draft pull request URL" in text
-    assert "Manifest digest" in text
-    assert "head -c 500" in text
-    assert "OPENAI_API_KEY" not in text
-    assert "SLUGGER_GITHUB_TOKEN" not in text
-    assert "Authorization:" not in text
+    data = _workflow(ISSUE_WORKFLOW)
+    reporting_text = str(
+        {
+            "preflight": data["jobs"]["preflight"],
+            "report-result": data["jobs"]["report-result"],
+        }
+    )
+    assert "Workflow run URL" in reporting_text
+    assert "Draft pull request URL" in reporting_text
+    assert "Manifest digest" in reporting_text
+    assert "head -c 500" in reporting_text
+    assert "OPENAI_API_KEY" not in reporting_text
+    assert "SLUGGER_GITHUB_TOKEN" not in reporting_text
+    assert "Authorization:" not in reporting_text
 
 
 def test_manual_dispatch_and_workflow_call_share_user_idea_jobs() -> None:
@@ -179,6 +185,20 @@ def test_manual_dispatch_and_workflow_call_share_user_idea_jobs() -> None:
     assert data[True]["workflow_call"]["inputs"]["idea"]["required"] is True
     assert "generate-with-codex" in data["jobs"]
     assert "openai/codex-action" in USER_IDEA_WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_canonical_workflow_call_uses_explicit_secret_contract() -> None:
+    data = _workflow(ISSUE_WORKFLOW)
+    job = data["jobs"]["run-canonical-codex"]
+
+    assert job["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
+    assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
+    assert job["secrets"] == {
+        "SLUGGER_GITHUB_TOKEN": "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
+    }
+    assert job["secrets"] != "inherit"
+    assert "OPENAI_API_KEY" not in str(job["secrets"])
+    assert set(job["secrets"]) == {"SLUGGER_GITHUB_TOKEN"}
 
 
 def test_caller_passes_canonical_outputs_to_report_result() -> None:

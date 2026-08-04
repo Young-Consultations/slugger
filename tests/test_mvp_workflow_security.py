@@ -150,3 +150,12 @@ def test_slugger_artifact_adapter_and_exact_function_are_required() -> None:
     assert "python -m hello_codex.main greet Joseph" in text
     assert "Hello, Joseph!" in text
     assert "slugger-codex-certification-${{ github.run_id }}" in text
+
+
+def test_active_workflows_do_not_use_broad_secret_inheritance() -> None:
+    for workflow in Path(".github/workflows").glob("*.y*ml"):
+        data = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+        for name, job in data.get("jobs", {}).items():
+            assert job.get("secrets") != "inherit", (
+                f"{workflow}:{name} uses secrets: inherit"
+            )

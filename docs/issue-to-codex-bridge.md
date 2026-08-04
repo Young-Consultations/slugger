@@ -28,3 +28,7 @@ Operators must configure these items before the first live controlled execution:
 7. Perform the first live controlled execution with a sandbox issue and an allowlisted sandbox target repository.
 
 Do not auto-merge generated pull requests and do not push generated content directly to `main`.
+
+## Reusable workflow secret boundary
+
+The issue-triggered bridge calls the canonical user-idea reusable workflow with an explicit secret map containing only `SLUGGER_GITHUB_TOKEN`. `OPENAI_API_KEY` is not forwarded by the caller; it remains supplied only by the protected `codex-demo` environment on the `generate-with-codex` job. Supported workflows must not use broad `secrets: inherit`. Any new reusable-workflow secret requires an explicit `workflow_call.secrets` declaration, an explicit caller mapping, security justification, and focused regression coverage.
