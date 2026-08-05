@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mvp.codex_target import TargetPolicyError, authorize_slugger_execution
+from mvp.codex_target import (
+    TargetPolicyError,
+    authorize_slugger_execution,
+    deterministic_branch,
+)
 
 TARGET_WORKFLOW = Path(".github/workflows/codex-execute.yml")
 ISSUE_WORKFLOW = Path(".github/workflows/issue-to-codex.yml")
@@ -17,7 +21,11 @@ def _workflow(path: Path):
 
 def _canonical(**overrides):
     data = {
+        "contract_version": "ai-sdlc-contract/v3",
         "contract": "ai-sdlc-contract/v2",
+        "delivery_id": "delivery-123",
+        "requested_branch": deterministic_branch("delivery-123"),
+        "draft_pr_only": True,
         "mode": "verify",
         "correlation_id": "corr-123",
         "target": {"repository": "Young-Consultations/slugger", "executor": "Codex"},
@@ -34,7 +42,7 @@ def _canonical(**overrides):
             "idea": "Build a tiny calculator CLI.",
             "project_name": "calculator-demo",
         },
-        "publication": {"mode": "draft_pr", "identity": "pub-identity-123"},
+        "publication": {"mode": "draft_pr", "identity": "delivery-123"},
     }
     for key, value in overrides.items():
         data[key] = value
@@ -137,7 +145,9 @@ def test_slugger_target_policy_preserves_canonical_identities() -> None:
     plan = authorize_slugger_execution(_canonical(mode="implement"))
     assert plan.task_id == "task-123"
     assert plan.correlation_id == "corr-123"
-    assert plan.publication_identity == "pub-identity-123"
+    assert plan.delivery_id == "delivery-123"
+    assert plan.publication_identity == "delivery-123"
+    assert plan.requested_branch == deterministic_branch("delivery-123")
     assert plan.mode == "implement"
 
 
@@ -168,17 +178,16 @@ def test_verify_mode_installs_contracts_before_result_validation() -> None:
     assert "validate_execution_result" in verify_text
 
 
-def test_implement_mode_routes_through_draft_only_reusable_workflow() -> None:
+def test_implement_mode_is_gated_and_publishes_only_an_owned_draft() -> None:
     data = _workflow(TARGET_WORKFLOW)
     implement = data["jobs"]["implement"]
-    assert implement["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
-    assert implement["secrets"] == {
-        "SLUGGER_GITHUB_TOKEN": "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
-    }
-    user_text = USER_IDEA_WORKFLOW.read_text(encoding="utf-8")
-    assert "draft_pull_request_url" in user_text
-    assert "python -m cli.main mvp publish" in user_text
-    assert "gh pr merge" not in user_text
+    assert "new-delivery" in implement["if"]
+    assert "resume-incomplete-delivery" in implement["if"]
+    text = TARGET_WORKFLOW.read_text(encoding="utf-8")
+    assert "openai/codex-action" in str(implement)
+    assert "slugger-canonical-delivery" in Path("mvp/codex_target.py").read_text()
+    assert "gh pr create" in text and "--draft" in text
+    assert "gh pr merge" not in text
 
 
 def test_old_issue_bridge_cannot_silently_return_as_supported_path() -> None:

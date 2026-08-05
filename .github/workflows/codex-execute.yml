@@ -47,6 +47,10 @@ jobs:
       task_id: ${{ steps.policy.outputs.task_id }}
       correlation_id: ${{ steps.policy.outputs.correlation_id }}
       publication_identity: ${{ steps.policy.outputs.publication_identity }}
+      delivery_id: ${{ steps.policy.outputs.delivery_id }}
+      requested_branch: ${{ steps.policy.outputs.requested_branch }}
+      contract_version: ${{ steps.policy.outputs.contract_version }}
+      ownership_marker: ${{ steps.policy.outputs.ownership_marker }}
     steps:
       - name: Check out Slugger without credentials
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -101,7 +105,7 @@ jobs:
           import os
           import subprocess
           from pathlib import Path
-          from mvp.codex_target import authorize_slugger_execution
+          from mvp.codex_target import authorize_slugger_execution, ownership_marker
 
           data = json.loads(Path("execution-input.json").read_text(encoding="utf-8"))
           contracts = importlib.import_module("ai_sdlc_contracts")
@@ -132,6 +136,10 @@ jobs:
                   "task_id": plan.task_id,
                   "correlation_id": plan.correlation_id,
                   "publication_identity": plan.publication_identity,
+                  "delivery_id": plan.delivery_id,
+                  "requested_branch": plan.requested_branch,
+                  "contract_version": plan.contract_version,
+                  "ownership_marker": ownership_marker(plan),
               }.items():
                   out.write(f"{key}<<EOF_{key}\n{value}\nEOF_{key}\n")
           PY
@@ -185,6 +193,7 @@ jobs:
               "mode": "verify",
               "task_id": "${{ needs.validate-canonical-input.outputs.task_id }}",
               "correlation_id": "${{ needs.validate-canonical-input.outputs.correlation_id }}",
+              "delivery_id": "${{ needs.validate-canonical-input.outputs.delivery_id }}",
               "publication_identity": "${{ needs.validate-canonical-input.outputs.publication_identity }}",
               "publication": {"mode": "draft_pr", "occurred": False},
           }
@@ -200,27 +209,114 @@ jobs:
           path: execution-result.json
           if-no-files-found: error
 
-  implement:
-    name: Implement and publish deterministic draft PR
+  preflight:
+    name: Classify canonical delivery before Codex
     needs: validate-canonical-input
     if: needs.validate-canonical-input.outputs.execution_mode == 'implement'
-    uses: ./.github/workflows/user-idea-codex-cli-demo.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      state: ${{ steps.classify.outputs.state }}
+      pull_request_url: ${{ steps.classify.outputs.pull_request_url }}
+    steps:
+      - name: Classify durable branch and PR ownership
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.validate-canonical-input.outputs.requested_branch }}
+          DELIVERY_ID: ${{ needs.validate-canonical-input.outputs.delivery_id }}
+          EXPECTED_MARKER: ${{ needs.validate-canonical-input.outputs.ownership_marker }}
+        run: |
+          set -euo pipefail
+          prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --state all --limit 100 --json number,url,state,isDraft,headRefName,baseRefName,body)"
+          export PRS="$prs"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          prs = json.loads(os.environ["PRS"])
+          branch, delivery, marker = os.environ["BRANCH"], os.environ["DELIVERY_ID"], os.environ["EXPECTED_MARKER"]
+          matches = [p for p in prs if p["headRefName"] == branch or f'"delivery_id": "{delivery}"' in (p.get("body") or "")]
+          state, url = "new-delivery", ""
+          if len(matches) > 1:
+              state = "ambiguous"
+          elif matches:
+              p = matches[0]; url = p["url"]
+              valid = p["state"].lower() == "open" and p["isDraft"] and p["headRefName"] == branch and p["baseRefName"] == "main" and marker in (p.get("body") or "")
+              state = "reuse-completed-delivery" if valid else "ambiguous"
+          elif os.system(f'gh api "repos/{os.environ["GITHUB_REPOSITORY"]}/git/ref/heads/{branch}" >/dev/null 2>&1') == 0:
+              state = "blocked"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as out:
+              out.write(f"state={state}\npull_request_url={url}\n")
+          PY
+
+  implement:
+    name: Run Codex only for a new or safely resumable delivery
+    needs: [validate-canonical-input, preflight]
+    if: needs.preflight.outputs.state == 'new-delivery' || needs.preflight.outputs.state == 'resume-incomplete-delivery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: codex-demo
     permissions:
       contents: write
       pull-requests: write
-    secrets:
-      SLUGGER_GITHUB_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
-    with:
-      idea: ${{ needs.validate-canonical-input.outputs.idea }}
-      project_name: ${{ needs.validate-canonical-input.outputs.project_name }}
-      target_repository: Young-Consultations/slugger-generated-demos
-      retain_diagnostics: true
-      source_issue_number: ""
-      source_issue_url: ""
+    outputs:
+      generated_branch: ${{ needs.validate-canonical-input.outputs.requested_branch }}
+      draft_pull_request_url: ${{ steps.publish.outputs.pull_request_url }}
+      publication_outcome: ${{ steps.publish.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Run Codex against the Slugger checkout
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt: ${{ needs.validate-canonical-input.outputs.idea }}
+      - name: Validate Codex changes
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[test]'
+          python -m ruff check .
+          python -m mypy mvp cli
+          python -m pytest -q
+          test -n "$(git status --short)"
+      - name: Create deterministic branch and owned draft
+        id: publish
+        env:
+          GH_TOKEN: ${{ secrets.SLUGGER_GITHUB_TOKEN }}
+          BRANCH: ${{ needs.validate-canonical-input.outputs.requested_branch }}
+          MARKER: ${{ needs.validate-canonical-input.outputs.ownership_marker }}
+        run: |
+          set -euo pipefail
+          git config user.name slugger-automation
+          git config user.email slugger-automation@users.noreply.github.com
+          git add -A && git commit -m "Codex delivery ${{ needs.validate-canonical-input.outputs.delivery_id }}"
+          gh auth setup-git
+          # An empty lease is a compare-and-swap asserting that the ref does not
+          # exist. It can never update an unknown or race-winning branch.
+          if ! git push --force-with-lease="refs/heads/$BRANCH:" origin "HEAD:refs/heads/$BRANCH"; then
+            echo "Branch create conflict; validating the durable winner."
+          fi
+          url="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$BRANCH" --json url,isDraft,baseRefName,body --jq '.[] | select(.isDraft and .baseRefName == "main" and (.body | contains(env.MARKER))) | .url' | head -1)"
+          outcome=safely-resumed
+          if [ -z "$url" ]; then
+            if ! url="$(gh pr create --repo "$GITHUB_REPOSITORY" --draft --base main --head "$BRANCH" --title "Codex delivery ${{ needs.validate-canonical-input.outputs.delivery_id }}" --body "$MARKER")"; then
+              url="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$BRANCH" --json url,isDraft,baseRefName,body --jq '.[] | select(.isDraft and .baseRefName == "main" and (.body | contains(env.MARKER))) | .url' | head -1)"
+              test -n "$url" || { echo "Ambiguous PR create race; manual recovery required." >&2; exit 1; }
+            else
+              outcome=newly-published
+            fi
+          fi
+          echo "pull_request_url=$url" >> "$GITHUB_OUTPUT"
+          echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
 
   implement-result:
     name: Emit implement canonical result
-    needs: [validate-canonical-input, implement]
+    needs: [validate-canonical-input, preflight, implement]
     if: always() && needs.validate-canonical-input.outputs.execution_mode == 'implement'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -250,20 +346,28 @@ jobs:
           python - <<'PY'
           import importlib, json
           from pathlib import Path
-          success = "${{ needs.implement.result }}" == "success"
+          preflight = "${{ needs.preflight.outputs.state }}"
+          reused = preflight == "reuse-completed-delivery"
+          manual = preflight in {"ambiguous", "blocked"}
+          success = reused or "${{ needs.implement.result }}" == "success"
           result = {
               "contract": "ai-sdlc-contract/v2",
               "status": "completed" if success else "failed",
               "mode": "implement",
               "task_id": "${{ needs.validate-canonical-input.outputs.task_id }}",
               "correlation_id": "${{ needs.validate-canonical-input.outputs.correlation_id }}",
+              "delivery_id": "${{ needs.validate-canonical-input.outputs.delivery_id }}",
               "publication_identity": "${{ needs.validate-canonical-input.outputs.publication_identity }}",
+              "details": {
+                  "delivery_outcome": "existing-delivery-reused" if reused else ("ambiguous-manual-recovery" if manual else ("${{ needs.implement.outputs.publication_outcome }}" or "failed")),
+                  "preflight_state": preflight,
+              },
               "publication": {
                   "mode": "draft_pr",
-                  "occurred": success,
+                  "occurred": success and not reused,
                   "draft": True,
-                  "pull_request_url": "${{ needs.implement.outputs.draft_pull_request_url }}",
-                  "branch": "${{ needs.implement.outputs.generated_branch }}",
+                  "pull_request_url": "${{ needs.preflight.outputs.pull_request_url }}" if reused else "${{ needs.implement.outputs.draft_pull_request_url }}",
+                  "branch": "${{ needs.validate-canonical-input.outputs.requested_branch }}",
               },
           }
           contracts = importlib.import_module("ai_sdlc_contracts")

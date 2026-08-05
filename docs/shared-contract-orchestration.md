@@ -1,5 +1,45 @@
 # Shared-contract orchestration
 
+## At-least-once delivery at the Slugger target
+
+Slugger is an idempotent consumer of organization-routed tasks. A canonical
+`delivery_id` (or contract-defined `idempotency_key`) owns exactly one deterministic
+`slugger/codex-delivery-*` branch and one open, managed draft pull request. The PR
+body carries a machine-readable marker binding the delivery, correlation and source
+issue identities, target repository, contract version, base branch, deterministic
+branch, and an immutable-input digest. GitHub workflow run IDs, run attempts,
+timestamps, and random values never participate in that identity.
+
+Concurrency reduces overlapping work but is **not** the deduplication guarantee.
+Every run performs a durable repository preflight before Codex. A completed owned
+draft is reused without invoking Codex; an unowned branch, conflicting marker,
+non-draft/closed/merged PR, wrong base, or multiple match is preserved and fails
+closed for manual recovery. Branch and PR create conflicts are re-queried and may
+only converge on the one structurally valid owned draft. Automation never closes
+an ambiguous PR.
+
+The organization router remains the only production dispatch authority. The
+repository-local issue-label execution bridge remains retired, and publication is
+always draft-only.
+
+### Contract dependency and rollout
+
+The next pinned organization contract must validate and preserve a stable
+`delivery_id` (or `idempotency_key`) in both execution input and result, plus its
+contract-defined deterministic `requested_branch`. Slugger does not substitute an
+Actions run ID when those fields are absent. Rollout order is: publish and pin that
+contract release; update the organization router to emit the identity and branch;
+deploy this target consumer; then enable at-least-once redelivery. Until the new
+pin is adopted, router traffic that lacks the required identity must not be sent to
+this executor.
+
+Operators remain responsible for resolving deliberately untouched unsafe states:
+multiple matching PRs, closed or merged matches, a non-draft match, a wrong-base
+match, conflicting immutable input or marker data, and an existing deterministic
+branch whose ownership cannot be proven. Recovery consists of inspecting and
+reconciling those objects; automation does not delete branches, rewrite user work,
+close PRs, or guess ownership.
+
 Slugger's contract orchestration entry point is `ContractOrchestrator.run`. It
 accepts either the canonical execution-input mapping or a canonical task mapping
 (`kind="task"`). The caller must inject the validator distributed with the
