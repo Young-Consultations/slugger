@@ -227,6 +227,64 @@ def test_publication_outputs_map_cli_summary_to_job_outputs() -> None:
     assert "<<{delimiter}" in run
 
 
+def test_workflow_call_declares_narrow_secret_contract() -> None:
+    workflow_call = _workflow()[True]["workflow_call"]
+    assert set(workflow_call) == {"inputs", "secrets", "outputs"}
+    assert workflow_call["secrets"] == {
+        "SLUGGER_GITHUB_TOKEN": {
+            "description": "Token scoped to target-repository validation and draft PR publication",
+            "required": True,
+        }
+    }
+    assert "OPENAI_API_KEY" not in workflow_call["secrets"]
+    assert set(workflow_call["inputs"]) == {
+        "idea",
+        "project_name",
+        "target_repository",
+        "retain_diagnostics",
+        "source_issue_number",
+        "source_issue_url",
+        "request_identity",
+    }
+
+
+def test_user_idea_workflow_keeps_openai_secret_in_codex_environment_only() -> None:
+    data = _workflow()
+    jobs = data["jobs"]
+    codex = jobs["generate-with-codex"]
+    assert codex["environment"] == "codex-demo"
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert text.count("secrets.OPENAI_API_KEY") == 2
+    assert "OPENAI_API_KEY" not in data[True]["workflow_call"]["secrets"]
+    for name, job in jobs.items():
+        if name == "generate-with-codex":
+            assert "secrets.OPENAI_API_KEY" in str(job)
+        else:
+            assert "secrets.OPENAI_API_KEY" not in str(job)
+
+
+def test_slugger_token_is_only_used_for_target_validation_and_publication() -> None:
+    data = _workflow()
+    jobs = data["jobs"]
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert text.count("${{ secrets.SLUGGER_GITHUB_TOKEN }}") == 2
+    validate = next(
+        step
+        for step in jobs["prepare-codex-input"]["steps"]
+        if step["name"] == "Validate target repository before Codex"
+    )
+    publish = next(
+        step
+        for step in jobs["verify-generated-demo"]["steps"]
+        if step["name"] == "Publish or update draft pull request"
+    )
+    assert validate["env"]["GH_TOKEN"] == "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
+    assert publish["env"]["GH_TOKEN"] == "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
+    for name, job in jobs.items():
+        if name not in {"prepare-codex-input", "verify-generated-demo"}:
+            assert "secrets.SLUGGER_GITHUB_TOKEN" not in str(job)
+
+
 def test_workflow_call_outputs_expose_publication_and_gate_outputs() -> None:
     outputs = _workflow()[True]["workflow_call"]["outputs"]
     assert outputs == {

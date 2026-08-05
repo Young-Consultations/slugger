@@ -73,6 +73,10 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      SLUGGER_GITHUB_TOKEN:
+        description: Token scoped to target-repository validation and draft PR publication
+        required: true
     outputs:
       generated_branch:
         description: Generated branch name
