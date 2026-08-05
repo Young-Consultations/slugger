@@ -152,6 +152,22 @@ def test_verify_mode_cannot_mutate_git_or_publish() -> None:
     assert '"occurred": False' in TARGET_WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_verify_mode_installs_contracts_before_result_validation() -> None:
+    verify = _workflow(TARGET_WORKFLOW)["jobs"]["verify"]
+    step_names = [step.get("name", "") for step in verify["steps"]]
+    install_index = step_names.index(
+        "Install organization contracts for result validation"
+    )
+    emit_index = step_names.index("Emit and validate canonical result")
+    assert install_index < emit_index
+    checkout_step = verify["steps"][1]
+    assert checkout_step["with"]["repository"] == "Young-Consultations/.github"
+    assert checkout_step["with"]["path"] == ".ai-sdlc-control-plane"
+    verify_text = str(verify)
+    assert 'python -m pip install -e "./.ai-sdlc-control-plane"' in verify_text
+    assert "validate_execution_result" in verify_text
+
+
 def test_implement_mode_routes_through_draft_only_reusable_workflow() -> None:
     data = _workflow(TARGET_WORKFLOW)
     implement = data["jobs"]["implement"]
