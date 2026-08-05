@@ -1,34 +1,20 @@
-# Slugger Issue-to-Codex Automation Bridge
+# Issue-to-Codex bridge retired
 
-The issue bridge connects a synchronized Slugger issue to the canonical user-idea Codex workflow. It is intentionally approval gated: only applying `codex-ready` to an eligible open issue can call the reusable Codex workflow.
+Slugger no longer authorizes production Codex execution from local issues or labels. The former `codex-ready` issue-label bridge, repository-local issue contract parsing, `AUTHORIZED_CODEX_READY_ACTORS` approval variable, target allowlist, and local request identity have been retired to remove the duplicate control plane.
 
-## Required issue contract
+Production AI-SDLC work now originates in `Young-Consultations/portfolio-tasks`, where backlog intake and explicit approval are owned. Routing is owned by the organization control plane in `Young-Consultations/.github`.
 
-Issue text is treated as hostile input. The bridge accepts only the exact portfolio source marker and bounded deterministic field markers:
+Slugger is only a target executor. The registered production target workflow is:
 
-```markdown
-<!-- portfolio-task-source: Young-Consultations/portfolio-tasks#123 -->
-<!-- slugger-field: idea -->Build a small CLI.<!-- /slugger-field: idea -->
-<!-- slugger-field: project_name -->small-cli<!-- /slugger-field: project_name -->
-<!-- slugger-field: target_repository -->Young-Consultations/slugger-generated-demos<!-- /slugger-field: target_repository -->
+```text
+Young-Consultations/slugger/.github/workflows/codex-execute.yml@main
 ```
 
-The current target repository allowlist is reviewable in `.github/slugger/target-allowlist.json`.
+The supported organization contract is `ai-sdlc-contract/v2`, and Slugger pins the organization control-plane checkout to `ai-sdlc-v2.1.0`. Slugger consumes the `ai_sdlc_contracts` package from that immutable release instead of copying schemas or validators locally.
 
-## Manual setup steps
+The target workflow supports two modes:
 
-Operators must configure these items before the first live controlled execution:
+- `verify`: validates canonical input, checks Slugger authorization and workflow wiring, runs safe non-mutating checks, and emits a canonical result without invoking Codex, changing branches, committing, pushing, or publishing.
+- `implement`: runs controlled Slugger generation and validation, then creates or updates exactly one deterministic draft pull request. Automated publication remains draft-only; Slugger never merges generated code or marks generated pull requests ready for review.
 
-1. Create any missing issue labels: `portfolio-task`, `codex-ready`, `codex-running`, `codex-complete`, and `codex-failed`.
-2. Configure authorized maintainers or teams by setting the `AUTHORIZED_CODEX_READY_ACTORS` repository variable to a comma-separated list of GitHub logins allowed to apply `codex-ready`.
-3. Configure `OPENAI_API_KEY` only on the protected `codex-demo` environment used by the canonical Codex job.
-4. Configure `SLUGGER_GITHUB_TOKEN` with the least target-repository permissions needed for validation and draft pull request publication.
-5. Configure the `codex-demo` protected environment.
-6. Select required reviewers for the protected environment.
-7. Perform the first live controlled execution with a sandbox issue and an allowlisted sandbox target repository.
-
-Do not auto-merge generated pull requests and do not push generated content directly to `main`.
-
-## Reusable workflow secret boundary
-
-The issue-triggered bridge calls the canonical user-idea reusable workflow with an explicit secret map containing only `SLUGGER_GITHUB_TOKEN`. `OPENAI_API_KEY` is not forwarded by the caller; it remains supplied only by the protected `codex-demo` environment on the `generate-with-codex` job. Supported workflows must not use broad `secrets: inherit`. Any new reusable-workflow secret requires an explicit `workflow_call.secrets` declaration, an explicit caller mapping, security justification, and focused regression coverage.
+Organization-side follow-up is required before enabling Slugger in the registry; this repository does not enable the registry entry itself.

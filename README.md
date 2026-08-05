@@ -174,6 +174,13 @@ The workflow:
 
 ⸻
 
+
+## Organization-routed AI-SDLC execution
+
+Production Codex tasks for Slugger now originate in `Young-Consultations/portfolio-tasks`, where intake metadata and explicit approval are owned. Routing and canonical validation are owned by the organization control plane in `Young-Consultations/.github`. Slugger is a registered target executor only, through `.github/workflows/codex-execute.yml`.
+
+Slugger does not authorize production execution from local issue labels; `codex-ready` is no longer a production trigger. The supported contract is `ai-sdlc-contract/v2`, pinned to the organization control-plane release `ai-sdlc-v2.1.0`. Automated publication remains draft-only and requires human review before any merge.
+
 ## Contributing
 
 Contributions are welcome. MVP work should be delivered in focused pull requests, include tests, preserve the `mvp/` architecture boundary, and avoid unrelated full-SDLC functionality.
