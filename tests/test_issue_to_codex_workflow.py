@@ -3,13 +3,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mvp.issue_bridge import (
-    IssueBridgeError,
-    actor_is_authorized,
-    load_allowlist,
-    parse_issue_contract,
-)
+from mvp.codex_target import TargetPolicyError, authorize_slugger_execution
 
+TARGET_WORKFLOW = Path(".github/workflows/codex-execute.yml")
 ISSUE_WORKFLOW = Path(".github/workflows/issue-to-codex.yml")
 USER_IDEA_WORKFLOW = Path(".github/workflows/user-idea-codex-cli-demo.yml")
 ALLOWLIST = Path(".github/slugger/target-allowlist.json")
@@ -19,226 +15,176 @@ def _workflow(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def _body(repo: str = "Young-Consultations/slugger-generated-demos") -> str:
-    return f"""<!-- portfolio-task-source: Young-Consultations/portfolio-tasks#123 -->
-<!-- slugger-field: idea -->Build a tiny calculator CLI.<!-- /slugger-field: idea -->
-<!-- slugger-field: project_name -->calculator-demo<!-- /slugger-field: project_name -->
-<!-- slugger-field: target_repository -->{repo}<!-- /slugger-field: target_repository -->
-"""
+def _canonical(**overrides):
+    data = {
+        "contract": "ai-sdlc-contract/v2",
+        "mode": "verify",
+        "correlation_id": "corr-123",
+        "target": {"repository": "Young-Consultations/slugger", "executor": "Codex"},
+        "source": {
+            "repository": "Young-Consultations/portfolio-tasks",
+            "issue_number": 123,
+            "issue_state": "open",
+        },
+        "governance": {"approved": True},
+        "task": {
+            "id": "task-123",
+            "type": "mvp_python_cli",
+            "sensitive": False,
+            "idea": "Build a tiny calculator CLI.",
+            "project_name": "calculator-demo",
+        },
+        "publication": {"mode": "draft_pr", "identity": "pub-identity-123"},
+    }
+    for key, value in overrides.items():
+        data[key] = value
+    return data
 
 
-def test_issue_bridge_triggers_only_on_codex_ready_labeled_issues() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    assert data[True] == {"issues": {"types": ["labeled"]}}
-    assert data["jobs"]["preflight"]["if"] == "github.event.label.name == 'codex-ready'"
-    text = ISSUE_WORKFLOW.read_text(encoding="utf-8")
-    assert "chatgpt-task" not in text
-    assert "portfolio-task" not in text
-    assert "pull_request_target" not in text
-    assert "issue_comment" not in text
+def test_production_target_workflow_exists_and_accepts_router_inputs() -> None:
+    data = _workflow(TARGET_WORKFLOW)
+    dispatch = data[True]["workflow_dispatch"]["inputs"]
+    assert set(dispatch) == {
+        "execution_input_json",
+        "execution_input_artifact",
+        "execution_input_run_id",
+        "concurrency_group",
+    }
+    assert dispatch["concurrency_group"]["required"] is True
+    assert dispatch["execution_input_json"]["type"] == "string"
+    assert dispatch["execution_input_artifact"]["type"] == "string"
+    assert dispatch["execution_input_run_id"]["type"] == "string"
 
 
-def test_issue_contract_accepts_only_eligible_issues() -> None:
-    allowlist = load_allowlist(ALLOWLIST)
-    contract = parse_issue_contract(
-        body=_body(),
-        issue_number=7,
-        issue_url="https://github.com/o/r/issues/7",
-        allowlist=allowlist,
+def test_target_workflow_uses_router_concurrency_and_no_issue_triggers() -> None:
+    data = _workflow(TARGET_WORKFLOW)
+    assert data["concurrency"] == {
+        "group": "${{ inputs.concurrency_group }}",
+        "cancel-in-progress": False,
+    }
+    assert set(data[True]) == {"workflow_dispatch"}
+    assert "issues" not in data[True]
+    assert "issue_comment" not in data[True]
+    assert "pull_request_target" not in data[True]
+    assert "repository_dispatch" not in data[True]
+
+
+def test_target_workflow_installs_pinned_organization_contracts() -> None:
+    text = TARGET_WORKFLOW.read_text(encoding="utf-8")
+    assert "repository: Young-Consultations/.github" in text
+    assert "ref: ai-sdlc-v2.1.0" in text
+    assert "path: .ai-sdlc-control-plane" in text
+    assert "persist-credentials: false" in text
+    assert 'python -m pip install -e "./.ai-sdlc-control-plane"' in text
+    assert "validate_execution_input" in text
+    assert "validate_execution_result" in text
+
+
+def test_slugger_does_not_locally_define_canonical_contract_or_old_bridge() -> None:
+    assert not ISSUE_WORKFLOW.exists()
+    assert not ALLOWLIST.exists()
+    assert not Path("mvp/issue_bridge.py").exists()
+    text = TARGET_WORKFLOW.read_text(encoding="utf-8")
+    assert "ai-sdlc-contract/v2" not in Path("mvp/codex_target.py").read_text(
+        encoding="utf-8"
     )
-    assert contract.target_repository == "Young-Consultations/slugger-generated-demos"
-    assert len(contract.request_identity) == 64
+    assert "portfolio-task-source" not in text
+    assert "AUTHORIZED_CODEX_READY_ACTORS" not in text
+    assert "request_identity" not in text
+
+
+def test_no_issue_event_or_codex_ready_can_start_production_codex() -> None:
+    workflows = list(Path(".github/workflows").glob("*.yml")) + list(
+        Path(".github/workflows").glob("*.yaml")
+    )
+    for workflow in workflows:
+        data = _workflow(workflow)
+        text = workflow.read_text(encoding="utf-8")
+        if "openai/codex-action" in text or "user-idea-codex-cli-demo.yml" in text:
+            assert "issues" not in data.get(True, {})
+            assert "codex-ready" not in text
+
+
+def test_no_production_workflow_uses_secret_inheritance_or_auto_merge() -> None:
+    for workflow in Path(".github/workflows").glob("*.yml"):
+        text = workflow.read_text(encoding="utf-8")
+        assert "secrets: inherit" not in text
+        assert "gh pr merge" not in text
+        assert "--auto" not in text
+        assert "ready_for_review" not in text
 
 
 @pytest.mark.parametrize(
-    "body,error",
+    "mutator,error",
     [
-        ("", "missing portfolio task source marker"),
         (
-            _body().replace("portfolio-task-source", "chatgpt-task-source"),
-            "unsupported legacy source marker",
+            lambda d: d["target"].update(repository="Young-Consultations/other"),
+            "target repository",
         ),
-        (
-            _body().replace(
-                "<!-- slugger-field: idea -->Build a tiny calculator CLI.<!-- /slugger-field: idea -->",
-                "",
-            ),
-            "missing required field: idea",
-        ),
-        (
-            _body("Young-Consultations/not-allowed"),
-            "target repository is not allowlisted",
-        ),
-        (_body("not-owner-repo"), "target repository must use owner/repository format"),
+        (lambda d: d["governance"].update(approved=False), "approved"),
+        (lambda d: d["task"].update(sensitive=True), "sensitive"),
+        (lambda d: d["source"].update(issue_state="closed"), "open"),
     ],
 )
-def test_issue_contract_rejects_invalid_or_unsupported_inputs(
-    body: str, error: str
-) -> None:
-    with pytest.raises(IssueBridgeError, match=error):
-        parse_issue_contract(
-            body=body,
-            issue_number=7,
-            issue_url="https://github.com/o/r/issues/7",
-            allowlist=load_allowlist(ALLOWLIST),
-        )
+def test_slugger_target_policy_rejects_unauthorized_inputs(mutator, error) -> None:
+    data = _canonical()
+    mutator(data)
+    with pytest.raises(TargetPolicyError, match=error):
+        authorize_slugger_execution(data)
 
 
-def test_authorized_actors_are_explicitly_configured() -> None:
-    assert actor_is_authorized("maintainer", "owner, maintainer") is True
-    assert actor_is_authorized("intruder", "owner, maintainer") is False
+def test_slugger_target_policy_preserves_canonical_identities() -> None:
+    plan = authorize_slugger_execution(_canonical(mode="implement"))
+    assert plan.task_id == "task-123"
+    assert plan.correlation_id == "corr-123"
+    assert plan.publication_identity == "pub-identity-123"
+    assert plan.mode == "implement"
 
 
-def test_issue_workflow_prevents_duplicates_and_updates_state_labels() -> None:
-    text = ISSUE_WORKFLOW.read_text(encoding="utf-8")
-    data = _workflow(ISSUE_WORKFLOW)
-    assert data["concurrency"] == {
-        "group": "issue-to-codex-${{ github.repository }}-${{ github.event.issue.number }}",
-        "cancel-in-progress": False,
-    }
-    assert "An active or completed execution already exists" in text
-    assert "--add-label codex-running" in text
-    assert "--remove-label codex-running" in text
-    assert 'RESULT_LABEL="codex-complete"' in text
-    assert 'RESULT_LABEL="codex-failed"' in text
-    assert '--add-label "$RESULT_LABEL"' in text
-    assert "--add-label codex-ready" not in text
+def test_verify_mode_cannot_mutate_git_or_publish() -> None:
+    verify = _workflow(TARGET_WORKFLOW)["jobs"]["verify"]
+    text = str(verify)
+    assert verify["permissions"] == {"contents": "read"}
+    assert "openai/codex-action" not in text
+    assert "git checkout" not in text
+    assert "git push" not in text
+    assert "gh pr create" not in text
+    assert '"occurred": False' in TARGET_WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_issue_workflow_fails_closed_before_codex_generation() -> None:
-    text = ISSUE_WORKFLOW.read_text(encoding="utf-8")
-    assert "ISSUE_PULL_REQUEST" in text
-    assert "Issue-to-Codex accepts issues only; pull requests are rejected." in text
-    assert (
-        "missing portfolio task source marker" not in text
-    )  # message comes from helper, not shell parsing
-    assert "AUTHORIZED_CODEX_READY_ACTORS" in text
-    assert "Issue-to-Codex must run from the default branch." in text
-    assert "SLUGGER_TARGET_ALLOWLIST: .github/slugger/target-allowlist.json" in text
-
-
-def test_issue_workflow_reuses_canonical_user_idea_workflow() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    call = data["jobs"]["run-canonical-codex"]
-    assert call["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
-    assert "openai/codex-action" not in str(data["jobs"]["preflight"])
-    assert "openai/codex-action" not in str(data["jobs"]["report-result"])
-
-
-def test_report_result_uses_explicit_repo_context_without_checkout() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    report = data["jobs"]["report-result"]
-    assert all(
-        step.get("uses") != "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd"
-        for step in report["steps"]
+def test_verify_mode_installs_contracts_before_result_validation() -> None:
+    verify = _workflow(TARGET_WORKFLOW)["jobs"]["verify"]
+    step_names = [step.get("name", "") for step in verify["steps"]]
+    install_index = step_names.index(
+        "Install organization contracts for result validation"
     )
-    step = report["steps"][0]
-    assert step["env"]["GH_REPO"] == "${{ github.repository }}"
-    assert "GH_REPO" in str(step)
-    assert "gh issue edit" in step["run"]
-    assert "gh issue comment" in step["run"]
+    emit_index = step_names.index("Emit and validate canonical result")
+    assert install_index < emit_index
+    checkout_step = verify["steps"][1]
+    assert checkout_step["with"]["repository"] == "Young-Consultations/.github"
+    assert checkout_step["with"]["path"] == ".ai-sdlc-control-plane"
+    verify_text = str(verify)
+    assert 'python -m pip install -e "./.ai-sdlc-control-plane"' in verify_text
+    assert "validate_execution_result" in verify_text
 
 
-def test_report_result_has_no_malformed_heredoc_and_best_effort_actions() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    run = data["jobs"]["report-result"]["steps"][0]["run"]
-    assert "cat > issue-comment.md <<EOF" not in run
-    assert "run_report_action" in run
-    assert "--remove-label codex-running" in run
-    assert '--add-label "$RESULT_LABEL"' in run
-    assert "codex-complete" in run
-    assert "codex-failed" in run
-    assert "Every Slugger issue reporting action failed." in run
-
-
-def test_report_result_success_and_failure_comments_are_markdown() -> None:
-    run = _workflow(ISSUE_WORKFLOW)["jobs"]["report-result"]["steps"][0]["run"]
-    assert "### Slugger Codex automation complete" in run
-    assert "### Slugger Codex automation failed" in run
-    assert "- Workflow run URL:" in run
-    assert "- Completion status: codex-complete" in run
-    assert "- Failed phase: canonical-user-idea-workflow" in run
-    assert "Slugger request identity:" in run
-
-
-def test_result_comments_are_bounded_and_secret_safe() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    reporting_text = str(
-        {
-            "preflight": data["jobs"]["preflight"],
-            "report-result": data["jobs"]["report-result"],
-        }
-    )
-    assert "Workflow run URL" in reporting_text
-    assert "Draft pull request URL" in reporting_text
-    assert "Manifest digest" in reporting_text
-    assert "head -c 500" in reporting_text
-    assert "OPENAI_API_KEY" not in reporting_text
-    assert "SLUGGER_GITHUB_TOKEN" not in reporting_text
-    assert "Authorization:" not in reporting_text
-
-
-def test_manual_dispatch_and_workflow_call_share_user_idea_jobs() -> None:
-    data = _workflow(USER_IDEA_WORKFLOW)
-    assert set(data[True]) == {"workflow_dispatch", "workflow_call"}
-    assert data[True]["workflow_dispatch"]["inputs"]["idea"]["required"] is True
-    assert data[True]["workflow_call"]["inputs"]["idea"]["required"] is True
-    assert "generate-with-codex" in data["jobs"]
-    assert "openai/codex-action" in USER_IDEA_WORKFLOW.read_text(encoding="utf-8")
-
-
-def test_canonical_workflow_call_uses_explicit_secret_contract() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    job = data["jobs"]["run-canonical-codex"]
-
-    assert job["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
-    assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
-    assert job["secrets"] == {
+def test_implement_mode_routes_through_draft_only_reusable_workflow() -> None:
+    data = _workflow(TARGET_WORKFLOW)
+    implement = data["jobs"]["implement"]
+    assert implement["uses"] == "./.github/workflows/user-idea-codex-cli-demo.yml"
+    assert implement["secrets"] == {
         "SLUGGER_GITHUB_TOKEN": "${{ secrets.SLUGGER_GITHUB_TOKEN }}"
     }
-    assert job["secrets"] != "inherit"
-    assert "OPENAI_API_KEY" not in str(job["secrets"])
-    assert set(job["secrets"]) == {"SLUGGER_GITHUB_TOKEN"}
+    user_text = USER_IDEA_WORKFLOW.read_text(encoding="utf-8")
+    assert "draft_pull_request_url" in user_text
+    assert "python -m cli.main mvp publish" in user_text
+    assert "gh pr merge" not in user_text
 
 
-def test_caller_passes_canonical_outputs_to_report_result() -> None:
-    data = _workflow(ISSUE_WORKFLOW)
-    env = data["jobs"]["report-result"]["steps"][0]["env"]
-    assert (
-        env["GENERATED_BRANCH"]
-        == "${{ needs.run-canonical-codex.outputs.generated_branch }}"
+def test_old_issue_bridge_cannot_silently_return_as_supported_path() -> None:
+    text = "\n".join(
+        p.read_text(encoding="utf-8") for p in Path(".github/workflows").glob("*.yml")
     )
-    assert (
-        env["DRAFT_PR_URL"]
-        == "${{ needs.run-canonical-codex.outputs.draft_pull_request_url }}"
-    )
-    assert (
-        env["SLUGGER_RUN_ID"]
-        == "${{ needs.run-canonical-codex.outputs.slugger_run_id }}"
-    )
-    assert (
-        env["VALIDATION_RESULT"]
-        == "${{ needs.run-canonical-codex.outputs.validation_result }}"
-    )
-    assert env["TEST_RESULT"] == "${{ needs.run-canonical-codex.outputs.test_result }}"
-    assert (
-        env["SMOKE_RESULT"] == "${{ needs.run-canonical-codex.outputs.smoke_result }}"
-    )
-    assert (
-        env["MANIFEST_DIGEST"]
-        == "${{ needs.run-canonical-codex.outputs.manifest_digest }}"
-    )
-
-
-def test_success_report_requires_publication_outputs_before_complete_comment() -> None:
-    run = _workflow(ISSUE_WORKFLOW)["jobs"]["report-result"]["steps"][0]["run"]
-    assert 'if [ "$CODEX_RESULT" = "success" ]; then' in run
-    assert '[ -z "${GENERATED_BRANCH:-}" ] || [ -z "${DRAFT_PR_URL:-}" ]' in run
-    assert (
-        "Canonical workflow succeeded but generated_branch or draft_pull_request_url was empty."
-        in run
-    )
-    assert 'CODEX_RESULT="output_contract_failure"' in run
-    assert "### Slugger Codex automation complete" in run
-    assert "f\"- Generated branch: {value('GENERATED_BRANCH')}\"" in run
-    assert "f\"- Draft pull request URL: {value('DRAFT_PR_URL')}\"" in run
+    assert "mvp.issue_bridge" not in text
+    assert "issue-to-codex" not in text
+    assert "AUTHORIZED_CODEX_READY_ACTORS" not in text

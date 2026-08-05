@@ -32,11 +32,6 @@ on:
         required: false
         type: string
         default: ""
-      request_identity:
-        description: Optional deterministic issue request identity
-        required: false
-        type: string
-        default: ""
   workflow_call:
     inputs:
       idea:
@@ -59,17 +54,12 @@ on:
         type: boolean
         default: false
       source_issue_number:
-        description: Optional Slugger source issue number for reusable issue automation
+        description: Optional source issue number supplied by the organization router
         required: false
         type: string
         default: ""
       source_issue_url:
-        description: Optional Slugger source issue URL for reusable issue automation
-        required: false
-        type: string
-        default: ""
-      request_identity:
-        description: Optional deterministic issue request identity
+        description: Optional source issue URL supplied by the organization router
         required: false
         type: string
         default: ""

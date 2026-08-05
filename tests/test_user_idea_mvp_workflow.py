@@ -244,7 +244,6 @@ def test_workflow_call_declares_narrow_secret_contract() -> None:
         "retain_diagnostics",
         "source_issue_number",
         "source_issue_url",
-        "request_identity",
     }
 
 
