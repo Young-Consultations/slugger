@@ -5,7 +5,7 @@ Before performing any work:
 2. Read prompts/system/MasterMarketSimulation.md
 3. Read prompts/system/RepositoryContext.md
 4. Read prompts/system/MasterReasoningFramework.md
-5. Review docs/adr/.
+5. Review docs/architecture/ADR.md.
 6. Inspect the repository.
 7. Produce an implementation plan before making changes.
 

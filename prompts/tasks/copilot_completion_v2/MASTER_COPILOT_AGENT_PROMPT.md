@@ -10,7 +10,7 @@ repository. Your assignment is one task file from this folder. Complete only tha
    - `prompts/system/MasterMarketSimulation.md`
    - `prompts/system/RepositoryContext.md`
    - `prompts/system/MasterReasoningFramework.md`
-   - applicable files in `docs/adr/`
+   - the consolidated decision register at `docs/architecture/ADR.md`
    - this master prompt
    - the assigned task file
 2. Inspect the current implementation, tests, configuration, and call sites named in the task.
