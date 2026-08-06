@@ -2,6 +2,10 @@
 
 The AI Software Factory for turning ideas into runnable Python project drafts.
 
+> **Product intent:** [docs/VISION.md](docs/VISION.md) is the authoritative
+> organization-context and Slugger product-vision document. This README remains
+> the operational entry point for current supported behavior.
+
 [![CI](https://github.com/Young-Consultations/slugger/actions/workflows/ci.yml/badge.svg)](https://github.com/Young-Consultations/slugger/actions/workflows/ci.yml)
 
 ⸻

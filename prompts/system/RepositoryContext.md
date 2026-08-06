@@ -11,6 +11,18 @@ Every AI agent working within this repository should treat this document as the 
 
 If this document conflicts with a task prompt, ask for clarification or preserve the documented architecture rather than making assumptions.
 
+## Ordered Reading Sequence
+
+AI-assisted work should read repository context in this order:
+
+1. `docs/VISION.md` — authoritative organization context and Slugger product intent, including supported, experimental, and future boundaries.
+2. `README.md` — operational entry point for current supported behavior.
+3. `docs/mvp.md` — detailed supported MVP operation, architecture, and limitations.
+4. This file — general repository structure and engineering conventions.
+5. Applicable architecture decision records and directory-level documentation.
+
+When legacy mission language or experimental components imply broader current capability, `docs/VISION.md` controls product intent and the README and MVP guide control supported operations.
+
 ---
 
 # Project Identity
