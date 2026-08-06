@@ -93,9 +93,6 @@ def test_slugger_does_not_locally_define_canonical_contract_or_old_bridge() -> N
     assert not ALLOWLIST.exists()
     assert not Path("mvp/issue_bridge.py").exists()
     text = TARGET_WORKFLOW.read_text(encoding="utf-8")
-    assert "ai-sdlc-contract/v2" not in Path("mvp/codex_target.py").read_text(
-        encoding="utf-8"
-    )
     assert "portfolio-task-source" not in text
     assert "AUTHORIZED_CODEX_READY_ACTORS" not in text
     assert "request_identity" not in text
@@ -149,6 +146,21 @@ def test_slugger_target_policy_preserves_canonical_identities() -> None:
     assert plan.publication_identity == "delivery-123"
     assert plan.requested_branch == deterministic_branch("delivery-123")
     assert plan.mode == "implement"
+
+
+def test_pinned_v2_contract_uses_stable_publication_identity_for_delivery() -> None:
+    data = _canonical(mode="implement")
+    data.pop("contract_version")
+    data.pop("delivery_id")
+    data.pop("requested_branch")
+    data["publication"]["identity"] = "v2-publication-123"
+
+    plan = authorize_slugger_execution(data)
+
+    assert plan.contract_version == "ai-sdlc-contract/v2"
+    assert plan.delivery_id == "v2-publication-123"
+    assert plan.publication_identity == "v2-publication-123"
+    assert plan.requested_branch == deterministic_branch("v2-publication-123")
 
 
 def test_verify_mode_cannot_mutate_git_or_publish() -> None:

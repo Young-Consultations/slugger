@@ -189,17 +189,33 @@ def authorize_slugger_execution(
     ):
         raise TargetPolicyError("draft_pr_only must be true")
 
-    delivery_id = _require_text(
-        _first(execution_input, "delivery_id", "idempotency_key"), "delivery_id"
-    )
+    # ai-sdlc-v2.1.0 predates the dedicated delivery fields, but its
+    # publication identity is already the router-owned stable publication key.
+    # Keep accepting that pinned contract during the coordinated rollout rather
+    # than rejecting every current production delivery.  Newer contracts must
+    # send delivery_id/idempotency_key and are still checked against the
+    # publication identity below.
     contract_version = _require_text(
         _first(execution_input, "contract_version", "contract"), "contract_version"
     )
+    delivery_value = _first(execution_input, "delivery_id", "idempotency_key")
+    if delivery_value is None and contract_version == "ai-sdlc-contract/v2":
+        delivery_value = _first(publication, "identity", "publication_identity")
+    delivery_id = _require_text(delivery_value, "delivery_id")
+    expected_branch = deterministic_branch(delivery_id)
+    branch_default = (
+        _first(publication, "branch", default=expected_branch)
+        if contract_version == "ai-sdlc-contract/v2"
+        else publication.get("branch")
+    )
     requested_branch = _require_text(
-        _first(execution_input, "requested_branch", default=publication.get("branch")),
+        _first(
+            execution_input,
+            "requested_branch",
+            default=branch_default,
+        ),
         "requested_branch",
     )
-    expected_branch = deterministic_branch(delivery_id)
     if requested_branch != expected_branch:
         raise TargetPolicyError(f"requested_branch must equal {expected_branch}")
     publication_identity = _require_text(

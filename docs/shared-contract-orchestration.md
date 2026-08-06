@@ -26,12 +26,13 @@ always draft-only.
 
 The next pinned organization contract must validate and preserve a stable
 `delivery_id` (or `idempotency_key`) in both execution input and result, plus its
-contract-defined deterministic `requested_branch`. Slugger does not substitute an
-Actions run ID when those fields are absent. Rollout order is: publish and pin that
-contract release; update the organization router to emit the identity and branch;
-deploy this target consumer; then enable at-least-once redelivery. Until the new
-pin is adopted, router traffic that lacks the required identity must not be sent to
-this executor.
+contract-defined deterministic `requested_branch`. During the coordinated rollout,
+the pinned `ai-sdlc-v2.1.0` contract remains compatible: Slugger treats its existing
+router-owned `publication.identity` as the delivery identity and derives the same
+deterministic branch when the dedicated fields are absent. Slugger never substitutes
+an Actions run ID. Rollout order is: publish and pin the new contract release; update
+the organization router to emit the dedicated identity and branch; then remove this
+v2 compatibility adapter after in-flight deliveries have drained.
 
 Operators remain responsible for resolving deliberately untouched unsafe states:
 multiple matching PRs, closed or merged matches, a non-draft match, a wrong-base
