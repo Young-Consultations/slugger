@@ -50,7 +50,7 @@ def validate_no_submodule() -> None:
 
 def validate_namespace_references() -> None:
     try:
-        output = git("grep", "-In", "mightyjoe909", "--", ".")
+        output = git("grep", "-In", "mighty" + "joe909", "--", ".")
     except subprocess.CalledProcessError as exc:
         if exc.returncode == 1:
             output = ""

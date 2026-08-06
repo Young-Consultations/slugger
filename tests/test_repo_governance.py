@@ -11,6 +11,10 @@ def test_generated_demo_repository_is_not_local_submodule() -> None:
     governance.validate_no_submodule()
 
 
+def test_repository_contains_no_obsolete_namespace_references() -> None:
+    governance.validate_namespace_references()
+
+
 def test_workflows_are_least_privilege_and_pinned() -> None:
     governance.validate_workflows()
 
