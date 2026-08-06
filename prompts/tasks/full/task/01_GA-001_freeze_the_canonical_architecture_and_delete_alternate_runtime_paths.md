@@ -31,8 +31,8 @@ Define and enforce the single supported execution path before further integratio
 - config/defaults.yaml
 - config/schema.yaml
 - README.md
-- docs/architecture.md
-- docs/adr/
+- docs/architecture/README.md
+- docs/architecture/ADR.md
 
 ## Ordered implementation steps
 

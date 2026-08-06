@@ -27,7 +27,7 @@ Provide one production Codex agent for coding, review, refactoring, and session 
 - agents/development/
 - orchestrator/bootstrap.py
 - config/settings.py
-- docs/adr/
+- docs/architecture/ADR.md
 
 ## Ordered implementation steps
 

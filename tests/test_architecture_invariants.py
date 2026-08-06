@@ -20,8 +20,10 @@ def test_default_workflow_is_full_sdlc_v2() -> None:
     assert _DEFAULT_WORKFLOW == "full-sdlc-v2"
 
 
-def test_adr_0017_exists() -> None:
-    assert (ROOT / "docs" / "adr" / "0017-canonical-execution-path.md").exists()
+def test_authoritative_architecture_decision_register_exists() -> None:
+    decision_register = ROOT / "docs" / "architecture" / "ADR.md"
+    assert decision_register.exists()
+    assert "ADR-001 — One governed supported pipeline" in decision_register.read_text()
 
 
 def test_full_sdlc_v2_recipe_exists() -> None:

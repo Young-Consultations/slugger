@@ -6,7 +6,7 @@ Before performing any work:
 2. Read `prompts/system/MasterMarketSimulation.md`.
 3. Read `prompts/system/RepositoryContext.md`.
 4. Read `prompts/system/MasterReasoningFramework.md`.
-5. Review applicable ADRs under `docs/adr/`.
+5. Review applicable decisions in `docs/architecture/ADR.md`.
 6. Inspect current source and tests before proposing changes.
 7. Extend working components instead of recreating them.
 8. Produce an implementation plan in the pull request description.
