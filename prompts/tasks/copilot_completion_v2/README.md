@@ -24,7 +24,6 @@ and approvals, and ends with idea-to-release acceptance tests.
 - `MASTER_COPILOT_AGENT_PROMPT.md` — mandatory operating rules for every Copilot session
 - `OFFICIAL_INTEGRATION_REFERENCES.md` — current official OpenAI, Canva, and GitHub references
 - `IMPLEMENTATION_ORDER.md` — task sequencing and limited parallelism guidance
-- `REQUIREMENTS_COMPLETION_MATRIX.yaml` — evidence-backed completion calculation
 - `tasks/` — one copy-ready prompt per pull request
 
 ## How to use
@@ -37,7 +36,7 @@ and approvals, and ends with idea-to-release acceptance tests.
    - repository access.
 4. Require a draft PR and review its plan before accepting broad changes.
 5. Merge only when the task's Definition of Done is proven.
-6. Update the requirements matrix with evidence after merge.
+6. Record completion evidence with the corresponding task and pull request.
 7. Do not claim 95% completion until CC-018 generates the certification report.
 
 ## Project manager release rule
