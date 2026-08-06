@@ -38,8 +38,6 @@ python -m ruff format --check .
 python -m mypy mvp cli
 python -m pytest -q
 python -m build
-python scripts/check_obsolete_namespace.py
-python scripts/validate_repo_governance.py
 ```
 
 ## Generated projects
