@@ -1,5 +1,9 @@
 # Issue-to-Codex bridge retired
 
+Local labels are not execution authority. Production work is accepted only through
+the pinned organization router and canonical target workflow. Redelivery is
+deduplicated by canonical delivery ownership, not labels or Actions concurrency.
+
 Slugger no longer authorizes production Codex execution from local issues or labels. The former `codex-ready` issue-label bridge, repository-local issue contract parsing, `AUTHORIZED_CODEX_READY_ACTORS` approval variable, target allowlist, and local request identity have been retired to remove the duplicate control plane.
 
 Production AI-SDLC work now originates in `Young-Consultations/portfolio-tasks`, where backlog intake and explicit approval are owned. Routing is owned by the organization control plane in `Young-Consultations/.github`.

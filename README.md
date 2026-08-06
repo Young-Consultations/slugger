@@ -181,6 +181,12 @@ Production Codex tasks for Slugger now originate in `Young-Consultations/portfol
 
 Slugger does not authorize production execution from local issue labels; `codex-ready` is no longer a production trigger. The supported contract is `ai-sdlc-contract/v2`, pinned to the organization control-plane release `ai-sdlc-v2.1.0`. Automated publication remains draft-only and requires human review before any merge.
 
+The target executor is an idempotent consumer under at-least-once router delivery.
+The canonical delivery identity—not a workflow run ID or concurrency group—owns a
+deterministic branch and machine-marked draft PR. Completed deliveries are reused
+without rerunning Codex; conflicting or ambiguous repository state fails closed and
+is left intact for operator recovery.
+
 ## Contributing
 
 Contributions are welcome. MVP work should be delivered in focused pull requests, include tests, preserve the `mvp/` architecture boundary, and avoid unrelated full-SDLC functionality.
