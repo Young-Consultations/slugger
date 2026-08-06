@@ -1,5 +1,7 @@
 # Slugger Requirements Baseline
 
+> The exact organization next-MVP selection is maintained in [`docs/next-mvp.md`](../next-mvp.md). It overrides older uses of “MVP” as a priority synonym without deleting Slugger's longer-term requirements.
+
 This directory is the authoritative product-requirements baseline for Slugger. It translates the product direction in [`docs/VISION.md`](../VISION.md) into verifiable, implementation-independent requirements. Where this baseline and descriptive implementation documentation differ, the vision governs product intent and this baseline governs required product behavior; neither makes an unsupported current-capability claim.
 
 No other repository file is an authoritative Slugger product-requirements document. Experimental agents, prompts, and workflow recipes that generate requirements artifacts for generated projects are product capabilities or research inputs, not alternate specifications for Slugger. The obsolete generic requirements document template and the superseded Copilot completion requirements matrix have been removed to prevent competing baselines.

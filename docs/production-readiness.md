@@ -1,5 +1,7 @@
 # Slugger Production Readiness
 
+> This is longer-term product material, not a claim that the organization next MVP is production-ready. The next MVP stops at a validated managed draft PR and canonical result and remains blocked on the gates in [`docs/next-mvp.md`](next-mvp.md#external-validation-gates).
+
 ## Canonical execution path
 
 `slugger build` → `full-sdlc-v2` → managed prompts → capability resolver →

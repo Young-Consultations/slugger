@@ -1,5 +1,7 @@
 # Observability Architecture
 
+> Next-MVP audit correlation spans request, proof decision, reconciliation, Codex (implement only), validation, draft create/reuse, result validation, and result delivery attempts. Telemetry is sanitized and may not substitute for canonical results/evidence or grant authorization.
+
 ## Principles
 
 Mandatory run evidence/audit proves lifecycle facts; observability diagnoses system operation. Logs, metrics and traces are sanitized derivative signals and never substitute for gates. All signals correlate by delivery, run, attempt, phase and operation IDs where classification permits. Provider prompts, candidate content, secrets and raw generated output are excluded by default.

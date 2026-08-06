@@ -1,5 +1,7 @@
 # Interface Contract — `Young-Consultations/.github` Control Plane
 
+> **Next-MVP constraint:** This sibling repository was not inspected. The control plane owns admission, routing, target selection, and routed authorization evidence; Slugger only validates the pinned request/proof and local policy. Exact release/pin, proof semantics, registry enablement, shared fixtures, status vocabulary, and result-return mechanism are unresolved external gates listed in [`docs/next-mvp.md`](../next-mvp.md#external-validation-gates). No cross-repository compatibility is claimed.
+
 ## Purpose and repository responsibilities
 
 The organization repository is expected to own canonical AI-SDLC contracts, validation vocabulary, target registration, routing, compatibility, and control-plane verification. Slugger is a registered target executor and MUST NOT edit organization configuration, define a competing router, or locally fork canonical schemas.

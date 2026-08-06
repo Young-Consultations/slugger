@@ -1,5 +1,9 @@
 # Requirements Traceability Matrix
 
+## Organization next-MVP release trace
+
+The authoritative local selection is the exact ID list in [`docs/next-mvp.md`](../next-mvp.md#normative-repository-scope). Its included requirements trace to the architecture and conformance groups in [`ArchitectureTraceability.md`](../architecture/ArchitectureTraceability.md#organization-next-mvp-slice). FR-RES-01 acceptance covers all canonical result observations; FR-CNF-01 covers hermetic fixtures. All unlisted functional IDs are explicitly deferred from this release, regardless of older P0/P1 labels.
+
 ## Traceability convention
 
 This matrix provides planning-level coverage from vision goal to future verification. Detailed `AC-*` text is authoritative in [FunctionalRequirements.md](FunctionalRequirements.md); measurable quality criteria are in [NonFunctionalRequirements.md](NonFunctionalRequirements.md). Future test case IDs (`FTC-*`) are test-design placeholders, not implementation prescriptions.

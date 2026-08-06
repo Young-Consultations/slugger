@@ -1,3 +1,5 @@
+> **Historical release checklist.** Completion here is not organization next-MVP readiness. Current scope and blocking external confirmations are in [`docs/next-mvp.md`](next-mvp.md#external-validation-gates).
+
 ## Project status for v0.1.2
 
 Current release target: **Slugger v0.1.2**. Slugger documents exactly three distinct operational paths:

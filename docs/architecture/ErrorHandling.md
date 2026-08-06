@@ -1,5 +1,7 @@
 # Error Handling Strategy
 
+> The next-MVP result adapter must represent contract/authorization rejection, execution/validation/publication failure, and interruption/ambiguity with the organization-owned vocabulary, safe detail, timestamps, and retry or human-reconciliation guidance. Unknown mappings fail closed; retry never changes the stable delivery/result identity or guesses whether a GitHub effect occurred.
+
 ## Taxonomy
 
 | Category | Examples | Default retry | Effect |

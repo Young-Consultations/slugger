@@ -1,5 +1,7 @@
 # Sequence Diagrams
 
+> For organization next-MVP interpretation, portfolio owns approval truth and the control plane supplies stable routed evidence. Any sequence that reads a mutable label is implementation evidence, not normative authorization. Slugger validates proof before Codex and immediately before mutation; `verify` calls neither Codex nor publication. Every terminal/rejected/ambiguous flow creates and returns/exposes a canonical result. See [`docs/next-mvp.md`](../next-mvp.md#authority-and-admission-model).
+
 ## Primary approved generation and draft handoff
 
 ```mermaid

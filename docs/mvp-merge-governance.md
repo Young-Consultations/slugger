@@ -1,5 +1,7 @@
 # MVP Merge Governance Administrator Checklist
 
+> This checklist applies to the historical repository MVP unless a row explicitly cites [`docs/next-mvp.md`](next-mvp.md). Organization next-MVP merge readiness additionally requires the immutable shared fixture/validator pin, merge-blocking hermetic conformance, all external authority/result/registry decisions, and confirmation that the flow ends at one managed draft PR plus canonical result.
+
 Configure the repository before declaring issue #24 complete:
 
 1. Protect `main`.

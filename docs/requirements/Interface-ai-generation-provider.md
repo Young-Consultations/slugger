@@ -1,5 +1,7 @@
 # Interface Contract — AI Generation Provider
 
+> **Organization next-MVP restriction:** the production provider is Codex and may be invoked only for an authorized canonical `implement` request. `verify` and normal conformance CI never call Codex. The provider receives neither approval/routing authority nor publication credentials.
+
 ## Purpose and responsibilities
 
 The provider supplies bounded candidate generation. Codex is the near-term provider named by the vision, but the contract is provider-neutral. The provider owns its service/model behavior, authentication, service availability and provider-side usage records. Slugger owns intent bounding, request construction, capability grants, workspace, policy, validation, evidence semantics, retries, and publication. Provider statements are claims, not verified results.

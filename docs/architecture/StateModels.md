@@ -1,5 +1,7 @@
 # State Models
 
+> The organization next-MVP target lifecycle is the smaller model in [`docs/next-mvp.md`](../next-mvp.md#lifecycle-and-sequence). Names in this architecture are local observations and MUST be mapped to, not substituted for, the pinned organization's status vocabulary. No transition after draft creation enters ready, merge, release, or deployment.
+
 ## Run lifecycle
 
 ```mermaid

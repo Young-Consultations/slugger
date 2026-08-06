@@ -1,5 +1,7 @@
 # Integration Architecture
 
+> **Next-MVP integration slice:** control-plane request/proof receipt → local policy/Codex/validation → managed draft publication → canonical result delivery or exposure. All cross-repository details are assumptions until the inaccessible organization baseline confirms immutable contract/fixtures, approval proof, registry enablement, statuses, and result transport. See [`docs/next-mvp.md`](../next-mvp.md).
+
 ## Classification convention
 
 **Known** is stated by Vision/Requirements or observable within this repository. **Assumed** is a design precondition needing owner validation. **Unknown** must block dependent production reliance; it is never filled from another repository’s presumed implementation.

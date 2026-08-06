@@ -1,5 +1,7 @@
 # Interface Contract — GitHub Platform
 
+> **Organization next-MVP restriction:** this interface may create or reuse one structurally owned open draft PR after validation. It may not approve, mark ready, merge, release, deploy, close ambiguous work, or guess ownership. At-least-once-safe reconciliation—not exactly-once transport—is required.
+
 ## Purpose and responsibilities
 
 GitHub is the organizational system of record for source references, routed automation, execution artifacts/evidence, branches, draft pull requests, checks, and human review decisions. GitHub owns service identity, repository object semantics, authorization enforcement, availability, and audit capabilities. Slugger owns the correctness and scope of requests it makes.

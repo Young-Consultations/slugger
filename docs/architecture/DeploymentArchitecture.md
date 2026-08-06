@@ -1,5 +1,7 @@
 # Deployment Architecture
 
+> The organization next MVP defines no merge, release, deployment, or production operation. Target-registry enablement and rollback order are organization-owned gates. Passing local conformance does not enable Slugger; a registry-disabled target remains disabled.
+
 ## Conceptual topology
 
 Deployment technology is intentionally unspecified. A minimal deployment may run logical units in one host/process while maintaining trust and data boundaries; production may isolate them physically.
