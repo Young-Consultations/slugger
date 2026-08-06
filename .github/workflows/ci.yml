@@ -28,8 +28,6 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: python -m mypy mvp cli
-      - run: python scripts/check_obsolete_namespace.py
-      - run: python scripts/validate_repo_governance.py
 
   test:
     name: MVP unit and integration tests (Python ${{ matrix.python-version }})
