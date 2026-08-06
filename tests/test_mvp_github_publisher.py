@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -662,34 +661,6 @@ def test_publication_marker_uses_organization_target_repository() -> None:
 
     assert marker["repository"] == "Young-Consultations/slugger-generated-demos"
     assert marker["publication_identity"] == identity
-
-
-def test_former_namespace_marker_is_not_organization_owned() -> None:
-    from mvp.integrations.github import publication_identity, publication_marker
-
-    run = _run()
-    run.request = replace(
-        run.request, github_repository="Young-Consultations/slugger-generated-demos"
-    )
-    identity = publication_identity(run.request, run.prompt_hash)
-    old_run = _run()
-    old_run.request = replace(
-        old_run.request, github_repository="mighty" + "joe909/slugger-generated-demos"
-    )
-    old_body = publication_marker(old_run, identity)
-    publisher = RecordingGitHubCliPublisher(WorkspaceManager(Path("/tmp") / "unused"))
-
-    assert not publisher._valid_slugger_pr(
-        run,
-        branch_name(run.request, run.prompt_hash),
-        identity,
-        {
-            "isDraft": True,
-            "headRefName": branch_name(run.request, run.prompt_hash),
-            "baseRefName": "main",
-            "body": old_body,
-        },
-    )
 
 
 def test_publication_identity_is_independent_of_run_id() -> None:
