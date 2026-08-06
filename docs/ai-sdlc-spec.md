@@ -149,10 +149,10 @@ Define the system structure, component boundaries, data flows, and key architect
 
 | Artifact | Path |
 |----------|------|
-| System Architecture | `docs/architecture.md` |
-| Domain Model | `docs/domain-model.md` |
-| Architecture Decision Records | `docs/adr/NNNN-*.md` |
-| Security Architecture | `docs/security-architecture.md` |
+| System Architecture | `docs/architecture/SoftwareArchitecture.md` |
+| Domain Model | `docs/architecture/DomainModel.md` |
+| Architecture Decision Records | `docs/architecture/ADR.md` |
+| Security Architecture | `docs/architecture/SecurityArchitecture.md` |
 | Component Diagram | `artifacts/architecture/components.md` |
 | Data Flow Diagram | `artifacts/architecture/data-flow.md` |
 
@@ -180,7 +180,7 @@ Decompose requirements into an ordered, estimated implementation plan with clear
 ### Inputs
 
 - `artifacts/requirements/user-stories.md`
-- `docs/architecture.md`
+- `docs/architecture/SoftwareArchitecture.md`
 
 ### Agents
 
@@ -217,8 +217,8 @@ Define all public interfaces, contracts, and data models before any implementati
 
 ### Inputs
 
-- `docs/architecture.md`
-- `docs/domain-model.md`
+- `docs/architecture/SoftwareArchitecture.md`
+- `docs/architecture/DomainModel.md`
 - `artifacts/planning/plan.md`
 
 ### Agents
@@ -592,13 +592,13 @@ New phases, agents, and validators can be introduced without modifying existing 
 
 | Document | Path |
 |----------|------|
-| System Architecture | `docs/architecture.md` |
-| Domain Model | `docs/domain-model.md` |
+| System Architecture | `docs/architecture/SoftwareArchitecture.md` |
+| Domain Model | `docs/architecture/DomainModel.md` |
 | Workflow DSL Reference | `docs/workflow-dsl.md` |
 | Agent Specification | `docs/agent-specification.md` |
 | Testing Strategy | `docs/testing-strategy.md` |
 | Deployment Strategy | `docs/deployment-strategy.md` |
-| Architecture Decision Records | `docs/adr/` |
+| Architecture Decision Records | `docs/architecture/ADR.md` |
 | Master Orchestrator Prompt | `prompts/system/MasterOrchestrator.md` |
 | Repository Context | `prompts/system/RepositoryContext.md` |
 

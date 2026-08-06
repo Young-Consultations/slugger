@@ -11,26 +11,17 @@ Documentation is a first-class deliverable in Slugger. Every architecture decisi
 | Path | Contents |
 |------|----------|
 | `requirements/` | Authoritative product, software, interface, use-case, business-rule, and traceability requirements baseline |
-| `adr/` | Architecture Decision Records |
+| `architecture/` | Authoritative software architecture, designs, consolidated decisions, and traceability |
 | `mvp.md` | Primary MVP command guide and operations checklist |
 | `VISION.md` | Authoritative product vision statement |
-| `roadmap.md` | Feature and milestone roadmap |
 | `ai-sdlc-spec.md` | AI-SDLC workflow specification |
-| `architecture.md` | System architecture overview |
-| `domain-model.md` | Domain model and entity definitions |
 | `workflow-dsl.md` | Workflow DSL reference |
-| `coding-standards.md` | Python coding standards |
-| `design-principles.md` | Design principles and guidelines |
-| `security-architecture.md` | Security architecture and threat model |
-| `quality-standards.md` | Quality gates and acceptance criteria |
-| `testing-strategy.md` | Testing philosophy and strategy |
-| `deployment-strategy.md` | Deployment approach and environments |
 | `agent-specification.md` | Agent interface and contract specification |
 
 ## Conventions
 
 - Documentation is updated alongside every architecture or behavior change.
-- ADRs are numbered sequentially and never deleted (deprecated ADRs are superseded).
+- Architectural decisions are maintained in `architecture/ADR.md`; supersession history is retained in that register.
 - All documentation is written in Markdown.
 
 ## Related
