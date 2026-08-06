@@ -10,9 +10,10 @@ Documentation is a first-class deliverable in Slugger. Every architecture decisi
 
 | Path | Contents |
 |------|----------|
+| `requirements/` | Authoritative product, software, interface, use-case, business-rule, and traceability requirements baseline |
 | `adr/` | Architecture Decision Records |
 | `mvp.md` | Primary MVP command guide and operations checklist |
-| `vision.md` | Product vision statement |
+| `VISION.md` | Authoritative product vision statement |
 | `roadmap.md` | Feature and milestone roadmap |
 | `ai-sdlc-spec.md` | AI-SDLC workflow specification |
 | `architecture.md` | System architecture overview |
