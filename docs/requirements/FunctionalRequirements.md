@@ -4,22 +4,22 @@
 
 Each record is atomic at the product-behavior level. “Input” and “output” identify information, not transport or schema. Priorities: P0 MVP release-blocking; P1 MVP important; P2 post-MVP; P3 candidate. Unless stated otherwise, the precondition is an authorized actor or canonical caller and the postcondition is a durable, correlated outcome.
 
-> **MVP interpretation:** priorities in this historical product baseline do not by themselves select the organization next MVP. The exact included and deferred IDs are defined in [the organization next-MVP contribution](../next-mvp.md#normative-repository-scope).
+> **MVP interpretation:** priorities in this historical product baseline do not by themselves select the organization next MVP. The exact included and deferred IDs are defined in [the organization next-MVP contribution](../next-mvp.md#narrow-responsibility-and-requirements).
 
 ## A. Intent intake and scope
 
 ### FR-INT-01 — Accept complete approved intent
-**Description:** Slugger MUST accept a single bounded software intent only when accompanied by canonical contract version, logical task and delivery identities, correlation and source references, target, execution mode, approval assertion, project class, publication policy, and immutable request context required by the applicable contract.  
+**Description:** Slugger MUST accept a single bounded software intent only when accompanied by the complete canonical `execution-input/v2` object, including contract, task, delivery, correlation, source, target, mode, task type, draft-only policy, and immutable request context required by the pinned schema.
 **Rationale:** Execution must remain tied to its governance context. **Priority:** P0. **Dependencies:** external portfolio and control-plane contracts; BR-01–BR-04.  
 **Inputs:** canonical execution request. **Outputs:** validated normalized request or rejection reasons. **Preconditions:** supported contract is available. **Postconditions:** accepted fields are bound to the run and immutable-input digest.  
 **Acceptance:** **AC-INT-01a:** complete supported input is accepted without losing supplied context. **AC-INT-01b:** each absent, malformed, unsupported, or contradictory mandatory field blocks execution before provider invocation. **AC-INT-01c:** rejection identifies fields and does not mutate a target.  
 **Vision:** VG-01, VG-02, VG-07.
 
-### FR-INT-02 — Verify authority at execution time
-**Description:** Slugger SHALL verify that the request is routed by the authorized control plane, targets registered Slugger capability, retains valid explicit execution approval, requests a permitted mode, and enforces draft-only publication before mutating execution.  
+### FR-INT-02 — Authenticate and authorize the admitted caller
+**Description:** Slugger SHALL authenticate and authorize the router-admitted caller, require an enabled registered Slugger target, permitted mode/task type, and draft-only policy before execution. Slugger SHALL NOT recheck a live source label or require a second approval record.
 **Rationale:** Stale or local signals cannot authorize consequential action. **Priority:** P0. **Dependencies:** Interface-portfolio-tasks; Interface-organization-github.  
-**Inputs:** request and current authority evidence. **Outputs:** authorization decision/evidence. **Preconditions:** request passed structural validation. **Postconditions:** unauthorized work has no generation or target mutation.  
-**Acceptance:** **AC-INT-02a:** withdrawn/absent approval blocks implement mode. **AC-INT-02b:** local issue labels alone never authorize production execution. **AC-INT-02c:** verification mode causes no provider call or repository mutation.  
+**Inputs:** authenticated routed request and local policy. **Outputs:** authorization decision/evidence. **Preconditions:** request passed structural validation. **Postconditions:** unauthorized work has no generation or target mutation.
+**Acceptance:** **AC-INT-02a:** unauthorized caller or disabled registry blocks before execution. **AC-INT-02b:** `ai-sdlc-approved`, another label, and a second target approval are neither required nor authoritative. **AC-INT-02c:** verification mode causes no provider call or repository mutation.
 **Vision:** VG-03, VG-07.
 
 ### FR-SCP-01 — Bound and communicate supported scope
@@ -138,8 +138,8 @@ Each record is atomic at the product-behavior level. “Input” and “output�
 ### FR-PUB-01 — Gate publication
 **Description:** Slugger MUST permit publication only for an authorized implement request whose required validation, dependency, installation, test, smoke, manifest-integrity, source-integrity, and target-preflight gates all pass and whose evidence remains current.  
 **Rationale:** Publication is consequential. **Priority:** P0. **Dependencies:** FR-EVD-01; BR-11.  
-**Inputs:** gate/evidence set and current authority. **Outputs:** publication authorization decision. **Preconditions:** candidate is stable. **Postconditions:** any ambiguity/failed/incomplete/stale gate blocks mutation.  
-**Acceptance:** **AC-PUB-01a:** a fault injected into each gate independently yields no push or PR creation/update. **AC-PUB-01b:** approval withdrawal before mutation blocks. **AC-PUB-01c:** successful decision records exact evidence digest.  
+**Inputs:** gate/evidence set, unchanged admitted input, and current local policy. **Outputs:** publication authorization decision. **Preconditions:** candidate is stable. **Postconditions:** any ambiguity/failed/incomplete/stale gate blocks mutation.
+**Acceptance:** **AC-PUB-01a:** a fault injected into each gate independently yields no push or PR creation/update. **AC-PUB-01b:** changed input binding or local-policy denial before mutation blocks without a live source-approval lookup. **AC-PUB-01c:** successful decision records exact evidence digest.
 **Vision:** VG-01, VG-03, VG-04.
 
 ### FR-PUB-02 — Publish one managed draft review
@@ -150,9 +150,9 @@ Each record is atomic at the product-behavior level. “Input” and “output�
 **Vision:** VG-02, VG-03, VG-07.
 
 ### FR-IDM-01 — Make redelivery and publication idempotent
-**Description:** Slugger MUST classify durable target state before provider invocation and before publication. Completed matching delivery SHALL be reused; an absent delivery MAY proceed; conflicting, ambiguous, unowned, non-draft, closed/merged, wrong-base, or multiply matching state MUST be preserved and fail closed.  
+**Description:** Slugger MUST classify durable target state before provider invocation and before publication. Completed matching delivery SHALL be reused with canonical `duplicate-reused`; changed payload under the delivery ID SHALL be rejected; an absent delivery MAY proceed; conflicting, ambiguous, unowned, non-draft, closed/merged, wrong-base, or multiply matching state MUST be preserved and fail closed.
 **Rationale:** At-least-once delivery must not duplicate or overwrite work. **Priority:** P0. **Dependencies:** FR-RUN-01, FR-PUB-02.  
-**Inputs:** stable delivery identity, expected ownership and target state. **Outputs:** proceed/reuse/block classification. **Preconditions:** read access to target. **Postconditions:** no guessing or destructive reconciliation.  
+**Inputs:** `delivery_id`, immutable payload digest, expected ownership marker and target state. **Outputs:** proceed/reuse/block classification. **Preconditions:** read access to target. **Postconditions:** no guessing or destructive reconciliation.
 **Acceptance:** **AC-IDM-01a:** sequential and concurrent identical deliveries result in at most one managed open draft. **AC-IDM-01b:** completed matching delivery does not reinvoke provider. **AC-IDM-01c:** every unsafe state is unchanged and accompanied by recovery guidance. **AC-IDM-01d:** runtime IDs/timestamps/randomness do not determine ownership.  
 **Vision:** VG-05.
 
@@ -173,14 +173,14 @@ Each record is atomic at the product-behavior level. “Input” and “output�
 ## F. Organization contract and continuous conformance
 
 ### FR-RES-01 — Produce and expose the canonical execution result
-**Description:** Slugger MUST map every terminal, rejected, failed, reused, no-change, interrupted, or ambiguous local observation to the pinned organization-owned execution-result contract, validate it with the official validator, durably retain it, and deliver or expose it through the approved mechanism with at-least-once-safe identity. Slugger SHALL NOT define substitute schema or status semantics.
-**Rationale:** Routing is incomplete without a truthful, correlated, interoperable outcome. **Priority:** organization next-MVP P0. **Dependencies:** external result contract and transport decision; FR-RUN-01; FR-EVD-01.
+**Description:** Slugger MUST map every terminal, rejected, failed, reused, no-change, interrupted, or ambiguous local observation to the pinned organization-owned execution-result contract, validate it with the official validator, durably retain it, and send it through the pinned organization result receiver with at-least-once-safe identity. Slugger SHALL NOT define substitute schema or status semantics.
+**Rationale:** Routing is incomplete without a truthful, correlated, interoperable outcome. **Priority:** organization next-MVP P0. **Dependencies:** pinned result contract and externally unimplemented receiver; FR-RUN-01; FR-EVD-01.
 **Acceptance:** **AC-RES-01a:** verify success, implement success, existing-draft reuse, no change, authorization rejection, contract rejection, execution failure, validation failure, publication failure, and ambiguous/interrupted execution each produce a validator-accepted result. **AC-RES-01b:** required version; delivery, correlation and target identities; canonical status; validation evidence; applicable draft metadata; safe error; timestamps; and retry/reconciliation guidance survive mapping. **AC-RES-01c:** unknown required status/field or uncertain result delivery fails closed and is reconciled without changing execution truth or duplicating a visible effect.
 
 ### FR-CNF-01 — Continuously prove target-interface conformance
 **Description:** Slugger MUST provide a deterministic, merge-blocking, no-Codex CI suite against immutably pinned organization fixtures and official validators, using fakes for authority, executor, repository, publication, clock, and result delivery.
 **Rationale:** Interface drift must be found without credentials or organization mutations. **Priority:** organization next-MVP P0. **Dependencies:** shared fixture release and pinning decision.
-**Acceptance:** **AC-CNF-01a:** valid verify and implement, deterministic change/no-change, simulated publication, managed-draft reuse, duplicate delivery, invalid target, invalid/withdrawn/stale approval, unsupported version, malformed request, validation failure, and every required result class are exercised. **AC-CNF-01b:** Codex credentials are absent, Codex network calls are trapped, and no real branch/commit/push/PR is created. **AC-CNF-01c:** fixture/validator incompatibility fails the required check and blocks merge; local fixtures cannot redefine canonical semantics.
+**Acceptance:** **AC-CNF-01a:** valid verify and fake implement; wrong/disabled target; unsupported version; malformed input; unauthorized caller; unsupported task type; invalid concurrency group; duplicate/conflicting delivery; matching/ambiguous/racing draft; fake Codex, validation, test, and publication failures; canonical result; receiver failure; and identical/conflicting result redelivery are exercised. **AC-CNF-01b:** Codex credentials are absent, Codex network calls are trapped, and no real branch/commit/push/PR is created. **AC-CNF-01c:** fixture/validator incompatibility fails the required check and blocks merge; local fixtures cannot redefine canonical semantics.
 
 ## G. Human governance and lifecycle evolution
 

@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-> For organization next-MVP interpretation, portfolio owns approval truth and the control plane supplies stable routed evidence. Any sequence that reads a mutable label is implementation evidence, not normative authorization. Slugger validates proof before Codex and immediately before mutation; `verify` calls neither Codex nor publication. Every terminal/rejected/ambiguous flow creates and returns/exposes a canonical result. See [`docs/next-mvp.md`](../next-mvp.md#authority-and-admission-model).
+> For organization next-MVP interpretation, only canonical `approved` is admitted by the router. Slugger authenticates the admitted caller and validates the pinned input/local policy; it never performs a live label or source-approval recheck. `verify` calls neither Codex nor publication. Every terminal/rejected/ambiguous flow creates a canonical result and separately attempts the pinned receiver. See [`docs/next-mvp.md`](../next-mvp.md#registry-and-admission).
 
 ## Primary approved generation and draft handoff
 
@@ -9,17 +9,17 @@ sequenceDiagram
   autonumber
   participant CP as Control Plane
   participant IN as Contract Boundary
-  participant AU as Authority/Scope
+  participant AU as Caller Auth/Local Policy
   participant RC as Run Coordinator
   participant PV as Provider Gateway
   participant VF as Inventory/Verifier
   participant EV as Evidence/Gates
   participant GH as Target Adapter
   participant HR as Human Reviewer
-  CP->>IN: canonical request (delivery, digest, approval, target)
+  CP->>IN: execution_input_json + concurrency_group
   IN->>IN: authenticate + authoritative validate
-  IN->>AU: request attributed authority/scope decision
-  AU-->>IN: supported + current approval + scope
+  IN->>AU: authenticate caller + evaluate local policy
+  AU-->>IN: authenticated + enabled + supported + in scope
   IN->>RC: accept delivery
   RC->>RC: claim identity; persist run/phase intent
   RC->>GH: early target preflight (read only)
@@ -30,8 +30,8 @@ sequenceDiagram
   VF-->>RC: manifest + observed check records
   RC->>EV: assemble and evaluate exact bindings
   EV-->>RC: sealed evidence + all current PASS
-  RC->>AU: recheck authority and material context
-  AU-->>RC: current
+  RC->>AU: recheck unchanged input + local policy
+  AU-->>RC: permitted
   RC->>GH: final preflight + exact manifest/evidence
   GH->>GH: reconcile/create/update only proven owned draft
   GH-->>RC: deterministic branch + draft reference
@@ -112,19 +112,19 @@ sequenceDiagram
   end
 ```
 
-## Withdrawn approval before publication
+## Local policy change before publication
 
 ```mermaid
 sequenceDiagram
   participant RC as Coordinator
-  participant AU as Authority
+  participant AU as Local Policy
   participant GH as Target
-  RC->>AU: freshness recheck bound to input/target
-  AU-->>RC: withdrawn or unverifiable
-  RC->>RC: invalidate publication authorization
+  RC->>AU: reconcile unchanged input/local policy/target
+  AU-->>RC: denied or unverifiable
+  RC->>RC: invalidate publication permission
   RC-->>GH: no mutation
-  RC->>RC: seal evidence; terminal BlockedAuthority
-  Note over RC: Existing target state is preserved; no source issue is edited
+  RC->>RC: create canonical blocked/rejected result
+  Note over RC: Existing target state is preserved; source approval is not re-read or edited
 ```
 
 ## Verification-only routed request
@@ -133,11 +133,11 @@ sequenceDiagram
 sequenceDiagram
   participant CP as Control Plane
   participant IN as Slugger Boundary
-  participant CAT as Capability/Registration
+  participant CAT as Caller/Contract/Policy
   CP->>IN: canonical verify-mode request
   IN->>IN: authenticate + validate + preserve identity
   IN->>CAT: verify contract/capability/target wiring
-  CAT-->>IN: conformance observations
+  CAT-->>IN: authenticated + enabled + schema/policy observations
   Note over IN: Provider, workspace execution, and target mutation are forbidden
-  IN-->>CP: canonical verify result + evidence
+  IN->>CP: separately send canonical verified result via pinned receiver
 ```

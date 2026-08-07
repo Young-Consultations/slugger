@@ -1,6 +1,6 @@
 # Data Flow Design
 
-> **Next-MVP data-flow constraint:** stable approval evidence and canonical request enter from the control plane; only allowlisted repository context enters Codex; only validated changes enter the GitHub draft adapter; a validator-accepted canonical result leaves through the externally approved result port. Credentials, raw proof material, and secrets may not flow into Codex, generated commands, PR text, logs, or safe errors.
+> **Next-MVP data-flow constraint:** an authenticated router-admitted `execution_input_json` and `concurrency_group` enter the target; only allowlisted Slugger context enters Codex; only validated changes enter the draft adapter; and canonical result leaves through the pinned receiver. Slugger does not fetch a live label or second approval. Credentials and secrets may not flow into Codex, generated commands, PR text, logs, or safe errors.
 
 ## Inputs, outputs, and classifications
 
@@ -32,7 +32,7 @@ flowchart TD
  I --> J[Static + dependency admission]
  J --> K[Isolated install/test/smoke]
  K --> L[Seal evidence]
- L --> M[Freshness + authority + target recheck]
+ L --> M[Local policy + target reconciliation]
  M --> N[Exact draft handoff]
  N --> O[Canonical result + human summary]
  B -.reject.-> O

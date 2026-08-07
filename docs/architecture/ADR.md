@@ -77,11 +77,11 @@
 ## ADR-009 — External contracts remain externally owned
 
 **Context:** Sibling implementations are unavailable and local schema copies drift.
-**Decision:** Pin trusted releases/validators and map through adapters; store attributed references/snapshots; unknown major/semantics fail closed.
+**Decision:** For the next MVP, consume the three canonical schema files directly from `Young-Consultations/.github@f2491872976a4dcc1633997954c03c07cbc4fced` and map through adapters; unknown major/semantics fail closed. Do not assume a package, tag, floating branch, local copy, or extension.
 **Alternatives:** Copy schema/enums; infer fields from workflows.
 **Tradeoffs:** External availability/version coordination; preserves ownership.
-**Consequences:** Verification-only until integration conformance is approved.
-**Open questions:** Distribution trust, rollout order, result transport and compatibility window.
+**Consequences:** Release 2.2.0 and `ai-sdlc-contract/v2` are the interface baseline; the disabled registry still blocks routed execution.
+**Open questions:** Future artifact/package publication and compatibility-window policy are organization-owned.
 
 ## ADR-010 — Experimental capabilities are quarantined
 
@@ -110,16 +110,16 @@
 **Consequences:** Telemetry outage cannot fabricate or erase run truth.
 **Open questions:** Deployment-specific sinks, SLOs and sampling.
 
-## ADR-013 — Stable external approval evidence, not repository labels
+## ADR-013 — Router admission, not repository labels
 
 **Context:** Portfolio approval truth and control-plane routing are externally owned; mutable repository labels create time-of-check races and a second authority.
-**Decision:** Slugger validates pinned-contract evidence bound to issuer, task revision, target, mode and delivery, including contract-defined freshness and withdrawal/revocation rules, before Codex and again before mutation. A local label is non-authoritative unless the external contract explicitly assigns its validation to Slugger. Unknown or unavailable authority fails closed.
-**Consequences:** The observed `ai-sdlc-approved` implementation check is blueprint drift pending an organization decision. Slugger neither approves tasks nor defines portfolio status transitions.
-**Open questions:** Proof format/issuer, freshness and clock skew, edit/withdrawal/revocation semantics, and outage behavior.
+**Decision:** The router admits only canonical `approved`; `queued` is not authorization, and material change requires a new `task_id` and approval. Slugger authenticates/authorizes the admitted caller and validates the immutable payload plus local policy. It never performs a target-side live label/source-issue recheck or requires `ai-sdlc-approved` or a second approval record.
+**Consequences:** Slugger is not an approval authority. Rich approval provenance is deferred to v3; unknown caller, malformed input, disabled registration, or policy uncertainty fails closed.
+**Open questions:** None block local next-MVP implementation.
 
 ## ADR-014 — Hermetic conformance gates external-interface changes
 
 **Context:** Real Codex and GitHub effects are unsafe, nondeterministic, and credential-dependent in normal CI.
-**Decision:** A merge-blocking suite uses immutably pinned official validators/shared fixtures and deterministic authority, executor, repository, publisher, clock, and result-sink fakes. Network/Codex and real GitHub mutations are prohibited.
-**Consequences:** Contract/lifecycle drift blocks merge; credentialed demonstrations remain separate and non-normative. Local fixtures may extend but not redefine the external contract.
-**Open questions:** Fixture release/digest, required check name, update cadence and compatibility window.
+**Decision:** A merge-blocking suite will use the release-2.2.0 schemas and `TC-MVP-CI-001` manifest at the full immutable SHA, plus deterministic caller, executor, repository, publisher, clock, and result-sink fakes. Network/Codex and real GitHub mutations are prohibited.
+**Consequences:** Local cases may extend but not redefine the external contract. The manifest's missing executable inputs/outputs prevent a full shared-fixture claim.
+**Open questions:** Completion of the executable fixture release and required check name are organization-owned dependencies.

@@ -1,6 +1,6 @@
 # Integration Architecture
 
-> **Next-MVP integration slice:** control-plane request/proof receipt → local policy/Codex/validation → managed draft publication → canonical result delivery or exposure. All cross-repository details are assumptions until the inaccessible organization baseline confirms immutable contract/fixtures, approval proof, registry enablement, statuses, and result transport. See [`docs/next-mvp.md`](../next-mvp.md).
+> **Next-MVP integration slice:** authenticated `execution_input_json` plus `concurrency_group` → local policy/Codex/validation → managed Slugger draft → canonical result through the pinned receiver. Release 2.2.0 and the full immutable SHA are fixed; receiver implementation, complete executable fixtures, and registry enablement remain external. See [`docs/next-mvp.md`](../next-mvp.md).
 
 ## Classification convention
 
@@ -11,7 +11,7 @@
 | Integration | Known | Assumed | Unknown / validation required |
 |---|---|---|---|
 | `portfolio-tasks` | Owns structured intake, backlog, priority, approval/withdrawal; context arrives via control plane. | Stable task/revision and attributable approval can be referenced. | Approval expiry/change semantics, fields, SLA, auth, notifications, retention. |
-| Organization `.github` | Owns canonical contracts, target registration, routing, compatibility; production route only. Current docs mention v2/v2.1.0 but not permanence. | Trusted immutable validator/fixtures and authenticated at-least-once delivery exist. | Transport, registry authority, result channel, backoff/dead letter, compatibility window, outage/incident behavior. |
+| Organization `.github` | Owns release 2.2.0 canonical contracts, registry, router, and pinned receiver at `f2491872976a4dcc1633997954c03c07cbc4fced`. | Authenticated at-least-once delivery uses the documented inputs. | Receiver implementation, complete executable fixtures, enablement, backoff/dead letter, outage behavior. |
 | AI provider | Produces untrusted candidates through replaceable bounded contract. | Cancellation, limits, receipt/error/usage metadata are available or emulated safely. | Model guarantees, retention/training, regional handling, exact idempotency, rate/SLA, data rights. |
 | GitHub platform | Current system of record and draft publication platform. | Least-privilege branch/PR operations and observable reconciliation are possible. | Token model/lifetime, protection/rate limits, outage objectives, checks/forks, API evolution. |
 | Target repository (`slugger-generated-demos` named sandbox) | Separate target; owns base, policy, review/merge. Slugger only owns proven managed branch/draft. | Approved target permits generated draft content. | CODEOWNERS/base/protection/license/retention/cleanup/automation/reviewer SLA. |
