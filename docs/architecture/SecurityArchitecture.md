@@ -1,6 +1,6 @@
 # Security Architecture
 
-> **Approval boundary correction:** portfolio approval truth and control-plane admission are outside Slugger. Slugger validates stable revision/target/mode-bound evidence and required freshness/revocation twice; mutable labels cannot independently authorize. Stale, edited, withdrawn, malformed, unauthorized, unavailable, or ambiguous evidence fails closed. Phase credentials separate Codex, validation, publication, and result delivery, and normal conformance CI has none.
+> **Approval boundary correction:** portfolio approval truth and router admission are outside Slugger. Only canonical `approved` is admitted; `queued` is not authorization, and material change gets a new task and approval. Slugger authenticates the admitted caller and validates the immutable request/local policy, never a live label or second approval. Phase credentials separate Codex, validation, publication, and result delivery; normal conformance CI has none.
 
 ## Security objectives and model
 
@@ -24,7 +24,7 @@ Generation has provider credentials only; sandbox has approved dependency access
 
 ## Authentication and authorization
 
-Authenticate workload/human and transport separately from validating business authority. Authorization evaluates actor, current approval, action/mode, immutable input, capability, target/base, phase, policy and time. Deny by default. Registration is not approval; provider success is not authorization; local labels/text cannot grant authority. Recheck authority before generation where required and immediately before target mutation. Policy exceptions are scoped, attributable, expiring, audited, and cannot override BR-30 prohibitions.
+Authenticate the routed caller and transport before validating the canonical payload. Authorization evaluates actor, mode, immutable input, permitted task type, target, disabled/enabled registry state, draft-only policy, and local policy. Deny by default. Registration is not approval; provider success is not authorization; labels/text cannot grant authority. Reconcile local policy and target state before mutation, but do not re-read source approval. Policy exceptions are scoped, attributable, expiring, audited, and cannot override BR-30 prohibitions.
 
 ## Secrets management
 

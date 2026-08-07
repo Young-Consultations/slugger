@@ -1,13 +1,13 @@
 # Error Handling Strategy
 
-> The next-MVP result adapter must represent contract/authorization rejection, execution/validation/publication failure, and interruption/ambiguity with the organization-owned vocabulary, safe detail, timestamps, and retry or human-reconciliation guidance. Unknown mappings fail closed; retry never changes the stable delivery/result identity or guesses whether a GitHub effect occurred.
+> The next-MVP result adapter validates against the pinned canonical result schema and sends through the pinned receiver. Contract/authorization rejection and execution/validation/test/publication failure receive sanitized canonical results; receiver acknowledgement never rewrites execution truth. Retry preserves `delivery_id` and never guesses whether a GitHub effect occurred.
 
 ## Taxonomy
 
 | Category | Examples | Default retry | Effect |
 |---|---|---|---|
 | Contract/Input | malformed, incomplete, unsupported major/mode | No until corrected/new approved revision | Reject before mutation |
-| Authority/Governance | missing/stale/withdrawn approval, unregistered target | No; transient verification outage may retry | Block consequential action |
+| Authority/Governance | unauthenticated/unauthorized caller, registry disabled, unregistered target | No until external correction | Block consequential action |
 | Policy/Security | unsafe path/content/dependency, secret, control unavailable | No; correction creates/revalidates affected work | Fail closed, incident if disclosure |
 | Identity/Conflict | same delivery/different digest, lease/version conflict | Reconcile; semantic conflict no | Preserve state, human action if unresolved |
 | Provider | rate limit, timeout, rejection, partial/ambiguous response | Bounded only when categorized and budget permits | Never treat partial candidate as verified |

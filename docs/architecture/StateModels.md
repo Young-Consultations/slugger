@@ -1,6 +1,6 @@
 # State Models
 
-> The organization next-MVP target lifecycle is the smaller model in [`docs/next-mvp.md`](../next-mvp.md#lifecycle-and-sequence). Names in this architecture are local observations and MUST be mapped to, not substituted for, the pinned organization's status vocabulary. No transition after draft creation enters ready, merge, release, or deployment.
+> The organization next-MVP target lifecycle is the smaller model in [`docs/next-mvp.md`](../next-mvp.md#state-sequence-security-and-failures). Names here are local observations and never redefine the pinned schema. Router admission is already based on canonical `approved`; Slugger authenticates the caller and validates local policy without a live source-approval recheck. No transition after draft creation enters ready, merge, release, or deployment.
 
 ## Run lifecycle
 
@@ -21,8 +21,8 @@ stateDiagram-v2
   Verifying --> Verified: install/test/smoke pass
   Verifying --> Failed: any non-pass
   Verified --> Evidenced: evidence sealed/current
-  Evidenced --> Publishing: authority/gates/target rechecked
-  Evidenced --> Blocked: recheck denies/ambiguous
+  Evidenced --> Publishing: gates/local policy/target reconciled
+  Evidenced --> Blocked: policy or ownership ambiguous
   Publishing --> HandedOff: exact managed draft observed
   Publishing --> Blocked: ambiguous/unsafe outcome
   Publishing --> Failed: definite terminal adapter error
@@ -40,12 +40,12 @@ A persisted `Interrupted` recovery marker may apply to any nonterminal phase. Re
 | Transition | Entry requirements | Exit evidence / failure state |
 |---|---|---|
 | Received→Accepted | Authenticated authoritative contract; stable IDs; digest match | Acceptance journal; otherwise Rejected before provider/target mutation |
-| Accepted→Governed | Current scoped approval, supported profile, complete scope, safe target preflight | Scope/authority snapshot; otherwise Blocked |
+| Accepted→Governed | Authenticated admitted caller, enabled registration, supported task/mode, complete scope, safe target preflight | Admission/local-policy decision; otherwise Blocked |
 | Governed→CandidateReceived | Durable generation intent and bounded provider response | Receipt/request digest; provider error → Failed or retry wait |
 | CandidateReceived→Admitted | Owned workspace; protected inventory; all admission gates PASS | Manifest/gates; any other status → Failed |
 | Admitted→Verified | Controlled environment proven; dependency/install/test/smoke all PASS | Observation set; timeout/error/skip → Failed |
 | Verified→Evidenced | Evidence complete, digest-bound, accessible and redacted views valid | Sealed evidence; store failure → Failed |
-| Evidenced→Publishing | Fresh approval, unchanged bindings, current all-pass gates, unique safe target | Publication intent; denial/ambiguity → Blocked |
+| Evidenced→Publishing | Unchanged input binding, current all-pass gates/local policy, unique safe target | Publication intent; denial/ambiguity → Blocked |
 | Publishing→HandedOff | Exact files/marker on expected branch and one open draft proven | Handoff record; uncertainty → Blocked/reconcile |
 
 ## Gate state model

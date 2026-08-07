@@ -1,6 +1,6 @@
 # Interface Architecture
 
-> For the organization next MVP, IF-01, IF-02, IF-04, IF-06, IF-07, IF-10, IF-11, IF-12, IF-13, and IF-14 are the active interface subset. Their exact external semantics remain pinned-contract dependencies; [`docs/next-mvp.md`](../next-mvp.md) is the release boundary. IF-11 supplies the atomic aggregate/version/lease/outbox boundary required for concurrent-delivery reconciliation, durable idempotency, and canonical-result redelivery.
+> For the organization next MVP, IF-01, IF-02, IF-04, IF-06, IF-07, IF-10, IF-11, IF-12, IF-13, and IF-14 are active. IF-01 is required-string `execution_input_json` plus `concurrency_group`; IF-02 is canonical result delivery through the full-SHA pinned, currently unimplemented receiver. [`docs/next-mvp.md`](../next-mvp.md) is the exact release boundary.
 
 ## Universal contract rules
 
@@ -10,8 +10,8 @@ Every interface has an owner and version; validates syntax, semantics, authoriza
 
 | ID / interface | Responsibility and owner | Inputs → outputs | Validation / assumptions | Failure, retry, idempotency / versioning |
 |---|---|---|---|---|
-| IF-01 Canonical inbound | Receive routed work. Contract/control-plane owner; Slugger adapter owner. | Authenticated envelope/request or integrity reference → acceptance/rejection receipt | Authoritative validator, registered target, complete identities/mode/authority/target/digest; transport unknown | Reject before mutation; at-least-once; delivery ID dedupes; unknown major rejected. |
-| IF-02 Canonical result | Return truthful execution outcome. Canonical vocabulary external, observations Slugger. | Run snapshot → validated result with identities, evidence, publication, error, human action | Preserve root identity; disclosure/redaction; no invented status | At-least-once delivery, result ID dedupe; durable outbox recommended; transport unknown. |
+| IF-01 Canonical inbound | Receive routed work. Contract/control-plane owner; Slugger adapter owner. | Required `execution_input_json` and `concurrency_group` strings → acceptance/rejection | Pinned schema with format checking, authenticated caller, enabled exact target, permitted task type/mode, draft-only | Reject before mutation; at-least-once; `delivery_id` dedupes; changed payload/unknown major rejected. |
+| IF-02 Canonical result | Send truthful execution outcome through the pinned organization receiver. | Run snapshot → schema-valid `execution-result/v2`, `source_issue` | Preserve delivery/correlation/target; sanitize; no invented status | Identical redelivery is safe; conflict fails closed; receiver acknowledgement is not execution success. |
 | IF-03 Local CLI/API | Human/operator command and accessible views. Slugger. | Build/verify/resume/status/cancel arguments → structured + human result | Same policy as routed entry; explicit auth/target/scope; noninteractive mode | Stable exit categories; commands carry idempotency; interface semver/deprecation. |
 | IF-04 Authority verifier | Verify externally owned current approval. Portfolio/control-plane asserts, Slugger consumes. | Authority/task/input/target refs → attributed decision + freshness/proof | Authenticity, scope, current revision, withdrawal/change; exact mechanism unknown | Unavailable/unknown blocks mutation; bounded transient retry; never cache beyond freshness. |
 | IF-05 Capability catalog | Declare product support. Slugger product owner. | Class/mode/version → supported profile or denial | Promotion evidence and effective date; config cannot self-promote | Read/idempotent; release-versioned; absent/experimental denies supported status. |

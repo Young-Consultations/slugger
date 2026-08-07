@@ -4,13 +4,21 @@
 
 | Included requirements | Design/interface realization | Required conformance evidence |
 |---|---|---|
-| FR-INT-01, FR-INT-02 | IF-01/IF-04; ADR-009/ADR-013; inbound and authority adapters | supported/malformed/version/target and valid/invalid/stale/withdrawn fixtures |
-| FR-RUN-01, FR-IDM-01 | coordinator, IF-11/IF-12; ADR-003/ADR-007 | duplicate/reuse/conflict and interrupted-publication fixtures |
+| FR-INT-01, FR-INT-02, FR-CAT-01 | IF-01/IF-04; ADR-009/ADR-013; exact `execution_input_json` plus `concurrency_group` | valid verify, wrong target, disabled target, unsupported version, malformed input, unauthorized caller, unsupported task type, invalid concurrency group |
+| FR-RUN-01, FR-IDM-01 | coordinator, IF-11/IF-12; ADR-003/ADR-007; `delivery_id` identity | duplicate delivery, changed payload under delivery ID, identical/conflicting result redelivery |
 | FR-WS-01, FR-PRV-01 | workspace/Codex ports; ADR-004/ADR-008 | fake implement, verify-no-call, outside-scope denial and network trap |
 | FR-VAL-01, FR-TST-01, FR-EVD-01 | validation/evidence adapters; ADR-004/ADR-006/ADR-011 | deterministic pass/fail evidence and safe-error fixtures |
-| FR-PUB-01, FR-PUB-02 | GitHub publication adapter/IF-12; ADR-007/ADR-013 | simulated create/reuse, one visible effect, draft-only assertion |
-| FR-ERR-01, FR-RES-01 | IF-02, result adapter/outbox; ADR-009/ADR-011/ADR-012 | official-validator coverage for every outcome and redelivery |
-| FR-CNF-01 | conformance composition; ADR-014 | merge-blocking, no-secret/no-network/no-real-publication suite |
+| FR-PUB-01, FR-PUB-02 | GitHub publication adapter/IF-12; `ai-sdlc-delivery-id`; ADR-007/ADR-013 | matching draft reuse, ambiguous ownership, create-race requery, publication failure, no real branch/PR |
+| FR-ERR-01, FR-RES-01 | IF-02; pinned result schema; pinned receiver | fake Codex/validation/test/publication failures, valid canonical result, receiver fail-closed response and result redelivery |
+| FR-CNF-01 | fake executor/publisher; ADR-014; `TC-MVP-CI-001` plan | no Codex network call and no real branch/PR; no full shared-fixture claim until external fixtures are complete |
+
+The exact included IDs are **FR-INT-01, FR-INT-02, FR-CAT-01, FR-RUN-01,
+FR-WS-01, FR-PRV-01, FR-ART-01, FR-VAL-01, FR-DEP-01, FR-EXE-01,
+FR-TST-01, FR-SMK-01, FR-EVD-01, FR-PUB-01, FR-PUB-02, FR-IDM-01,
+FR-ERR-01, FR-RES-01, and FR-CNF-01**. Deferred IDs are **FR-SCP-01,
+FR-RUN-02, FR-PRM-01, FR-WS-02, FR-REC-01, FR-GOV-01, FR-LCM-01,
+FR-LCM-02, and FR-EXT-01**. This selection is bidirectional with the obligations
+and planned cases in [`docs/next-mvp.md`](../next-mvp.md).
 
 This slice is narrower than the architecture's long-term factory. Deferred requirements and external blockers are recorded in [`docs/next-mvp.md`](../next-mvp.md); rows elsewhere in this document are not implicitly selected for the organization release.
 

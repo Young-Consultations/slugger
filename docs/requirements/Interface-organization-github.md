@@ -1,45 +1,80 @@
-# Interface Contract — `Young-Consultations/.github` Control Plane
+# Interface Contract — `Young-Consultations/.github` control plane
 
-> **Next-MVP constraint:** This sibling repository was not inspected. The control plane owns admission, routing, target selection, and routed authorization evidence; Slugger only validates the pinned request/proof and local policy. Exact release/pin, proof semantics, registry enablement, shared fixtures, status vocabulary, and result-return mechanism are unresolved external gates listed in [`docs/next-mvp.md`](../next-mvp.md#external-validation-gates). No cross-repository compatibility is claimed.
+This interface is aligned, without a cross-repository conformance claim, to
+organization release 2.2.0 at
+`Young-Consultations/.github@f2491872976a4dcc1633997954c03c07cbc4fced`, payload
+`ai-sdlc-contract/v2`, and fixture manifest `TC-MVP-CI-001`. See the complete
+[next-MVP baseline](../next-mvp.md).
 
-## Purpose and repository responsibilities
+## Ownership and authority
 
-The organization repository is expected to own canonical AI-SDLC contracts, validation vocabulary, target registration, routing, compatibility, and control-plane verification. Slugger is a registered target executor and MUST NOT edit organization configuration, define a competing router, or locally fork canonical schemas.
+The organization control plane owns canonical contracts, registry, admission,
+routing, and result receipt. Only canonical task status `approved` is router
+admissible; `queued` is not authorization, and material change requires a new
+`task_id` and approval. Slugger authenticates the admitted caller and validates the
+payload and local policy. It is not an approval authority and must not require or
+recheck `ai-sdlc-approved`, another label, or a repository-specific approval record.
+Rich approval provenance is deferred to v3.
 
-## Required inputs to Slugger
+The supplied registry entry targets `Young-Consultations/slugger`, is
+`enabled: false`, permits `automation`, `bug-fix`, `documentation`, `feature`, and
+`testing`, requires `ai-sdlc-contract/v2` and `draft_pr_only: true`, and declares
+`delivery_id`, `ai-sdlc-delivery-id`, and `duplicate-reused` as branch identity,
+ownership marker, and terminal reuse status. Slugger fails closed while disabled.
 
-A routed request MUST supply: canonical contract kind/version; stable task, correlation and delivery/idempotency identities; source reference and current approval context; registered target/capability; execution mode (`verify`-like non-mutating semantics or governed implementation semantics, using canonical vocabulary); bounded intent/project context; target repository/base/requested deterministic branch; draft-only policy; immutable-input identity/digest; handling/security constraints; and any contract-required retry lineage. Input may be delivered inline or by an integrity-bound artifact reference; the transport is not prescribed.
+## Inbound reusable-workflow contract
 
-## Required outputs
+`.github/workflows/codex-execute.yml` must accept exactly these required strings:
 
-Slugger SHALL return a canonical result validated by the authoritative contract, carrying all root identities and input version; observed mode/outcome; timing; evidence reference/digest; provider/gate summary appropriate to disclosure; publication mode/occurrence/reference; safe error category and retryability; and outstanding human action. Child work in future orchestration retains root correlation and produces individually valid results; aggregation MUST NOT invent status vocabulary.
+* `execution_input_json`: the complete canonical `execution-input/v2` object;
+* `concurrency_group`: the routing-path transport concurrency identity.
 
-## Required events and behavior
+`execution_input` is obsolete. Neither an artifact alternative, a live issue-label
+lookup, sibling-repository access, an undocumented module/package, nor control-plane
+credentials are part of the target contract. `concurrency_group` is validated and
+used, but `delivery_id` is the only idempotency key; retries retain it.
 
-The control plane must support registration/compatibility verification, task dispatch/redelivery, contract/registry version change, and result availability. Verification dispatch SHALL cause no provider invocation, branch/commit/PR mutation, or target write. Implement dispatch remains subject to Slugger revalidation and gates. Registration does not itself approve portfolio work.
+Slugger validates with format checking against the immutable schema at
+`https://raw.githubusercontent.com/Young-Consultations/.github/f2491872976a4dcc1633997954c03c07cbc4fced/contracts/execution-input.schema.json`.
+It likewise consumes the pinned `task-contract.schema.json` and
+`execution-result.schema.json` directly. Slugger defines no local canonical enum,
+schema fork, or extension, and assumes no published package.
 
-## Contract invariants
+## Result contract
 
-* The authoritative validator is obtained from an immutable approved contract release or equivalent trusted distribution.
-* Registration identifies repository, supported contract/capability/mode, target entry point, and compatibility.
-* Logical delivery identity and requested branch are stable and independent of job/run/attempt IDs.
-* One canonical request has one target and draft-only publication policy for MVP.
-* Routing is at-least-once; concurrency is not the deduplication guarantee.
-* Contract validation occurs before Slugger run mutation.
-* Canonical enums/statuses remain externally owned; Slugger supplies an adapter, not duplicate definitions.
+Slugger validates canonical `execution-result/v2`, preserves the input
+`delivery_id`, `correlation_id`, and target, and separately calls:
 
-## Failure, retry, and idempotency
+```text
+Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@f2491872976a4dcc1633997954c03c07cbc4fced
+```
 
-Schema failure, unsupported contract, unregistered/misdirected target, unresolved dependencies, invalid executor/capability, absent stable identity, non-draft publication, or failed authority recheck MUST reject before provider execution. Redelivery uses the same logical identity. Conflicting immutable content, ambiguous ownership, or unsupported semantic version is non-retryable until governance correction. Results SHOULD be deliverable at least once and deduplicable by delivery/result identity.
+The receiver inputs are `execution_result` and `source_issue`; its secret is
+`CODEX_RESULT_TOKEN`; its outputs are `accepted`, `delivery_id`, `correlation_id`,
+`execution_status`, `failure_category`, and `diagnostic_summary`. It is currently an
+approved fail-closed, unimplemented skeleton. Successful live result delivery is
+therefore impossible today. Its implementation is an organization-owned external
+dependency; Slugger must not build a competing receiver. Transport acknowledgement
+is not execution success.
 
-## Versioning expectations
+## Delivery, publication, and failures
 
-Unknown major versions fail closed. A pinned version/release is required for an execution. Contract evolution SHALL specify compatibility, deprecation period, rollout order, in-flight handling, fixtures, and downgrade/rollback behavior. Dedicated stable identity fields SHOULD replace compatibility-derived identities only through coordinated rollout. Slugger MUST NOT assume the currently documented `ai-sdlc-contract/v2` or release `ai-sdlc-v2.1.0` is permanent.
+Routing is at least once. Identical redelivery converges on idempotent visible
+effects; changed content under a delivery ID is rejected. `correlation_id` is for
+observability only. Implement publication is limited to one managed open draft per
+delivery in this repository. Ownership ambiguity fails closed, matching work is
+reused, and a create race is requeried. Verify makes no Codex call or mutation and
+returns canonical `verified` with schema-required null publication fields.
 
-## Ownership
+Every accepted, rejected, blocked, or failed terminal path produces a sanitized
+canonical result when trusted identity is available. Identical result redelivery is
+safe; conflicting redelivery fails closed. No target operation merges, releases,
+deploys, performs production operations, or touches another repository.
 
-Organization control-plane owner: schemas, vocabularies, registry, router and compatibility verification. Slugger: supported-capability declaration, target policy, actual execution/evidence, and truthful canonical result. Portfolio owner: work and approval. Target owner: repository governance. Humans: review/merge/release.
+## Version and limitations
 
-## Assumptions, unknowns, and validation
-
-Known context states that the organization repository has these responsibilities, but its implementation is unavailable. Validate registry enablement and authority; supported versions; validator distribution trust; artifact limits/integrity; transport authentication; redelivery/backoff/dead-letter behavior; result callback/polling mechanism; child task semantics; incident ownership; availability objectives; compatibility window; and source approval revalidation. Slugger activation SHALL remain disabled or verification-only until registry and end-to-end conformance are approved externally.
+All workflow and schema references use the full SHA. `main`, the nonexistent
+`ai-sdlc-v2.2.0` tag, and an assumed package are prohibited dependencies. The
+fixture manifest supplies authoritative scenario names/coverage, not complete
+executable cases. Missing fixtures/expected outputs, receiver implementation, and
+registry enablement remain external dependencies.

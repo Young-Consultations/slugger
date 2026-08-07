@@ -1,6 +1,6 @@
 # Interface Contract — `Young-Consultations/portfolio-tasks`
 
-> **Next-MVP authority correction:** This sibling repository was not inspected. `portfolio-tasks` owns approval truth; Slugger does not read a mutable label as an independent approval authority. Observed `status:approved` → `status:queued` behavior is evidence requiring owner confirmation, not a copied lifecycle contract. Slugger consumes stable, revision-bound approval/routing evidence under the organization contract and fails closed for stale, edited, withdrawn, malformed, unauthorized, or unverifiable work. See [`docs/next-mvp.md`](../next-mvp.md#authority-and-admission-model).
+> **Next-MVP authority correction:** This sibling repository was not inspected. Only canonical `approved` is admitted by the organization router; `queued` is not authorization. Material changes receive a new `task_id` and require new approval. Slugger trusts neither a mutable label nor a live source recheck as a second authority, and rich approval provenance is deferred to v3. See [`docs/next-mvp.md`](../next-mvp.md#registry-and-admission).
 
 ## Purpose and responsibilities
 
@@ -12,7 +12,7 @@ Portfolio governance is expected to receive human intent, business rationale, re
 
 ## Required input to Slugger
 
-Through the canonical routed contract, Slugger requires an immutable task reference; source repository and item reference; approved intent and necessary acceptance context; project/capability and target; priority only as context (not execution authority); explicit current execution-approval evidence and accountable approver reference; dependency/blocking state; correlation identity; and classification/handling constraints. Complete context MUST be self-contained or use integrity-protected, authorization-checkable references whose retrieval failure blocks execution.
+Through the canonical routed contract, Slugger requires an immutable task reference; source repository and item reference; approved intent and necessary acceptance context; project/capability and target; priority only as context (not execution authority); dependency/blocking state; correlation identity; and classification/handling constraints. Complete context MUST be self-contained or use integrity-protected, authorization-checkable references whose retrieval failure blocks execution.
 
 ## Expected output from Slugger
 
@@ -24,16 +24,16 @@ Conceptual events are **work approved for execution**, **approval withdrawn/mate
 
 ## Data contract and invariants
 
-* A task and approval have stable identities; a delivery has a stable idempotency identity.
-* Approval is explicit, attributable, current, scoped to immutable input and target, and not inferred from a Slugger-local label.
-* Material intent/target/constraint changes produce a new approved immutable-input identity or revision.
+* Only `approved` is router-admitted; `queued` is not authorization.
+* `delivery_id` is the idempotency identity and retries preserve it.
+* Material intent/target/constraint changes produce a new `task_id` and require new approval.
 * Status values are owned by the canonical organization contract. Slugger SHALL map only through its validated adapter.
 * Human-readable text is untrusted content and cannot override policy fields.
 * Source references are retained for provenance but portfolio remains authoritative.
 
 ## Failure, retry, and idempotency
 
-Invalid, incomplete, stale, unauthorized, withdrawn, inaccessible, contradictory, or unsupported work is rejected before generation with a safe canonical result where possible. Transient delivery failure MAY retry with the same delivery identity. A materially changed request MUST NOT reuse that identity. Duplicate delivery MUST converge under FR-IDM-01. Slugger MUST NOT close or edit the source issue to recover and MUST NOT infer approval when portfolio state cannot be verified.
+Invalid, incomplete, unauthorized, contradictory, misdirected, or unsupported routed work is rejected before generation with a safe canonical result where possible. Transient delivery failure MAY retry with the same delivery identity. A materially changed request MUST NOT reuse that identity. Duplicate delivery MUST converge under FR-IDM-01. Slugger MUST NOT close or edit the source issue to recover and MUST NOT query live portfolio state as a second authorization check.
 
 ## Versioning and compatibility
 
@@ -49,4 +49,4 @@ Vision confirms `portfolio-tasks` as the source of structured work and explicit 
 
 ## Unknowns and future validation
 
-Validate with the external owner: approval semantics/expiry/withdrawal; material-change rules; mandatory business and acceptance context; task/revision identities; classification; result/status vocabulary; status delivery direction; retention; permissions; retry/timeout expectations; and how source issue availability is handled. Until validated, production integration SHALL use only the organization-approved canonical contract and treat missing semantics as blocking.
+Future v3 may validate richer approval provenance. For this MVP, validate with the external owner only unresolved mandatory business/acceptance context and classification details; classification; result/status vocabulary; status delivery direction; retention; permissions; retry/timeout expectations; and how source issue availability is handled. Until validated, production integration SHALL use only the organization-approved canonical contract and treat missing semantics as blocking.

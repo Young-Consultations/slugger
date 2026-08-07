@@ -181,11 +181,11 @@ The workflow:
 
 ## Organization-routed AI-SDLC execution
 
-Production Codex tasks for Slugger now originate in `Young-Consultations/portfolio-tasks`, where intake metadata and explicit approval are owned. Routing and canonical validation are owned by the organization control plane in `Young-Consultations/.github`. Slugger is a registered target executor only, through `.github/workflows/codex-execute.yml`.
+When the organization registry entry is enabled, production Codex tasks for Slugger will arrive through the organization routing path. Intake metadata and explicit approval remain externally owned, while the organization control plane owns routing and canonical validation. Slugger's responsibility is limited to the target adapter at `.github/workflows/codex-execute.yml`.
 
-Slugger does not authorize production execution from local issue labels; `codex-ready` is no longer a production trigger. The supported contract is `ai-sdlc-contract/v2`, pinned to the organization control-plane release `ai-sdlc-v2.1.0`. Automated publication remains draft-only and requires human review before any merge.
+Slugger does not authorize execution from local issue labels; neither `codex-ready` nor `ai-sdlc-approved` is a production authority. The target interface is aligned to `ai-sdlc-contract/v2` and organization release 2.2.0 at the immutable reference `Young-Consultations/.github@f2491872976a4dcc1633997954c03c07cbc4fced`. Its required inputs are `execution_input_json` and `concurrency_group`. The supplied registry entry is disabled, so live routed execution must fail closed. Automated publication remains draft-only and requires human review before any merge. See [`docs/next-mvp.md`](docs/next-mvp.md) for the exact schemas, receiver limitation, and implementation boundary.
 
-The target executor is an idempotent consumer under at-least-once router delivery.
+The eventual target executor must be an idempotent consumer under at-least-once router delivery.
 The canonical delivery identity—not a workflow run ID or concurrency group—owns a
 deterministic branch and machine-marked draft PR. Completed deliveries are reused
 without rerunning Codex; conflicting or ambiguous repository state fails closed and

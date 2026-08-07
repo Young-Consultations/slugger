@@ -12,7 +12,7 @@
 
 ### US-03 — Retain approval authority
 **Role:** portfolio approver. **Goal:** ensure only currently approved work executes. **Benefit:** automation cannot bypass governance. **Priority:** P0. **Dependencies:** current authority evidence.  
-**Acceptance:** absent/withdrawn approval and local labels alone cause no provider invocation or target mutation. **Trace:** FR-INT-02.
+**Acceptance:** an unauthorized caller or disabled registry causes no provider invocation or target mutation; local labels are neither required nor authoritative, and no live source approval is rechecked. **Trace:** FR-INT-02.
 
 ## Generation, isolation, and verification
 
