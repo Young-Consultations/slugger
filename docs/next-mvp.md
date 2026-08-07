@@ -155,9 +155,9 @@ validation/tests must pass first. The adapter never operates on another reposito
 and never marks ready, approves, merges, releases, deploys, or performs production
 operations.
 
-## Exact result-receiver interface and limitation
+## Result-receiver interface, current pin, and release transition
 
-Results are sent through:
+The release-2.2.0 baseline identifies this **current, non-live** receiver pin:
 
 ```text
 Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@f2491872976a4dcc1633997954c03c07cbc4fced
@@ -175,14 +175,28 @@ Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@f2491872
 | output | `failure_category` |
 | output | `diagnostic_summary` |
 
-The receiver is an approved **fail-closed interface skeleton and is not
-implemented**. Slugger can align now, but live successful result delivery is not
-possible until the organization owner implements it. Slugger must not create a
-competing receiver. Its secret is used only at the result-delivery boundary and is
-not a control-plane credential. Receiver transport acknowledgement means only that
-transport accepted the payload; it is not execution success and cannot alter the
-canonical execution truth. Identical result redelivery must be safe; a conflicting
-result under the same identity must fail closed.
+The receiver at that SHA is an approved **fail-closed interface skeleton and is
+not implemented**. It is suitable only for alignment and fail-closed conformance;
+it is not the pin that a live-capable Slugger release will invoke. Slugger must not
+create a competing receiver. Its secret is used only at the result-delivery
+boundary and is not a control-plane credential. Receiver transport acknowledgement
+means only that transport accepted the payload; it is not execution success and
+cannot alter the canonical execution truth. Identical result redelivery must be
+safe; a conflicting result under the same identity must fail closed.
+
+Successful live result delivery becomes reachable only through a coordinated
+organization release and Slugger pin update. The organization owner must first
+implement and test this workflow, publish a new immutable full commit SHA containing
+that implementation, and include that SHA in a new approved control-plane release.
+Slugger must then replace the receiver `uses:` reference above with that new SHA,
+update the documented control-plane release/SHA baseline, and pass receiver
+contract, authentication, identical-redelivery, conflicting-redelivery, and failure
+tests against the new revision before the registry entry may be enabled. The
+implemented receiver SHA must differ from
+`f2491872976a4dcc1633997954c03c07cbc4fced`; a branch, tag, or the skeleton SHA is
+not an acceptable live receiver pin. Until the new full SHA is recorded here and in
+the adapter workflow, successful live result delivery remains unreachable and
+enablement must fail closed.
 
 ## Planned no-Codex conformance
 
@@ -229,11 +243,12 @@ unauthorized calls, ambiguous ownership, and receiver rejection all fail closed.
 
 ## External dependencies, limitations, and readiness
 
-External organization-owned prerequisites are: implementation of the pinned result
-receiver; completion of executable fixtures/expected outputs for `TC-MVP-CI-001`;
-registry enablement after local evidence; and any future publication of a package,
-release artifact, or real tag (none is assumed). The immutable SHA, not a tag, is
-the present dependency.
+External organization-owned prerequisites are: implementation of the result
+receiver followed by the coordinated release and immutable repin described above;
+completion of executable fixtures/expected outputs for `TC-MVP-CI-001`; registry
+enablement after local evidence; and any future publication of a package, release
+artifact, or real tag (none is assumed). The immutable SHA, not a tag, is the
+present dependency.
 
 No additional Slugger-owned requirement or architecture decision is needed before
 implementation. Slugger is **ready to begin local, disabled, no-Codex target-adapter
