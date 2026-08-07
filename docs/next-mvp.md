@@ -17,11 +17,16 @@ The exact included Slugger requirement IDs are:
 |---|---|
 | FR-INT-01 | Accept and validate the canonical request and supported contract version. |
 | FR-INT-02 | Validate target identity plus stable routed authorization evidence. |
+| FR-CAT-01 | Govern the supported Slugger target capability/profile used to authorize and validate the request. |
 | FR-RUN-01 | Preserve task, delivery, correlation, attempt, and target identities. |
 | FR-WS-01 | Confine writes and commands to the selected Slugger repository workspace and allowed paths. |
 | FR-PRV-01 | Invoke Codex only for an authorized `implement` request; never for `verify`. |
+| FR-ART-01 | Inventory candidate artifacts and bind validation and publication to that exact inventory. |
 | FR-VAL-01 | Apply the request/profile repository-change policy before publication. |
+| FR-DEP-01 | Acquire only policy-allowed, integrity-verified dependencies needed by the validation plan. |
+| FR-EXE-01 | Install and execute candidate behavior only in the controlled validation isolation boundary. |
 | FR-TST-01 | Run the bounded repository validation plan and record outcomes. |
+| FR-SMK-01 | Run the profile's deterministic smoke verification and record its outcome. |
 | FR-EVD-01 | Produce safe validation and execution evidence. |
 | FR-PUB-01 | Recheck gates and authorization evidence before mutation. |
 | FR-PUB-02 | Publish or reuse exactly one owned open draft PR; never merge/release/deploy. |
@@ -30,7 +35,7 @@ The exact included Slugger requirement IDs are:
 | FR-RES-01 | Map every terminal/ambiguous outcome to the externally owned canonical result. |
 | FR-CNF-01 | Provide deterministic, no-Codex, no-publication contract conformance in normal CI. |
 
-All other functional requirement IDs are deferred from this organization release: **FR-SCP-01, FR-CAT-01, FR-RUN-02, FR-PRM-01, FR-WS-02, FR-ART-01, FR-DEP-01, FR-EXE-01, FR-SMK-01, FR-REC-01, FR-GOV-01, FR-LCM-01, FR-LCM-02, and FR-EXT-01**. They remain product direction or previously demonstrated capability, not organization next-MVP exit criteria. Included requirements apply only to the routed Slugger-repository target path; they do not certify the broader factory.
+All other functional requirement IDs are deferred from this organization release: **FR-SCP-01, FR-RUN-02, FR-PRM-01, FR-WS-02, FR-REC-01, FR-GOV-01, FR-LCM-01, FR-LCM-02, and FR-EXT-01**. They remain product direction or previously demonstrated capability, not organization next-MVP exit criteria. Included requirements—including the catalog, artifact-inventory, dependency, isolated-execution, and smoke-verification prerequisites—apply only to the routed Slugger-repository target path and its bounded validation/publication gates; they do not certify the broader factory.
 
 ## Authority and admission model
 

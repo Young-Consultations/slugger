@@ -1,6 +1,6 @@
 # Interface Architecture
 
-> For the organization next MVP, IF-01, IF-02, IF-04, IF-06, IF-07, IF-10, IF-12, IF-13, and IF-14 are the active interface subset. Their exact external semantics remain pinned-contract dependencies; [`docs/next-mvp.md`](../next-mvp.md) is the release boundary.
+> For the organization next MVP, IF-01, IF-02, IF-04, IF-06, IF-07, IF-10, IF-11, IF-12, IF-13, and IF-14 are the active interface subset. Their exact external semantics remain pinned-contract dependencies; [`docs/next-mvp.md`](../next-mvp.md) is the release boundary. IF-11 supplies the atomic aggregate/version/lease/outbox boundary required for concurrent-delivery reconciliation, durable idempotency, and canonical-result redelivery.
 
 ## Universal contract rules
 
