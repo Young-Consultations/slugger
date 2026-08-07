@@ -1,5 +1,19 @@
 # Architecture Traceability Matrix
 
+## Organization next-MVP slice
+
+| Included requirements | Design/interface realization | Required conformance evidence |
+|---|---|---|
+| FR-INT-01, FR-INT-02 | IF-01/IF-04; ADR-009/ADR-013; inbound and authority adapters | supported/malformed/version/target and valid/invalid/stale/withdrawn fixtures |
+| FR-RUN-01, FR-IDM-01 | coordinator, IF-11/IF-12; ADR-003/ADR-007 | duplicate/reuse/conflict and interrupted-publication fixtures |
+| FR-WS-01, FR-PRV-01 | workspace/Codex ports; ADR-004/ADR-008 | fake implement, verify-no-call, outside-scope denial and network trap |
+| FR-VAL-01, FR-TST-01, FR-EVD-01 | validation/evidence adapters; ADR-004/ADR-006/ADR-011 | deterministic pass/fail evidence and safe-error fixtures |
+| FR-PUB-01, FR-PUB-02 | GitHub publication adapter/IF-12; ADR-007/ADR-013 | simulated create/reuse, one visible effect, draft-only assertion |
+| FR-ERR-01, FR-RES-01 | IF-02, result adapter/outbox; ADR-009/ADR-011/ADR-012 | official-validator coverage for every outcome and redelivery |
+| FR-CNF-01 | conformance composition; ADR-014 | merge-blocking, no-secret/no-network/no-real-publication suite |
+
+This slice is narrower than the architecture's long-term factory. Deferred requirements and external blockers are recorded in [`docs/next-mvp.md`](../next-mvp.md); rows elsewhere in this document are not implicitly selected for the organization release.
+
 ## Traceability method
 
 The requirements matrix remains authoritative for Vision → business → requirement → acceptance/test. This matrix continues the chain through architecture. Future implementation records add `IMP-*` module/service, migration and test IDs in the final column; an architecture row is not evidence that code exists.

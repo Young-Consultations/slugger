@@ -1,5 +1,7 @@
 # Shared-contract orchestration
 
+> **Next-MVP reconciliation note:** [`docs/next-mvp.md`](next-mvp.md) governs the target contribution. Exact contract release/pin, approval proof, result statuses/transport, registry enablement, and shared fixtures remain external decisions. The `ai-sdlc-v2.1.0` and `publication.identity` text below describes observed compatibility behavior only and MUST NOT be treated as the organization next-MVP selection until confirmed against an immutable baseline.
+
 ## At-least-once delivery at the Slugger target
 
 Slugger is an idempotent consumer of organization-routed tasks. A canonical

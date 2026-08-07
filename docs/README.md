@@ -8,6 +8,8 @@ Documentation is a first-class deliverable in Slugger. Every architecture decisi
 
 ## Structure
 
+- [`next-mvp.md`](next-mvp.md) is the repository planning baseline for Slugger's organization next-MVP target contribution, exact requirement scope, external decisions, and conformance obligations.
+
 | Path | Contents |
 |------|----------|
 | `requirements/` | Authoritative product, software, interface, use-case, business-rule, and traceability requirements baseline |

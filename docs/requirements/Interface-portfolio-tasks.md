@@ -1,5 +1,7 @@
 # Interface Contract — `Young-Consultations/portfolio-tasks`
 
+> **Next-MVP authority correction:** This sibling repository was not inspected. `portfolio-tasks` owns approval truth; Slugger does not read a mutable label as an independent approval authority. Observed `status:approved` → `status:queued` behavior is evidence requiring owner confirmation, not a copied lifecycle contract. Slugger consumes stable, revision-bound approval/routing evidence under the organization contract and fails closed for stale, edited, withdrawn, malformed, unauthorized, or unverifiable work. See [`docs/next-mvp.md`](../next-mvp.md#authority-and-admission-model).
+
 ## Purpose and responsibilities
 
 This interface transfers governed work context toward Slugger without transferring governance ownership. `portfolio-tasks` is expected to own structured intake, backlog state, prioritization, source issue lifecycle, and explicit execution approval. Slugger owns bounded execution and evidence. The organization control plane is expected to mediate canonical routing; direct source-tree or database coupling is prohibited.

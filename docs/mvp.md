@@ -1,3 +1,5 @@
+> **Historical MVP only.** This page records the previously delivered/demonstrated v0.1.x Python-CLI capability. It does not define or certify Slugger's organization next-MVP contribution. The current planning boundary is [`docs/next-mvp.md`](next-mvp.md), ends at a validated draft PR plus canonical result, and does not require the full software factory.
+
 ## Project status for v0.1.2
 
 Current release target: **Slugger v0.1.2**. Slugger documents exactly three distinct operational paths:

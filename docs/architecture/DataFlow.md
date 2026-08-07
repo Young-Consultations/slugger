@@ -1,5 +1,7 @@
 # Data Flow Design
 
+> **Next-MVP data-flow constraint:** stable approval evidence and canonical request enter from the control plane; only allowlisted repository context enters Codex; only validated changes enter the GitHub draft adapter; a validator-accepted canonical result leaves through the externally approved result port. Credentials, raw proof material, and secrets may not flow into Codex, generated commands, PR text, logs, or safe errors.
+
 ## Inputs, outputs, and classifications
 
 | Flow | Required content | Trust/classification | Owner |

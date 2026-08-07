@@ -4,6 +4,8 @@
 
 Each record is atomic at the product-behavior level. “Input” and “output” identify information, not transport or schema. Priorities: P0 MVP release-blocking; P1 MVP important; P2 post-MVP; P3 candidate. Unless stated otherwise, the precondition is an authorized actor or canonical caller and the postcondition is a durable, correlated outcome.
 
+> **MVP interpretation:** priorities in this historical product baseline do not by themselves select the organization next MVP. The exact included and deferred IDs are defined in [the organization next-MVP contribution](../next-mvp.md#normative-repository-scope).
+
 ## A. Intent intake and scope
 
 ### FR-INT-01 — Accept complete approved intent
@@ -168,7 +170,19 @@ Each record is atomic at the product-behavior level. “Input” and “output�
 **Acceptance:** **AC-ERR-01a:** representative failures yield distinct category and next step. **AC-ERR-01b:** secrets and unsafe raw content are not disclosed. **AC-ERR-01c:** no failure is represented as success or production readiness.  
 **Vision:** VG-02, VG-05.
 
-## F. Human governance and lifecycle evolution
+## F. Organization contract and continuous conformance
+
+### FR-RES-01 — Produce and expose the canonical execution result
+**Description:** Slugger MUST map every terminal, rejected, failed, reused, no-change, interrupted, or ambiguous local observation to the pinned organization-owned execution-result contract, validate it with the official validator, durably retain it, and deliver or expose it through the approved mechanism with at-least-once-safe identity. Slugger SHALL NOT define substitute schema or status semantics.
+**Rationale:** Routing is incomplete without a truthful, correlated, interoperable outcome. **Priority:** organization next-MVP P0. **Dependencies:** external result contract and transport decision; FR-RUN-01; FR-EVD-01.
+**Acceptance:** **AC-RES-01a:** verify success, implement success, existing-draft reuse, no change, authorization rejection, contract rejection, execution failure, validation failure, publication failure, and ambiguous/interrupted execution each produce a validator-accepted result. **AC-RES-01b:** required version; delivery, correlation and target identities; canonical status; validation evidence; applicable draft metadata; safe error; timestamps; and retry/reconciliation guidance survive mapping. **AC-RES-01c:** unknown required status/field or uncertain result delivery fails closed and is reconciled without changing execution truth or duplicating a visible effect.
+
+### FR-CNF-01 — Continuously prove target-interface conformance
+**Description:** Slugger MUST provide a deterministic, merge-blocking, no-Codex CI suite against immutably pinned organization fixtures and official validators, using fakes for authority, executor, repository, publication, clock, and result delivery.
+**Rationale:** Interface drift must be found without credentials or organization mutations. **Priority:** organization next-MVP P0. **Dependencies:** shared fixture release and pinning decision.
+**Acceptance:** **AC-CNF-01a:** valid verify and implement, deterministic change/no-change, simulated publication, managed-draft reuse, duplicate delivery, invalid target, invalid/withdrawn/stale approval, unsupported version, malformed request, validation failure, and every required result class are exercised. **AC-CNF-01b:** Codex credentials are absent, Codex network calls are trapped, and no real branch/commit/push/PR is created. **AC-CNF-01c:** fixture/validator incompatibility fails the required check and blocks merge; local fixtures cannot redefine canonical semantics.
+
+## G. Human governance and lifecycle evolution
 
 ### FR-GOV-01 — Preserve human decision gates
 **Description:** Slugger SHALL identify the accountable human role and required decision at intent approval, material scope/architecture exception, security disposition, draft review, merge, release, deployment, and production use; it MUST NOT self-satisfy those gates.  

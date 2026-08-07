@@ -1,5 +1,7 @@
 # Security Architecture
 
+> **Approval boundary correction:** portfolio approval truth and control-plane admission are outside Slugger. Slugger validates stable revision/target/mode-bound evidence and required freshness/revocation twice; mutable labels cannot independently authorize. Stale, edited, withdrawn, malformed, unauthorized, unavailable, or ambiguous evidence fails closed. Phase credentials separate Codex, validation, publication, and result delivery, and normal conformance CI has none.
+
 ## Security objectives and model
 
 Protect authority, Slugger/source/target integrity, secrets and confidential intent; contain untrusted generated behavior; preserve auditable truth; and deny consequential action under uncertainty. Zero trust applies across every external, adapter, generated-code and extension boundary. Threat analysis must be refreshed per capability profile and integration.

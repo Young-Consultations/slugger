@@ -109,3 +109,17 @@
 **Tradeoffs:** Two intentionally related data products; correct security/availability semantics.
 **Consequences:** Telemetry outage cannot fabricate or erase run truth.
 **Open questions:** Deployment-specific sinks, SLOs and sampling.
+
+## ADR-013 — Stable external approval evidence, not repository labels
+
+**Context:** Portfolio approval truth and control-plane routing are externally owned; mutable repository labels create time-of-check races and a second authority.
+**Decision:** Slugger validates pinned-contract evidence bound to issuer, task revision, target, mode and delivery, including contract-defined freshness and withdrawal/revocation rules, before Codex and again before mutation. A local label is non-authoritative unless the external contract explicitly assigns its validation to Slugger. Unknown or unavailable authority fails closed.
+**Consequences:** The observed `ai-sdlc-approved` implementation check is blueprint drift pending an organization decision. Slugger neither approves tasks nor defines portfolio status transitions.
+**Open questions:** Proof format/issuer, freshness and clock skew, edit/withdrawal/revocation semantics, and outage behavior.
+
+## ADR-014 — Hermetic conformance gates external-interface changes
+
+**Context:** Real Codex and GitHub effects are unsafe, nondeterministic, and credential-dependent in normal CI.
+**Decision:** A merge-blocking suite uses immutably pinned official validators/shared fixtures and deterministic authority, executor, repository, publisher, clock, and result-sink fakes. Network/Codex and real GitHub mutations are prohibited.
+**Consequences:** Contract/lifecycle drift blocks merge; credentialed demonstrations remain separate and non-normative. Local fixtures may extend but not redefine the external contract.
+**Open questions:** Fixture release/digest, required check name, update cadence and compatibility window.

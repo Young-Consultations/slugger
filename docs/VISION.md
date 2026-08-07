@@ -1,5 +1,7 @@
 # Slugger Product Vision
 
+> **Release framing (organization next MVP):** Slugger's broader governed software-factory vision remains the future direction. Its next organization contribution is deliberately narrower: a conforming authorized Codex target that ends at one validated managed draft PR (or a no-change/rejection/failure outcome) and one canonical result. See [the next-MVP baseline](next-mvp.md). Earlier Python-CLI MVP demonstrations are historical evidence, not this release's scope.
+
 This document is the authoritative statement of organization context and product intent for Slugger. It defines direction and boundaries; it does not assert that future capabilities are implemented, and it is not a requirements specification. For current operating instructions, use the repository [README](../README.md) and [MVP guide](mvp.md).
 
 ## Organization Vision
@@ -253,4 +255,3 @@ Detailed shall-statements, user stories, acceptance criteria, APIs, schemas, and
 | Users need retained prompts and evidence. | Retention affects trust, reproducibility, storage, confidentiality, and review usability. | Observe reviews and recovery exercises to determine which prompt, manifest, test, decision, and provenance records users actually need and for how long. |
 | The experimental multi-agent system should not become the supported path until its boundaries are proven. | Premature promotion would couple the product to unvalidated orchestration, artifacts, and authority assumptions. | Define promotion criteria and test each candidate capability for bounded contracts, isolation, failure semantics, evidence, and explicit review ownership. |
 | Future SDLC phases can be added as composable capabilities rather than one monolithic workflow. | The long-term governance model relies on independent evolution and reviewable phase boundaries. | Model representative lifecycle journeys, identify artifact handoffs and review gates, and test whether capabilities can be composed, replaced, paused, and resumed independently. |
-

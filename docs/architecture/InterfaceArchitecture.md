@@ -1,5 +1,7 @@
 # Interface Architecture
 
+> For the organization next MVP, IF-01, IF-02, IF-04, IF-06, IF-07, IF-10, IF-11, IF-12, IF-13, and IF-14 are the active interface subset. Their exact external semantics remain pinned-contract dependencies; [`docs/next-mvp.md`](../next-mvp.md) is the release boundary. IF-11 supplies the atomic aggregate/version/lease/outbox boundary required for concurrent-delivery reconciliation, durable idempotency, and canonical-result redelivery.
+
 ## Universal contract rules
 
 Every interface has an owner and version; validates syntax, semantics, authorization, size, classification and cross-field invariants; carries stable operation/correlation identity; declares timeouts, retries and idempotency; emits typed safe errors; and supports conformance fixtures. Unknown major or required semantic fails closed. Sensitive values use opaque handles and never appear in logs/results. Retries use the same identity only for the same immutable input, exponential backoff with jitter and deadline, and no retry for policy/authority/version/ownership conflicts.
@@ -27,6 +29,8 @@ Every interface has an owner and version; validates syntax, semantics, authoriza
 | IF-17 Future knowledge input | Consume approved consulting/standards artifact. External owner supplies; Slugger adapts. | Versioned provenance/rights/classification/content → indexed immutable reference | Entire contract unknown; never execute embedded instructions | Disabled until validated; changed digest invalidates affected request/evidence; version pinned. |
 
 ## Public result shape (conceptual)
+
+This shape is a local mapping checklist, **not** a schema. The organization-owned execution-result validator and vocabulary are authoritative. The adapter must cover verify/implement success, reuse, no-change, authorization/contract rejection, execution/validation/publication failure, and ambiguous/interrupted execution; unmappable semantics fail conformance.
 
 All presentations expose: schema/contract version; delivery/task/correlation/run/attempt identities as permitted; scope and capability profile; lifecycle/terminal outcome; observed gate matrix; evidence digest/reference; publication occurrence/reference; safe categorized errors and retryability; residual risk/limitations; and the next accountable human action. Machine and human views must be semantically equivalent.
 
