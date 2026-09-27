@@ -49,9 +49,11 @@ seek accountable resolution. Do not infer a resolution from existing code.
 boundary. For the current organization next-MVP slice, it accepts one admitted
 task, validates and executes it within this repository, produces at most one
 validated Slugger-managed draft pull request for a qualifying implement request,
-and sends one canonical result. The issue #135 recovery candidate implements this
-responsibility and passes the complete local shared-oracle gate, but it is not
-tagged, enabled, live-receiver verified, released, or production-certified.
+and sends one canonical result. The issue #135 recovery implementation is now
+registry-bound as immutable target `codex-adapter-v2.3.2` at
+`797f239579bf56fbd5d11d98a1a6b5bad36d98a8` with passing local
+shared-oracle evidence. Slugger remains disabled in the published organization
+2.4.5 runtime state, and no Slugger REAL/live-receiver acceptance is claimed.
 
 Within that slice Slugger owns local contract and policy enforcement, identity and
 candidate correlation, repository-confined execution, Codex invocation after
@@ -275,21 +277,24 @@ disposition during the relevant implementation task.
 
 ## Known gaps or conflicts
 
-- The issue #135 recovery candidate exposes one two-input dispatch adapter and
-  passes all 29 canonical scenarios through the real adapter seam with prohibited
-  effects trapped at zero. It is not yet reviewed/merged, immutably tagged,
-  registry-bound, live-receiver verified, enabled, released, or
-  production-certified.
+- The issue #135 recovery implementation exposes one two-input dispatch adapter
+  and passes all 29 canonical scenarios through the real adapter seam with
+  prohibited effects trapped at zero. Review/merge, immutable target tagging, and
+  organization registry tag/commit/report binding are complete under
+  `codex-adapter-v2.3.2` at
+  `797f239579bf56fbd5d11d98a1a6b5bad36d98a8`. Slugger is still disabled and
+  has no Slugger-specific REAL/live-receiver acceptance or production-readiness
+  claim.
 - Immutable target capability and mutable operational activation are separate.
   Historical enabled state is not part of Slugger's compatibility pin; the router
-  owns and enforces current activation before dispatch. Local implementation and
-  conformance must not enable Slugger.
-- Recovery candidate
+  owns and enforces current activation before dispatch. Local implementation,
+  registration, and conformance must not enable Slugger.
+- Shared compatibility source
   `Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a`
-  supplies executable `TC-MVP-CI-001` inputs and expected results plus the planned
-  2.3.1 canonical result receiver. Slugger binds byte-identical shared blobs and
-  its target files in `config/mvp-conformance-pin.json`; it must not redefine
-  their semantics.
+  supplies executable `TC-MVP-CI-001` inputs and expected results. The immutable
+  registered 2.3.2 target adapter retains its exact receiver pin as target evidence.
+  Slugger binds byte-identical shared blobs and its target files in
+  `config/mvp-conformance-pin.json`; it must not redefine their semantics.
 - [Repository context](docs/requirements/RepositoryContext.md) describes backward
   compatibility for declared windows as a general lifecycle responsibility, while
   the current pre-production policy establishes no backward-compatibility
@@ -305,13 +310,16 @@ disposition during the relevant implementation task.
   [assumptions and open questions](docs/requirements/Assumptions.md). Consult the
   owning record rather than copying that backlog here or manufacturing answers.
 
-No local contract-design decision blocks issue #135 implementation. The remaining
-gates are human review/merge, an immutable adapter tag, registry tag/commit/report
-bindings, publication and live verification of the 2.3.1 receiver, credential
-confirmation, coordinated compatibility release, and one-at-a-time review-state
-validation. Exact organization-owned schemas, statuses, fixture expectations,
-receiver semantics, identity, ownership, and duplicate behavior remain
-authoritative at the immutable pin and must be consumed rather than redefined.
+No local contract-design decision blocks Slugger's registered target capability.
+Human review/merge, immutable adapter tagging, registry tag/commit/report binding,
+and deterministic compatibility evidence are complete for
+`codex-adapter-v2.3.2`. The remaining Slugger-specific operational gates are
+deliberate target activation, current credential/preflight readiness for the
+Slugger environment, and controlled Slugger live execution/receiver evidence.
+Those gates are not satisfied by consulting-playbook's 2.4.5 REAL evidence.
+Exact organization-owned schemas, statuses, fixture expectations, receiver
+semantics, identity, ownership, and duplicate behavior remain authoritative at
+the immutable pin and must be consumed rather than redefined.
 
 ## Maintenance rule
 

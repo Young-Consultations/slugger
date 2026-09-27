@@ -21,7 +21,7 @@ The controlling baseline is [`next-mvp.md`](next-mvp.md).
 | Candidate path/responsibility | Decision | Result and authoritative reason |
 |---|---|---|
 | `AI_CONTEXT.md`, `docs/VISION.md`, `docs/next-mvp.md`, `docs/requirements/**`, `docs/architecture/**`, current interface documents | KEEP | These are the ordered authoritative policy, baseline, requirements, design, ADR, and interface sources. |
-| `.github/workflows/codex-execute.yml` | MODIFY | It is the sole target entry point (FR-INT-01/02), now exposes only `workflow_dispatch` with required strings `execution_input_json` and `concurrency_group`, invokes the one repository adapter, and calls only the planned 2.3.1 receiver. Target-side historical activation enforcement is prohibited. |
+| `.github/workflows/codex-execute.yml` | KEEP AS PINNED TARGET EVIDENCE | It is the sole target entry point (FR-INT-01/02), exposes only `workflow_dispatch` with required strings `execution_input_json` and `concurrency_group`, invokes the one repository adapter, and retains the receiver pin captured by immutable `codex-adapter-v2.3.2`. Do not edit this pinned blob for post-release wording cleanup without producing new conformance evidence/release identity. Target-side historical activation enforcement remains prohibited. |
 | Obsolete `workflow_call`, artifact/run-ID inputs, v2.1 tag/package checkout, target-side label approval, locally constructed result, and target-supplied receiver trust | REMOVE | The issue #135 recovery architecture prohibits incompatible triggers, aliases, floating/package assumptions, label rechecks, schema substitutes, target-owned journal trust, and target-side activation enforcement (ADR-009, ADR-013, ADR-015, FR-RES-01). |
 | `.github/workflows/real-codex-cli-demo.yml` | REMOVE | Historical certification invoked Codex through a second trigger; certification is not the organization target path. Removal eliminates unintended duplicate execution. |
 | `.github/workflows/user-idea-codex-cli-demo.yml` | REMOVE | Historical user generation published to a sibling repository, contrary to FR-WS-01 and the repository boundary, and duplicated execution/publication. |
@@ -48,10 +48,15 @@ supported adapter path.
 
 ## Reassessed implementation readiness
 
-The recovery candidate supplies exact schemas and executable `TC-MVP-CI-001`
-inputs/expected results; the repository adapter and zero-effect report are now
-implemented. Remaining gates are review/merge, immutable adapter tagging, registry
-tag/commit/report binding, publication/live verification of the planned 2.3.1
-receiver, credential confirmation, final compatibility release, and one-at-a-time
-review-state validation. Current activation is separate mutable organization-router
-state. Passing local conformance must not enable Slugger.
+The recovery implementation now supplies exact schemas and executable
+`TC-MVP-CI-001` inputs/expected results, and the repository adapter/zero-effect
+report are registered under immutable `codex-adapter-v2.3.2` at
+`797f239579bf56fbd5d11d98a1a6b5bad36d98a8`. Review/merge, immutable target
+tagging, and registry tag/commit/report binding are complete.
+
+Current organization control-plane release is `ai-sdlc-v2.4.5`, while Slugger
+remains disabled in mutable router-owned activation state. Remaining
+Slugger-specific operational work before any REAL execution is deliberate
+activation plus current credential/preflight and live execution/receiver evidence.
+Passing local conformance or being registry-bound must not enable Slugger, and
+consulting-playbook's live evidence must not be reused as Slugger acceptance.
