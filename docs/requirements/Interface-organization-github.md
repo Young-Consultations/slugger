@@ -1,10 +1,12 @@
 # Interface Contract — `Young-Consultations/.github` control plane
 
-This interface is aligned to the reviewed issue #135 recovery candidate at
-`Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a`,
-payload `ai-sdlc-contract/v2`, and fixture manifest `TC-MVP-CI-001` v2.3.0.
-The final 2.3.1 release remains unpublished. See the complete [next-MVP
-baseline](../next-mvp.md).
+This interface consumes payload `ai-sdlc-contract/v2` and fixture manifest
+`TC-MVP-CI-001` v2.3.0 from the shared compatibility source
+`Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a`.
+The current organization control plane is published as `ai-sdlc-v2.4.5`, while
+Slugger is registry-bound as immutable target `codex-adapter-v2.3.2` at
+`797f239579bf56fbd5d11d98a1a6b5bad36d98a8` and remains disabled. See the
+complete [next-MVP baseline](../next-mvp.md).
 
 ## Ownership and authority
 
@@ -53,7 +55,9 @@ Slugger validates canonical `execution-result/v2`, preserves the input
 Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@ai-sdlc-v2.3.1
 ```
 
-That planned tag remains unpublished. Trusted-journal-author policy is immutable
+That receiver pin is part of the immutable registered 2.3.2 target adapter.
+Slugger is currently disabled, so no Slugger-specific REAL/live-receiver
+acceptance is claimed. Trusted-journal-author policy is immutable
 organization-owned configuration; Slugger passes only `CODEX_RESULT_TOKEN`.
 
 The receiver inputs are `execution_result` and `source_issue`; its secret is
