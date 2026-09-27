@@ -7,26 +7,35 @@ required reading order and implementation policy.
 
 ## Current next-MVP status
 
-The one current target is the organization next-MVP adapter described by
-[`docs/next-mvp.md`](docs/next-mvp.md). It accepts the pinned organization
-recovery-candidate `ai-sdlc-contract/v2` request, execute only an authorized task
-in this repository, produce at most one validated managed draft pull request, and
-send one canonical result.
+The supported target interface is the organization next-MVP adapter described by
+[`docs/next-mvp.md`](docs/next-mvp.md). It consumes
+`ai-sdlc-contract/v2`, executes only an admitted task in this repository,
+produces at most one validated managed draft pull request, and sends one canonical
+result.
 
-**The issue #135 adapter candidate is implemented and locally conformant, but is
-not tagged, enabled, live-receiver verified, released, or production-certified.**
-Current target activation is separate mutable control-plane state enforced by the
-organization router; Slugger neither records nor enforces historical enabled
-state. The single `.github/workflows/codex-execute.yml` now provides the canonical
-dispatch, admission, verify, implement, managed-draft, and result-delivery path;
-there is no parallel target adapter. There is currently no supported local CLI,
+The issue #135 recovery work is no longer an unpublished candidate. The current
+organization registry binds Slugger to immutable target
+`codex-adapter-v2.3.2` at
+`797f239579bf56fbd5d11d98a1a6b5bad36d98a8`, with passing
+`TC-MVP-CI-001` evidence. Slugger is **disabled** in the current published
+2.4.5 runtime state, and no Slugger REAL execution or Slugger-specific live
+receiver acceptance is claimed. Current target activation is separate mutable
+control-plane state enforced by the organization router.
+
+The single `.github/workflows/codex-execute.yml` remains the canonical target
+entry point; there is no parallel target adapter. Its exact 2.3.2 workflow/adapter
+content and receiver pin are immutable target evidence and are not rewritten by
+this documentation reconciliation. There is currently no supported local CLI,
 manual Codex demo, publication, certification, release, or full-SDLC execution
 path.
 
-The immutable external compatibility unit is:
+The organization source/control plane is currently published as
+`ai-sdlc-v2.4.5`. Slugger's target-specific compatibility evidence remains:
 
 ```text
-Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a
+target adapter: codex-adapter-v2.3.2
+target commit: 797f239579bf56fbd5d11d98a1a6b5bad36d98a8
+shared compatibility source: Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a
 contract: ai-sdlc-contract/v2
 fixture manifest: TC-MVP-CI-001 v2.3.0 (29 scenarios)
 ```
