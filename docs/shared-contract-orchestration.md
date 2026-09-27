@@ -1,11 +1,13 @@
 # Shared-contract orchestration — next-MVP target slice
 
-[`docs/next-mvp.md`](next-mvp.md) is the normative Slugger baseline. The reviewed
-issue #135 recovery candidate is
+[`docs/next-mvp.md`](next-mvp.md) is the normative Slugger baseline. Slugger
+consumes shared compatibility source
 `Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a`,
 contract payload `ai-sdlc-contract/v2`, and executable fixture oracle
-`TC-MVP-CI-001` v2.3.0. The final 2.3.1 release remains unpublished; historical
-baseline `c6090e5bbadcc2102a1cb91875466e9decdada1e` is unchanged.
+`TC-MVP-CI-001` v2.3.0. The current registered target is
+`codex-adapter-v2.3.2` at `797f239579bf56fbd5d11d98a1a6b5bad36d98a8`;
+the organization control plane is published at 2.4.5 and Slugger remains disabled.
+Historical baseline `c6090e5bbadcc2102a1cb91875466e9decdada1e` is unchanged.
 
 The reusable target entry point accepts required strings `execution_input_json`
 (the complete canonical execution-input object) and `concurrency_group` (transport
@@ -34,8 +36,10 @@ PR, or publication effect.
 
 Slugger sends canonical results separately to
 `Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@ai-sdlc-v2.3.1`.
-That planned tag still requires publication and live verification. Receiver trust
-policy remains organization-owned; the target supplies only `CODEX_RESULT_TOKEN`.
+That exact receiver pin is part of immutable target evidence. Slugger has no
+current live execution/receiver acceptance because the target remains disabled.
+Receiver trust policy remains organization-owned; the target supplies only
+`CODEX_RESULT_TOKEN`.
 Acknowledgement is transport state, not execution success. Result credentials are
 isolated from Codex and target publication; identical redelivery is safe and a
 conflicting result fails closed. Slugger does not create a competing receiver.
