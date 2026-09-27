@@ -1,17 +1,20 @@
 # Slugger organization next-MVP target adapter
 
-**Status:** the issue #135 recovery candidate is implemented with complete local
-zero-effect conformance evidence, but is not reviewed/merged, immutably tagged,
-registry-bound, enabled, live-receiver verified, released, or production-certified.
-This document is authoritative for Slugger's current organization-MVP slice. The
-broader product vision remains in [`VISION.md`](VISION.md).
+**Status:** the issue #135 recovery implementation is reviewed/merged,
+immutably registered as `codex-adapter-v2.3.2` at
+`797f239579bf56fbd5d11d98a1a6b5bad36d98a8`, and has complete local
+zero-effect conformance evidence. Slugger remains disabled in the current
+published organization 2.4.5 runtime state. No Slugger REAL execution,
+Slugger-specific live receiver acceptance, or production-readiness claim is
+established. This document is authoritative for Slugger's current organization-MVP
+slice. The broader product vision remains in [`VISION.md`](VISION.md).
 
 ## Immutable compatibility unit
 
-Slugger aligns its interface to the reviewed issue #135 recovery candidate for
-expected compatibility release **2.3.1**, contract payload version
-**`ai-sdlc-contract/v2`**, and fixture set **`TC-MVP-CI-001` v2.3.0** at this exact
-immutable reference:
+Slugger's current registered target adapter is **`codex-adapter-v2.3.2`**
+at commit `797f239579bf56fbd5d11d98a1a6b5bad36d98a8`. It implements contract
+payload version **`ai-sdlc-contract/v2`** and fixture set
+**`TC-MVP-CI-001` v2.3.0** against the shared compatibility source:
 
 ```text
 Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a
@@ -19,8 +22,9 @@ Young-Consultations/.github@e27b8a541afbd27b4be5606a19ffa43637ad312a
 
 The historical reviewed baseline
 `Young-Consultations/.github@c6090e5bbadcc2102a1cb91875466e9decdada1e`
-remains unchanged. The final 2.3.1 tag/release is not yet published. Mutable
-activation remains separate from this compatibility repair.
+remains unchanged. The organization source/control plane is now published as
+`ai-sdlc-v2.4.5`; that does not repin this disabled target's immutable 2.3.2
+adapter evidence. Mutable activation remains separate from target compatibility.
 
 The canonical schemas and executable fixtures are organization-owned. Slugger
 checks in byte-identical copies only for hermetic validation and binds their
@@ -170,14 +174,15 @@ operations.
 
 ## Canonical result-receiver interface
 
-The recovery candidate plans the canonical receiver at:
+The registered 2.3.2 adapter uses the canonical receiver at:
 
 ```text
 Young-Consultations/.github/.github/workflows/codex-result-receiver.yml@ai-sdlc-v2.3.1
 ```
 
-That tag is not yet published; live receiver verification remains a release gate.
-Receiver trusted-journal-author policy is immutable organization-owned
+This receiver pin is part of the immutable registered target adapter. Slugger is
+currently disabled, so no Slugger-specific live receiver execution/acceptance is
+claimed. Receiver trusted-journal-author policy is immutable organization-owned
 configuration. Slugger supplies only the narrowly scoped `CODEX_RESULT_TOKEN` at
 this boundary.
 
@@ -253,11 +258,12 @@ ambiguous ownership, and receiver rejection all fail closed.
 
 ## External dependencies, limitations, and readiness
 
-The repository-owned adapter and deterministic no-effects evidence are implemented.
-Acceptance still requires human review/merge, an immutable `codex-adapter-v*` tag,
-registry tag/commit/report bindings, the published and live-verified 2.3.1
-receiver, credential confirmation, the final compatibility release, and
-one-at-a-time review-state compatibility validation. Mutable activation remains
-outside this immutable unit and outside Slugger authority. Local implementation
-and conformance evidence do not enable the target or establish production
-readiness.
+The repository-owned adapter, immutable `codex-adapter-v2.3.2` identity,
+registry tag/commit/report binding, and deterministic no-effects evidence are
+complete. Slugger remains disabled. Before any future Slugger REAL execution,
+organization-owned activation must deliberately enable the target and current
+Slugger credential/preflight readiness plus controlled live execution/receiver
+evidence must be established. Consulting-playbook's successful 2.4.5 REAL path is
+not Slugger live evidence. Mutable activation remains outside this immutable unit
+and outside Slugger authority; local implementation/conformance and registry
+publication do not establish production readiness.
