@@ -2,9 +2,12 @@
 
 > **Next-MVP integration slice:** authenticated `execution_input_json` plus
 > `concurrency_group` → local policy/Codex/validation → managed Slugger draft →
-> canonical result through the planned 2.3.1 receiver. Exact recovery-candidate
-> schema/fixture blobs are pinned at `e27b8a5`; mutable activation remains
-> router-owned. See [`docs/next-mvp.md`](../next-mvp.md).
+> canonical result through the receiver pin captured by immutable registered
+> target `codex-adapter-v2.3.2`. Exact shared schema/fixture blobs remain pinned
+> at `e27b8a5`; the organization control plane is published at 2.4.5 and mutable
+> activation remains router-owned. Slugger is currently disabled and has no
+> Slugger-specific live-execution/receiver acceptance. See
+> [`docs/next-mvp.md`](../next-mvp.md).
 
 ## Classification convention
 
